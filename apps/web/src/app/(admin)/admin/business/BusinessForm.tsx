@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { CheckCircle2, Loader2, Save } from "lucide-react";
 
 import { FormField } from "@/app/(admin)/_components/FormField";
+import { ImageUpload } from "@/app/(admin)/_components/ImageUpload";
 import { updateOrganization } from "@/lib/api-admin";
 import type {
   AdminLocaleCode,
@@ -52,6 +53,8 @@ export function BusinessForm({ organization, csrfToken }: BusinessFormProps) {
     organization.supported_locales ?? ["tr"],
   );
   const [currency, setCurrency] = useState<string>(organization.currency ?? "TRY");
+  const [logoUrl, setLogoUrl] = useState<string | null>(organization.logo ?? null);
+  const [coverUrl, setCoverUrl] = useState<string | null>(organization.cover_image ?? null);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -90,6 +93,8 @@ export function BusinessForm({ organization, csrfToken }: BusinessFormProps) {
           name: name.trim(),
           legal_name: legalName.trim(),
           description: description.trim(),
+          logo: logoUrl ?? "",
+          cover_image: coverUrl ?? "",
           phone: phone.trim(),
           whatsapp_phone: whatsapp.trim(),
           email: email.trim(),
@@ -310,9 +315,38 @@ export function BusinessForm({ organization, csrfToken }: BusinessFormProps) {
         </div>
       </div>
 
-      <p className="text-xs text-muted">
-        Logo ve kapak görseli yükleme Sprint 5&apos;te (cloud storage — D-011).
-      </p>
+      <div className="flex flex-col gap-3">
+        <h2 className="font-heading text-base font-semibold text-text">
+          Görseller
+        </h2>
+        <p className="text-xs text-muted">
+          Logo ve kapak görseli. Yükleme multipart üzerinden
+          /api/v1/admin/media/upload endpoint&apos;ine gider. JPG / PNG /
+          WEBP · maks. 5 MB (D-011 local MEDIA_ROOT).
+        </p>
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+          <div className="flex flex-col gap-2">
+            <span className="text-sm font-medium text-text">Logo</span>
+            <ImageUpload
+              value={logoUrl}
+              onUpload={(serverUrl) => setLogoUrl(serverUrl)}
+              csrfToken={csrfToken}
+              aspectClassName="aspect-square"
+              alt={`${organization.name} logo`}
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <span className="text-sm font-medium text-text">Kapak görseli</span>
+            <ImageUpload
+              value={coverUrl}
+              onUpload={(serverUrl) => setCoverUrl(serverUrl)}
+              csrfToken={csrfToken}
+              aspectClassName="aspect-video"
+              alt={`${organization.name} kapak görseli`}
+            />
+          </div>
+        </div>
+      </div>
 
       <div className="flex justify-end gap-2 border-t border-border pt-4">
         <button
