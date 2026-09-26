@@ -9,12 +9,13 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     # Health check (no auth, application/json).
     path("health", include("apps.health.urls")),
-    # API v1 — auth, current user, organization/branches/theme admin.
+    # API v1 — auth, current user, organization/branches/theme/menu admin.
     path("api/v1/auth/", include("apps.accounts.auth_urls")),
     path("api/v1/", include("apps.accounts.urls")),
     path("api/v1/admin/organizations/", include("apps.organizations.urls")),
     path("api/v1/admin/branches/", include("apps.branches.urls")),
     path("api/v1/admin/theme/", include("apps.theme.urls")),
+    path("api/v1/admin/", include("apps.menu.urls")),
 ]
 
 if settings.DEBUG:

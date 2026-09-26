@@ -78,6 +78,7 @@ LOCAL_APPS = [
     "apps.organizations",
     "apps.branches",
     "apps.theme",
+    "apps.menu",
     "apps.audit",
     "apps.health",
 ]
