@@ -26,10 +26,16 @@ urlpatterns = [
     path("api/v1/admin/analytics/", include("apps.analytics.urls_admin")),
     # Sprint 7A — AI PDF menu import (D-021).
     path("api/v1/admin/pdf-import/", include("apps.pdf_import.urls")),
+    # Sprint 8A — Order flow (D-022). Admin lists/details/state-machine +
+    # kitchen display. See apps/orders/urls_admin.py for prefix layout.
+    path("api/v1/admin/orders/", include("apps.orders.urls_orders")),
+    path("api/v1/admin/kitchen/", include("apps.orders.urls_kitchen")),
     # Sprint 3 — public unauthenticated read endpoints (throttled).
     path("api/v1/public/", include("apps.menu.urls_public")),
     # Sprint 5A — public events endpoint (throttled, IP/UA hash).
     path("api/v1/public/", include("apps.analytics.urls_public")),
+    # Sprint 8A — public order placement + status polling (D-022).
+    path("api/v1/public/", include("apps.orders.urls_public")),
 ]
 
 if settings.DEBUG:
