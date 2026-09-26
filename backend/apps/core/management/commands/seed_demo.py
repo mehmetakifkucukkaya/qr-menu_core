@@ -323,6 +323,24 @@ class Command(BaseCommand):
                     "is_active": True,
                 },
             )
+            # Re-apply the contact info from the catalog on every run so
+            # the demo's WhatsApp/Phone CTA numbers stay in lockstep with
+            # docs/MODERN_CAFE_PRODUCTS.md (Sprint 1 had placeholder values).
+            organization.name = "Modern Cafe"
+            organization.legal_name = "Modern Cafe Ltd. Şti."
+            organization.description = "Modern Cafe — kahve, tatlı ve brunch."
+            organization.default_locale = "tr"
+            organization.supported_locales = ["tr", "en"]
+            organization.currency = "TRY"
+            organization.phone = "+90 212 555 0123"
+            organization.whatsapp_phone = "+90 532 555 0123"
+            organization.email = "hello@modern-cafe.example"
+            organization.address = (
+                "Caferağa Mahallesi, Moda Caddesi No:42, Kadıköy, İstanbul"
+            )
+            organization.instagram_url = "https://instagram.com/modern.cafe.tr"
+            organization.is_active = True
+            organization.save()
 
             Membership.objects.get_or_create(
                 user=user,
