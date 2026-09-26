@@ -79,8 +79,7 @@ export function CategoryForm({
   );
   const [sortOrder, setSortOrder] = useState<number>(category?.sort_order ?? 0);
   const [isActive, setIsActive] = useState(category?.is_active ?? true);
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageUrl, setImageUrl] = useState<string | null>(category?.image ?? null);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -109,6 +108,7 @@ export function CategoryForm({
           description: translationsArray[0].description ?? "",
           sort_order: Number.isFinite(sortOrder) ? sortOrder : 0,
           is_active: isActive,
+          image: imageUrl ?? "",
           translations: translationsArray,
         };
         const updated = await updateCategory(category.id, payload, { csrfToken });
@@ -122,6 +122,7 @@ export function CategoryForm({
           description: translationsArray[0].description ?? "",
           sort_order: Number.isFinite(sortOrder) ? sortOrder : 0,
           is_active: isActive,
+          image: imageUrl ?? "",
           translations: translationsArray,
         };
         const created = await createCategory(payload, { csrfToken });
@@ -220,15 +221,13 @@ export function CategoryForm({
 
       <ImageUpload
         value={category?.image ?? null}
-        onChange={({ file, preview }) => {
-          setImageFile(file);
-          setImagePreview(preview);
-        }}
+        onUpload={(serverUrl) => setImageUrl(serverUrl)}
+        csrfToken={csrfToken}
         alt={category?.name ?? "Kategori görseli"}
       />
-      {imagePreview ? (
+      {imageUrl && imageUrl !== (category?.image ?? null) ? (
         <p className="text-xs italic text-muted">
-          Yeni görsel seçildi (V1: multipart upload Sprint 5&apos;te).
+          Yeni görsel yüklendi — kaydet butonuna basınca kategoriye işlenir.
         </p>
       ) : null}
 
