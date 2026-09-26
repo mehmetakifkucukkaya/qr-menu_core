@@ -737,3 +737,63 @@ Local'de birden fazla Postgres instance çakışmasın diye ana stack'te host po
 | D-014 | 2026-09-26 | Theme override = inline CSS variables (component-level) | aktif |
 | D-015 | 2026-09-26 | Admin Panel V1 scope (catalog CRUD + inline edit + reorder + i18n tabs + chip selectors; görsel upload preview-only) | aktif |
 | D-016 | 2026-09-26 | Audit Log + Admin Summary (generic FK pattern + thread-local context + pre_save snapshot + immutable append-only; counts + 10 recent events) | aktif |
+| D-017 | 2026-09-26 | QR Codes + Media Upload + Analytics Pattern (qrcode[pil] PNG; tenant-prefix uploads; sha256+salt IP/UA hashing; per-event throttle; Postgres-side aggregation) | aktif |
+| D-018 | 2026-09-26 | Production settings pattern (env-driven; SECRET_KEY/ALLOWED_HOSTS/CORS runtime guards; Caddy-proxied HTTPS; JSON-to-stdout logging; optional Sentry) | aktif |
+---
+
+## KARAR D-018 — Production Settings Pattern + Deploy Config (Sprint 6A)
+
+**Karar:**
+- **Env-driven everything** — `config/settings/production.py` reads `DJANGO_SECRET_KEY`, `DJANGO_ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, `DATABASE_URL`, `ANALYTICS_SALT`, `SENTRY_DSN` from env; no hard-coded values, no safe-looking defaults that would silently ship with a placeholder secret
+- **Runtime safety rails** — production.py raises `RuntimeError` at import time if `DJANGO_SECRET_KEY` is missing/placeholder, `DJANGO_ALLOWED_HOSTS` is empty, or `CORS_ALLOWED_ORIGINS` is empty. Fail fast at startup, not at the first request
+- **HTTPS via Caddy, not Django** — Caddy terminates TLS at the edge (auto Let's Encrypt) and reverse-proxies `/api/*`, `/admin/*`, `/health`, `/media/*`, `/static/*` to the backend container. Django trusts `X-Forwarded-Proto` (one-hop) so `SECURE_SSL_REDIRECT` and `SECURE_HSTS_SECONDS=31_536_000` (1 year, preload) work without breaking the loop
+- **Cookies secure + SameSite=Lax** — single-domain setup (api + menu on `*.example.com`) keeps `SameSite=Lax` for top-level navigation POSTs; `Secure` flag is on so cookies never leak over plain http
+- **JSON logs to stdout** — `json_logging.JSONFormatter` (12-factor), falls back to a hand-rolled JSON shape if the lib is missing so a slimmer image can still start. DEBUG mode keeps the readable `[{asctime}] {levelname} {name}: {message}` format for local debugging
+- **Sentry opt-in** — `if SENTRY_DSN:` guards `sentry_sdk.init()` so the same image works with or without a monitoring account. 10% traces sample rate, `send_default_pii=False` (GDPR/KVKK default)
+- **Dockerfile prod target** — multi-stage (base / dev / prod). `prod` stage chains `migrate → collectstatic → gunicorn --workers 3 --timeout 60` so a single `docker compose up -d` brings the API to a serving state without manual steps
+- **`docker-compose.production.yml`** — 4-service stack (postgres + backend + frontend + caddy), all `restart: unless-stopped`. Postgres has NO host port mapping (network-internal only). Caddy is the only service publishing 80/443
+- **Caddyfile** — single primary site `{$DOMAIN:localhost}` with backend-specific reverse proxies first, frontend catch-all second. Security headers (HSTS, X-Content-Type-Options, X-Frame-Options DENY, Referrer-Policy, Permissions-Policy) applied to every response via Caddy `header` block (defence-in-depth alongside Django's own headers)
+- **`.env.production.example`** — template only; `.env.production` is in `.gitignore` (covered by `.env*` catch-all). Documented with `secrets.token_urlsafe(50)` commands for each value
+- **`scripts/validate_prod_env.sh`** — pre-deploy sanity check: required vars present, no placeholders, DJANGO_SECRET_KEY ≥ 50 chars, POSTGRES_PASSWORD ≥ 24 chars, ANALYTICS_SALT ≥ 32 chars. Exits non-zero on any failure so it can gate a CI deploy
+- **Production settings tests** — `tests/test_production_settings.py` (14 tests) pins the safety rails: structural source check (10 tests) + subprocess end-to-end (4 tests). Refactoring `production.py` without keeping the guards breaks CI
+
+**Tarih:** 2026-09-26
+
+**Bağlam:** V1 demo'su local'de çalışıyor (Sprint 5B-2 sonu), production deploy Hetzner + Cloudflare + Caddy (D-004) kararı Sprint 0'da alındı, gerçek deploy V1 demo'su sonrasına ertelendi. Bu sprint sadece production config + docs hazırlıyor; gerçek deploy manuel (V1 sonrası).
+
+**Alternatifler:**
+- **Django Caddy yerine Nginx** — Nginx daha güçlü ama Caddy'nin otomatik Let's Encrypt + HSTS + zero-downtime restart özellikleri V1 demo için yeterli. Nginx V2'ye (multi-tenant scaling)
+- **Whitenoise / static served by Django** — V1 demo'sunda `/static/*` trafiği düşük; Caddy reverse proxy tek network hop, Whitenoise'un process overhead'i yok
+- **Self-hosted Sentry** — V1 SaaS free tier (5K events/ay) yeterli; self-hosted V2+ (multi-tenant, daha büyük ölçek)
+- **Env-based config only (no YAML/TOML)** — Django settings.py zaten Python; `.env` + `os.environ.get()` pattern proje genelinde tutarlı (local + test + prod aynı `base.py`'yi inherit ediyor). YAML/TOML ek dependency
+- **`DEBUG=False` her zaman (env override yok)** — Sprint 5B-2'de bir kere `DJANGO_DEBUG=1` ile prod-shaped config kullanarak bug debug ettik; env override kalsın ama default hâlâ `0`
+
+**Seçim gerekçesi:**
+- Runtime safety rails (`RuntimeError` at import): bir kez "production'da placeholder secret ile deploy ettik" skandalı yaşamamak için startup-time fail. Tests `config.settings.test` modülünü kullanır (production.py import etmez), 14 yeni structural test production.py'nin korunmasını sağlar
+- Caddy-proxy pattern: TLS termination + reverse proxy + security headers tek container'da; backend basit kalır (`SECURE_PROXY_SSL_HEADER` ile bir hop trust eder)
+- JSON stdout: 12-factor compliant, Better Stack / Loki / Datadog / CloudWatch hepsi native parse eder. `json-logging` lib requirements-dev.txt'te (dev + prod aynı image)
+- Dockerfile prod target: gunicorn + collectstatic + migrate tek CMD'de. V2'de init container + healthcheck + rolling restart için base altyapısı hazır
+- `docker-compose.production.yml` restart: unless-stopped: VPS reboot'ta stack otomatik ayağa kalkar
+- `validate_prod_env.sh` exit codes: CI gate olarak kullanılabilir (`bash scripts/validate_prod_env.sh || exit 1`)
+
+**Sonuçlar:**
+- `backend/config/settings/production.py` — env-driven, runtime guards, JSON logging, optional Sentry
+- `backend/Dockerfile` — multi-stage (base / dev / prod), prod target = migrate+collectstatic+gunicorn
+- `docker-compose.production.yml` — 4 servis stack (postgres + backend + frontend + caddy)
+- `Caddyfile` (root) — HTTPS + reverse proxy + security headers + `{$DOMAIN:localhost}` env placeholder
+- `.env.production.example` — template with `secrets.token_urlsafe(N)` regeneration commands
+- `scripts/validate_prod_env.sh` — required vars + strength checks, exit codes for CI
+- `docs/DEPLOYMENT.md` — 12-section runbook (Prerequisites, Initial Setup, First Deploy, Subsequent, Backup, Rollback, Monitoring, Performance, Security, Troubleshooting, Appendices)
+- `backend/requirements.txt` — `sentry-sdk[django]==2.19.2` eklendi
+- `backend/requirements-dev.txt` — `json-logging==1.4.1` eklendi
+- `tests/test_production_settings.py` — 14 yeni test (10 structural source check + 4 subprocess e2e)
+- Backend test sayısı 120 → 134 (yeşil)
+- `python -c "import config.settings.production"` artık valid env ile çalışır, eksik env ile RuntimeError fırlatır (CI gate)
+
+**Notlar:**
+- Hetzner VPS şu an yok, gerçek deploy V1 sonrası. Bu sprint config + docs hazırlıyor
+- 6A sonunda 6B başlayacak (AI görsel + meta tags + QR seed)
+- Caddyfile'da `{$DOMAIN:localhost}` default localhost — production'da env ile override edilir
+- Sentry opsiyonel — `SENTRY_DSN` env varsa init olur, yoksa skip
+- `docker-compose.production.yml` restart: unless-stopped ile sunucu reboot'ta otomatik restart
+- Production settings module test ortamında import edilmemeli (`DJANGO_SETTINGS_MODULE=config.settings.test` zaten set'li, test.py `from .base import *` kullanır)
