@@ -1,0 +1,118 @@
+# ============================================================================
+# QR Menü — production stack (D-018, Sprint 6A).
+#
+# Usage on the Hetzner VPS (see docs/DEPLOYMENT.md for the full runbook):
+#
+#   cp .env.production.example .env.production
+#   # edit .env.production — fill DJANGO_SECRET_KEY, DOMAIN, POSTGRES_PASSWORD,
+#   # Caddy DOMAIN/EMAIL, NEXT_PUBLIC_API_BASE_URL.
+#   docker compose -f docker-compose.production.yml pull
+#   docker compose -f docker-compose.production.yml up -d --build
+#   docker compose -f docker-compose.production.yml exec backend \
+#       python manage.py createsuperuser
+#   docker compose -f docker-compose.production.yml exec backend \
+#       python manage.py seed_demo
+#   curl https://${DOMAIN}/health
+#
+# Differences from docker-compose.yml (local):
+#   - No host port mappings — Caddy publishes 80/443 only.
+#   - All services use ``restart: unless-stopped`` (survive VPS reboot).
+#   - ``env_file: .env.production`` (NOT .env).
+#   - Backend image built with ``target: prod`` (gunicorn + migrations).
+#   - Postgres has NO host port mapping (the network is internal).
+#   - Caddy volume-mounts ``./Caddyfile`` and persists certs in named volumes.
+# ============================================================================
+
+name: qrmenu-prod
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: qrmenu-prod-postgres
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # No host port mapping — backend talks to it over the docker network.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Caddy, backend, and frontend all sit on this private network. Caddy
+    # is the only service that publishes ports to the host.
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: prod
+    container_name: qrmenu-prod-backend
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      # Persist uploaded media + collected static outside the image so a
+      # redeploy without --build doesn't wipe them.
+      - backend-media:/app/media
+      - backend-static:/app/staticfiles
+    # CMD comes from the prod stage (migrate + collectstatic + gunicorn).
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  frontend:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    container_name: qrmenu-prod-frontend
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
+      INTERNAL_API_BASE_URL: ${INTERNAL_API_BASE_URL}
+      NEXT_PUBLIC_DEFAULT_LOCALE: ${NEXT_PUBLIC_DEFAULT_LOCALE:-tr}
+      NEXT_PUBLIC_SUPPORTED_LOCALES: ${NEXT_PUBLIC_SUPPORTED_LOCALES:-tr,en}
+      # Tell Next.js standalone server it's behind https (for redirect URLs).
+      NODE_ENV: production
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3000/', (r) => { process.exit(r.statusCode < 500 ? 0 : 1) }).on('error', () => process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: qrmenu-prod-caddy
+    restart: unless-stopped
+    env_file: .env.production
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - backend
+      - frontend
+
+volumes:
+  pgdata:
+  backend-media:
+  backend-static:
+  caddy-data:
+  caddy-config:
