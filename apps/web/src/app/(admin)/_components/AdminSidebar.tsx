@@ -8,6 +8,7 @@ import {
   Building2,
   Palette,
   QrCode,
+  BarChart3,
   LogOut,
   type LucideIcon,
 } from "lucide-react";
@@ -24,9 +25,10 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/menus", label: "Menüler", icon: UtensilsCrossed },
+  { href: "/admin/qr-codes", label: "QR Kodlar", icon: QrCode },
+  { href: "/admin/analytics", label: "Analitik", icon: BarChart3 },
   { href: "/admin/business", label: "İşletme", icon: Building2 },
   { href: "/admin/theme", label: "Tema", icon: Palette },
-  { href: "/admin/qr-codes", label: "QR Kodlar", icon: QrCode },
 ];
 
 interface AdminSidebarProps {
