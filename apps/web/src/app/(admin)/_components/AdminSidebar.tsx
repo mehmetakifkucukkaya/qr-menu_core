@@ -22,9 +22,9 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/admin/menus", label: "Menüler", icon: UtensilsCrossed, comingSoon: true },
-  { href: "/admin/business", label: "İşletme", icon: Building2, comingSoon: true },
-  { href: "/admin/theme", label: "Tema", icon: Palette, comingSoon: true },
+  { href: "/admin/menus", label: "Menüler", icon: UtensilsCrossed },
+  { href: "/admin/business", label: "İşletme", icon: Building2 },
+  { href: "/admin/theme", label: "Tema", icon: Palette },
 ];
 
 interface AdminSidebarProps {
