@@ -32,8 +32,11 @@ ENV/
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
-media/
-staticfiles/
+# Ignore runtime media + staticfiles; the apps.media Python package
+# (Sprint 5A) lives elsewhere so we use a leading slash + path prefix
+# to avoid clobbering source trees under ``media/`` directories.
+/backend/media/
+/backend/staticfiles/
 .coverage
 htmlcov/
 .pytest_cache/

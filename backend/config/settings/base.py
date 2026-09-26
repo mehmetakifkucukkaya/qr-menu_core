@@ -15,7 +15,11 @@ from dotenv import load_dotenv
 
 # Load .env from repo root if present (works for local dev / Docker).
 # In production, env vars come from the platform.
-_BACKEND_DIR = Path(__file__).resolve().parents[1]
+# Path anatomy: this file lives at <repo>/backend/config/settings/base.py
+#   parents[0] → <repo>/backend/config/settings
+#   parents[1] → <repo>/backend/config
+#   parents[2] → <repo>/backend           ← this is the backend root we want
+_BACKEND_DIR = Path(__file__).resolve().parents[2]
 _REPO_ROOT = _BACKEND_DIR.parent
 load_dotenv(_REPO_ROOT / ".env", override=False)
 
@@ -81,6 +85,10 @@ LOCAL_APPS = [
     "apps.menu",
     "apps.audit",
     "apps.health",
+    # Sprint 5A — QR code CRUD + PNG download, media upload, analytics.
+    "apps.qr",
+    "apps.media",
+    "apps.analytics",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -163,6 +171,21 @@ MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 # ---------------------------------------------------------------------------
+# Sprint 5A — public base URL + analytics salt
+# ---------------------------------------------------------------------------
+# PUBLIC_BASE_URL is the absolute origin the frontend uses to load menus.
+# Default points at the Next.js dev server. Production sets a real
+# https://menu.example.com value via env.
+PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "http://localhost:3000")
+
+# Salt for analytics IP / User-Agent hashes (D-016 / D-017). Production
+# overrides this with a 32+ char random string; the inline default is a
+# clear marker that production needs to set it.
+ANALYTICS_SALT = os.environ.get(
+    "ANALYTICS_SALT", "qr-menu-default-salt-change-me"
+)
+
+# ---------------------------------------------------------------------------
 # DRF
 # ---------------------------------------------------------------------------
 REST_FRAMEWORK = {
@@ -180,13 +203,14 @@ REST_FRAMEWORK = {
     ],
     # Sprint 3 — throttle anonymous traffic on the public menu endpoint.
     # Per-IP rate (DRF keys AnonRateThrottle by REMOTE_ADDR). 60/min is a
-    # reasonable V1 default; Sprint 5 will revisit this when analytics +
-    # Cloudflare edge cache land.
+    # reasonable V1 default; Sprint 5A adds a stricter 30/min bucket on
+    # /api/v1/public/events (PublicEventsThrottle.scope = "public_events").
     "DEFAULT_THROTTLE_CLASSES": [
         "rest_framework.throttling.AnonRateThrottle",
     ],
     "DEFAULT_THROTTLE_RATES": {
         "anon": "60/min",
+        "public_events": "30/min",
     },
     # SessionAuth enforces CSRF on unsafe methods (POST/PUT/PATCH/DELETE).
     # This is the default but made explicit so future contributors don't relax it.
