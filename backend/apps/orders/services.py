@@ -67,26 +67,29 @@ def generate_order_number(organization) -> str:
     """Return a unique human-readable order number for the given org.
 
     Format: ``{slug[:2].upper()}-{YYYYMMDD}-{NNN}`` where ``NNN`` is
-    today's count for that org (1-based, zero-padded to 3 digits).
+    the next available 3-digit suffix for that daily ``prefix``.
+
+    The DB unique constraint enforces global uniqueness — we count
+    across *all* orgs sharing the same prefix because two orgs with
+    the same first 2-letter slug prefix (e.g. ``cafe-a`` and
+    ``cafe-b``) would otherwise hand out the same number on the
+    same day. The per-organization "counter restarts each day"
+    property is therefore *per prefix*, not per org; for the V1
+    demo (one business per tenant) this is the same number.
     """
     today = timezone.now().strftime("%Y%m%d")
     slug_prefix = (organization.slug or "")[:2].upper() or "OR"
     prefix = f"{slug_prefix}-{today}-"
 
-    for attempt in range(_ORDER_NUMBER_RETRY_LIMIT):
-        # ``select_for_update`` would be safer under heavy concurrency but
-        # the daily counter is a thin straw per org; a count-based loop
-        # with a unique-constraint fallback is sufficient for V1.
-        today_orders_count = Order.objects.filter(
-            organization=organization,
+    for _ in range(_ORDER_NUMBER_RETRY_LIMIT):
+        # Global count across all orgs sharing the prefix.
+        today_prefixed_count = Order.objects.filter(
             order_number__startswith=prefix,
         ).count()
-        candidate = f"{prefix}{today_orders_count + 1:03d}"
+        candidate = f"{prefix}{today_prefixed_count + 1:03d}"
         if not Order.objects.filter(order_number=candidate).exists():
             return candidate
 
-    # Last resort: include a millisecond suffix so we still produce a
-    # unique identifier and the caller sees a meaningful error.
     raise RuntimeError(
         f"generate_order_number: could not allocate unique order "
         f"number after {_ORDER_NUMBER_RETRY_LIMIT} attempts"

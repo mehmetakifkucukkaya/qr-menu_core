@@ -235,6 +235,12 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "anon": "60/min",
         "public_events": "30/min",
+        # Sprint 8A — D-022. Public order placement is heavier than menu
+        # reads (write + audit + transaction), so 20/min per IP is the V1
+        # ceiling. Same bucket for the status poll endpoint would be too
+        # tight for the 15s confirmation polling — status uses the
+        # default AnonRateThrottle ("anon" scope, 60/min) for now.
+        "public_orders": "20/min",
     },
     # SessionAuth enforces CSRF on unsafe methods (POST/PUT/PATCH/DELETE).
     # This is the default but made explicit so future contributors don't relax it.
