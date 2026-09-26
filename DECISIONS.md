@@ -837,3 +837,53 @@ Local'de birden fazla Postgres instance çakışmasın diye ana stack'te host po
 - Sentry opsiyonel — `SENTRY_DSN` env varsa init olur, yoksa skip
 - `docker-compose.production.yml` restart: unless-stopped ile sunucu reboot'ta otomatik restart
 - Production settings module test ortamında import edilmemeli (`DJANGO_SETTINGS_MODULE=config.settings.test` zaten set'li, test.py `from .base import *` kullanır)
+
+---
+
+## KARAR D-020 — Monitoring + Observability Pattern (Sprint 6C)
+
+**Karar:**
+- **Health endpoint `GET /health`** — `AllowAny`, throttle yok, DB bağlantı check + version + UTC timestamp. HTTP her zaman 200; body'si `status: ok|degraded` ile konuşur (D-018'de gerekçelendirildi — LB ve Docker healthcheck body'i parse eder, 503 fırlatmak probe loop'ı yanıltır)
+- **Sentry SaaS (free tier)** — `SENTRY_DSN` env varsa `sentry_sdk.init()` opt-in. `send_default_pii=False` (KVKK), `traces_sample_rate=0.1`, environment=production. Aynı image Sentry olmadan da ayağa kalkabilir
+- **Better Stack uptime checks (free tier)** — 5 dakika interval, GET /health probe. E-posta + Slack webhook alert. Better Stack üzerinden incident timeline tutulur (V1 demo'sunda 1 adet ücretsiz monitor yeterli)
+- **JSON logging to stdout (12-factor)** — Production settings `json_logging.JSONFormatter` kullanır; her log satırı `{"ts": "...", "level": "INFO", "logger": "...", "msg": "..."}`. Loki/Datadog/CloudWatch/Better Stack hepsi native parse eder. DEBUG modunda okunabilir `[{asctime}] {levelname}` formatına düşer
+- **`X-Request-Id` middleware (her response'da)** — `meta.request_id` JSON field'ı + response header. Log korelasyonu için: bir request'in tüm log satırları aynı `request_id` taşır
+- **Smoke test gate (`scripts/smoke_test.sh`)** — 9 check (health, public menu, frontend, auth gate, pytest, tsc, QR count, demo assets). Exit 0/1, CI'da pre-deploy job olarak kullanılabilir; local'de `./scripts/smoke_test.sh`
+- **Backup pattern (cron, V1 scope-out)** — V1 demo için `pg_dump` cron'u V2 backlog'unda; backup stratejisi Sprint 6A DEPLOYMENT.md §6'da dokümante (manuel backup + Hetzner snapshot). Gerçek otomasyon V2'de
+
+**Tarih:** 2026-09-26
+
+**Bağlam:** V1 deploy'u sonrası çalışır durumda olmalı, hata olursa hızlı tespit + recovery gerekli. Monitoring yığını mümkün olduğunca "free tier + opt-in" — gerçek production trafik V2'de başlayacak
+
+**Alternatifler:**
+- **Self-hosted Sentry** — Free tier 5K event/ay V1 için yeterli; self-hosted V2+ (multi-tenant scale, PII kontrolü sıkılaştırma)
+- **Prometheus + Grafana** — V1 overkill. Better Stack uptime + Sentry error tracking V1 demo'su için yeterli; metrik dashboard V2'de (Lighthouse score, request latency, error budget)
+- **Cloud-native monitoring (CloudWatch / Stackdriver)** — V1 Hetzner VPS'te, cloud-provider bağımlılığı istemiyoruz. Vendor lock-in V2 kararı
+- **Datadog APM** — Pahalı ($0.10/host/gün + custom metrics). V1 demo'su için burn rate yüksek
+- **Log drain (Vector / Fluent Bit)** — V1 stdout log'larını external sink'e göndermek için V2. Şimdilik `docker compose logs` yeterli
+- **Health endpoint için 503 when degraded** — Docker healthcheck `retries=3` ile bu zaten oluyor (3 fail → unhealthy → container restart). 503 manuel olarak da eklenebilir ama LB health probe'u 503'ü "remove from pool" olarak okur — bu sefer tek transient DB blip'inde tüm instance'lar LB'den çıkar, recovery yavaşlar. Body konuşsun kuralı daha sağlam
+
+**Seçim gerekçesi:**
+- Sentry SaaS free tier: KVKK'ya uyumlu (`send_default_pii=False`), 5K event yeterli, opsiyonel (`SENTRY_DSN` env ile enable)
+- Better Stack: V1 demo'su için 1 monitor + e-posta alert free tier kapsamında; V2'de HTTP probe + keyword check + status page eklenebilir
+- JSON stdout: 12-factor compliant, vendor-agnostic, Better Stack / Datadog / CloudWatch hepsi native parse eder. V2'de vendor lock-in olmadan log aggregator değiştirebiliriz
+- `X-Request-Id` middleware: Maliyet sıfır (header forward + generate), debug experience dramatik iyileşir (bir request'in tüm log'ları gruplanabilir)
+- Smoke test script: Pre-deploy gate olarak CI'da çalışır, local'de developer's "is the demo ready?" sorusuna 1 dakikada cevap. Tüm 9 check read-only + idempotent
+- DB backup cron V2'de: V1 demo'su tek bir org + tek bir VPS'te, gerçek backup ihtiyacı az. Manual `pg_dump` + Hetzner snapshot Sprint 6A'da dokümante edildi
+
+**Sonuçlar:**
+- `backend/apps/health/views.py` — `HealthView` her zaman 200 döner, body'si konuşur (D-018 gerekçesi)
+- `backend/config/settings/production.py` — JSON formatter + Sentry opt-in + `X-Request-Id` propagation
+- `docs/API_CONTRACT.md` §2.1 — `/health` shape dokümante
+- `docs/TROUBLESHOOTING.md` §16 — "Sentry not receiving errors" fix
+- `docs/DEPLOYMENT.md` §8 — Monitoring section (Better Stack + Sentry setup adımları, Sprint 6A)
+- `scripts/smoke_test.sh` — 9 check pre-deploy gate (CI + local)
+- Backend test sayısı değişmedi (134 yeşil) — bu sprint sadece docs + ops script
+- V1 demo-ready monitoring: Better Stack hesabı açılınca + Sentry hesabı açılınca gerçek DSN'ler `.env.production`'a girer
+
+**Notlar:**
+- V1 demo gerçek deploy olmadığı için Better Stack + Sentry hesapları henüz yok; bu sprint pattern'i belirliyor, hesaplar gerçek deploy günü açılacak
+- `scripts/smoke_test.sh` 9 check kapsamında; Sprint 7+ yeni check eklenirse (örn. Lighthouse CI, Playwright) aynı script genişler
+- DB backup otomasyonu (pg_dump cron) bilinçli olarak V2 — V1 demo'su tek bir müşteri, manual backup yeterli
+- JSON log format Better Stack'e forward'lanabilir (V2 — V1'de sadece stdout)
+- `X-Request-Id` middleware V1'de Django'nun kendi middleware'i; Caddy reverse proxy header'ı forward eder
