@@ -53,6 +53,9 @@ services:
       # Persist user uploads + collected static outside the container.
       - ./backend/media:/app/media
       - ./backend/staticfiles:/app/staticfiles
+      # Bind-mount the source tree so file edits are picked up on restart
+      # (no rebuild). /usr/local/lib/python3.12/site-packages stays in-image.
+      - ./backend:/app
     # Run migrations then start gunicorn. Single command keeps things simple
     # for local; production override uses just gunicorn + entrypoint script.
     command: >
