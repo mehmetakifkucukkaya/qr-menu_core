@@ -632,9 +632,62 @@ Local'de birden fazla Postgres instance çakışmasın diye ana stack'te host po
 - Auth expire UX: session expire olunca layout sessizce `/login`'e atıyor, toast yok — Sprint 5+ UX polish'inde
 - `/admin/menus/[menuId]/categories/[categoryId]/items/new` POST sonrası edit sayfasına redirect ediyor (kategoriye değil) — operatör hemen çevirileri tamamlasın diye
 
-### Açık Sorular (Sprint 4C / 5 için)
+---
 
-- Backend ThemeConfig serializer'ı create için `organization_id` zorunlu kılıyor; Sprint 4C'de seed_demo'ya default ThemeConfig seed'i eklemek mantıklı
-- Reorder optimistic update + rollback UI'ı yok; başarısız olursa banner gösteriyoruz (mevcut kategori sırası korunuyor). Sprint 4C'de toast/undo eklenebilir
-- `Organization.supported_locales` + `Menu.supported_locales` duplicate field — birinden birini düşürebiliriz (org-level yeterli mi?). Sprint 4C temizlik
-- Tenant switcher / multi-org dropdown V1'de yok (tek org varsayımı); Sprint 5 multi-tenant demo'da gerekecek
+## KARAR D-016 — Audit Log + Admin Summary (Sprint 4C)
+
+**Karar:**
+- AuditEvent modeli generic FK pattern (target_type + target_id, generic foreign key yerine) — Django contenttypes bağımlılığı olmadan basit, hızlı sorgu
+- Thread-local context (AuditContextMiddleware) request'ten actor + IP'yi signal'lara taşır; signal kayıtları kim yaptı + nereden izlenebilir
+- Signal'lar pre_save snapshot kullanır — `post_save` tetiklendiğinde DB zaten yeni değerde olduğu için `pre_save` kayıtlarına `post_save` erişir (request.user ve IP ile birlikte)
+- AuditEvent immutable: update/delete API yok, sadece append; retention cron Sprint 6'da
+- Admin summary endpoint tenant-scoped (IsOrganizationMember), counts + son 10 audit event, envelope `{data, meta}` (4B D-015 fix pattern uyumlu)
+
+**Tarih:** 2026-09-26
+
+**Bağlam:** V1 demo akışının admin tarafında "kim ne zaman ne yaptı" görünürlüğü + dashboard metrikleri. Frontend admin dashboard'da stat cards + recent events listesi olarak render edilir.
+
+**Alternatifler:**
+- django-audit-log paketi — V1 için overkill, custom signal yeterli
+- ContentType generic FK — güçlü ama migration/admin complexity ekliyor; 12 entity type için explicit target_type yeterli
+- Celery async event yazma — V1 senkron yeterli, async Sprint 6+ (büyük tenant)
+
+**Seçim gerekçesi:**
+- Generic FK explicit type + id ile basit sorgu (`AuditEvent.objects.filter(target_type='item', target_id=27)`)
+- Thread-local context request scope'unda temiz; middleware'den clear ediyoruz (memory leak önleme)
+- pre_save snapshot DB rollback'e karşı dayanıklı (sadece save edilen değişiklikler loglanır)
+- Counts sorgusu tek endpoint'te, dashboard için ideal (10 etkinlik + 5 sayı)
+
+**Sonuçlar:**
+- `apps/audit/models.py` — AuditEvent (organization FK, actor FK null, action, target_type, target_id, target_repr, payload JSON, IP, created_at) + indexes
+- `apps/audit/context.py` — thread-local actor + IP
+- `apps/audit/middleware.py` — AuditContextMiddleware (AuthenticationMiddleware'den sonra)
+- `apps/audit/signals.py` + `services.py` — MenuItem (price_changed, deactivated, reactivated), Menu (published/unpublished), Category (reordered), Branch, ThemeConfig, Organization signals
+- `apps/audit/apps.py` — `ready()` ile signal connect
+- `apps/core/views.py` — AdminSummaryView
+- Backend test 18 yeni (audit signals + summary endpoint), 85 toplam
+- Frontend `apps/web/src/lib/api-admin.ts` — `fetchAdminSummary()` + AuditEvent/AdminSummary types
+- Frontend `apps/web/src/app/(admin)/admin/dashboard/page.tsx` — stat cards (5) + recent events listesi + relative time formatter
+
+---
+
+## Karar Geçmişi (Güncel)
+
+| ID | Tarih | Karar | Durum |
+|---|---|---|---|
+| D-001 | 2026-09-26 | Repo yolu = `/Users/mehmetakif/projects/agency-qr-menu` | aktif |
+| D-002 | 2026-09-26 | API framework = DRF | aktif |
+| D-003 | 2026-09-26 | Frontend = tek app + route group | aktif |
+| D-004 | 2026-09-26 | Deploy = Hetzner + Cloudflare + Caddy | aktif |
+| D-005 | 2026-09-26 | GitHub remote = qr-menu_core, public, MIT | aktif |
+| D-006 | 2026-09-26 | Demo görseller = logo/kapak AI + ürün/kategori stock | aktif |
+| D-007 | 2026-09-26 | Container sabitleme = Python 3.12, Node 20 LTS, PG 16 | aktif |
+| D-008 | 2026-09-26 | Custom User: email USERNAME_FIELD + role + Membership | aktif |
+| D-009 | 2026-09-26 | Settings & deps: requirements.txt + requirements-dev.txt + pyproject.toml | aktif |
+| D-010 | 2026-09-26 | CSRF: GET /auth/csrf + Set-Cookie qr_csrftoken + qr_sessionid | aktif |
+| D-011 | 2026-09-26 | Image upload = local MEDIA_ROOT, Sprint 5'te S3/R2'ye geçilecek | aktif |
+| D-012 | 2026-09-26 | Slug = save() override + slugify + TR char normalizasyon | aktif |
+| D-013 | 2026-09-26 | Next.js 14 standalone output = `next.config.mjs` zorunlu (Next 14.x) | aktif |
+| D-014 | 2026-09-26 | Theme override = inline CSS variables (component-level) | aktif |
+| D-015 | 2026-09-26 | Admin Panel V1 scope (catalog CRUD + inline edit + reorder + i18n tabs + chip selectors; görsel upload preview-only) | aktif |
+| D-016 | 2026-09-26 | Audit Log + Admin Summary (generic FK pattern + thread-local context + pre_save snapshot + immutable append-only; counts + 10 recent events) | aktif |
