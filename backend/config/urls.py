@@ -16,6 +16,8 @@ urlpatterns = [
     path("api/v1/admin/branches/", include("apps.branches.urls")),
     path("api/v1/admin/theme/", include("apps.theme.urls")),
     path("api/v1/admin/", include("apps.menu.urls")),
+    # Sprint 4C — admin dashboard summary (counts + recent events).
+    path("api/v1/admin/", include("apps.audit.urls")),
     # Sprint 3 — public unauthenticated read endpoints (throttled).
     path("api/v1/public/", include("apps.menu.urls_public")),
 ]

@@ -225,3 +225,64 @@ export interface DietaryTag {
   color: string;
   is_active: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// Admin summary (Sprint 4C)
+// ---------------------------------------------------------------------------
+
+/** Single audit event row as returned by `/api/v1/admin/summary`. */
+export interface AuditEvent {
+  id: number;
+  /** Email of the actor, or the literal string "system". */
+  actor: string;
+  action: AuditAction;
+  target_type: AuditTargetType;
+  target_id: number;
+  /** Human-readable snapshot (e.g. "Türk Kahvesi (modern-cafe)"). */
+  target_repr: string;
+  /** Change details — shape varies by action (e.g. price_changed
+   *  has `{old, new}`; updated has `{fields: string[]}`. */
+  payload: Record<string, unknown>;
+  /** ISO 8601 datetime. */
+  created_at: string;
+}
+
+export type AuditAction =
+  | "created"
+  | "updated"
+  | "deleted"
+  | "price_changed"
+  | "published"
+  | "unpublished"
+  | "deactivated"
+  | "reactivated"
+  | "reordered";
+
+export type AuditTargetType =
+  | "menu"
+  | "category"
+  | "item"
+  | "branch"
+  | "theme"
+  | "organization";
+
+/** Slim org summary embedded in the dashboard payload. */
+export interface SummaryOrganization {
+  id: number;
+  name: string;
+  slug: string;
+  currency: string;
+}
+
+/** Full response of `GET /api/v1/admin/summary`. */
+export interface AdminSummary {
+  menu_count: number;
+  category_count: number;
+  item_count: number;
+  /** Items that are both is_active AND is_available — the "live" count. */
+  active_item_count: number;
+  branch_count: number;
+  /** Up to 10 most recent events, newest first. */
+  recent_events: AuditEvent[];
+  organization: SummaryOrganization | null;
+}

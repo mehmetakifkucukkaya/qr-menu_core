@@ -1,8 +1,16 @@
 import { cookies } from "next/headers";
 import Link from "next/link";
-import { ChefHat, Store, Palette, Sparkles } from "lucide-react";
+import {
+  ChefHat,
+  Store,
+  Palette,
+  Sparkles,
+  Activity,
+} from "lucide-react";
 
 import { AdminEmptyState } from "../../_components/EmptyState";
+import { fetchAdminSummary } from "@/lib/api-admin";
+import type { AuditEvent, AuditAction } from "@/types/admin";
 
 const DEFAULT_NEXT = "/admin/dashboard";
 
@@ -10,12 +18,6 @@ const DEFAULT_NEXT = "/admin/dashboard";
 // of static prerender so Next.js doesn't try to bake it at build time.
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
-interface DashboardStats {
-  menuCount: number;
-  categoryCount: number;
-  itemCount: number;
-}
 
 /** Read the entire Cookie header so we can forward it on outgoing fetches. */
 function readCookieHeader(): string {
@@ -26,41 +28,88 @@ function readCookieHeader(): string {
 }
 
 /**
+ * Human-friendly label for an AuditAction. The i18n keys would normally live
+ * in a translation file; for V1 we keep them inline (admin-only surface,
+ * one locale).
+ */
+const ACTION_LABEL: Record<AuditAction, string> = {
+  created: "oluşturuldu",
+  updated: "güncellendi",
+  deleted: "silindi",
+  price_changed: "fiyat değişti",
+  published: "yayınlandı",
+  unpublished: "yayından kaldırıldı",
+  deactivated: "pasife alındı",
+  reactivated: "aktifleştirildi",
+  reordered: "sıralandı",
+};
+
+/**
+ * Compact human summary for an event's payload. We only enrich the most
+ * common actions (price_changed) — everything else falls back to a generic
+ * "X işlemi gerçekleşti" string.
+ */
+function payloadSummary(action: AuditAction, payload: Record<string, unknown>): string | null {
+  if (action === "price_changed") {
+    const oldVal = typeof payload.old === "string" ? payload.old : null;
+    const newVal = typeof payload.new === "string" ? payload.new : null;
+    if (oldVal !== null && newVal !== null) return `${oldVal} → ${newVal}`;
+  }
+  return null;
+}
+
+/** Relative time formatter (TR locale, no seconds — kept light for V1). */
+function formatRelative(iso: string): string {
+  const then = new Date(iso).getTime();
+  const now = Date.now();
+  const diff = Math.max(0, now - then);
+  const minutes = Math.floor(diff / 60_000);
+  if (minutes < 1) return "az önce";
+  if (minutes < 60) return `${minutes} dk önce`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} sa önce`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days} gün önce`;
+  const months = Math.floor(days / 30);
+  return `${months} ay önce`;
+}
+
+/**
  * /admin/dashboard — landing page after login.
  *
- * Sprint 4A scope is intentionally minimal:
- *   - Welcome banner (greeting + tagline)
- *   - Quick links to the upcoming sections (menus, business, theme)
- *   - Empty state card with a CTA hint
+ * Sprint 4C scope:
+ *   - Welcome banner
+ *   - Live stat cards (menus/categories/items/branches/active items)
+ *   - Recent audit events list (last 10, newest first)
+ *   - Quick links (business, theme)
  *
- * The data-backed stats (live counts of menus/categories/items) land in
- * Sprint 4B once the admin summary endpoint is exposed. For now we
- * render placeholder cards with a "soon" hint.
- *
- * Auth check: the parent layout already verified /api/v1/me with a
- * valid session, so by the time we render here the user is signed in.
+ * Auth check: the parent layout already verified /api/v1/me with a valid
+ * session, so by the time we render here the user is signed in. We
+ * also re-check the cookie here as a defence-in-depth redirect.
  */
 export default async function DashboardPage() {
   // Touch the cookie header so Next.js knows this page depends on the
   // request cookies (and doesn't try to cache it). The value is also
-  // exposed for future RSC fetches that need to forward cookies.
-  const _cookieHeader = readCookieHeader();
+  // forwarded to the admin summary fetch.
+  const cookieHeader = readCookieHeader();
 
-  // Defence-in-depth: if somehow the layout's auth check was bypassed
-  // (e.g. direct route hit while cookies were clearing), bounce to login.
-  // Redirect is OUTSIDE any try/catch on purpose — see the login page for
-  // why wrapping it swallows the NEXT_REDIRECT exception.
+  // Defence-in-depth: redirect OUTSIDE any try/catch — wrapping it
+  // swallows the NEXT_REDIRECT exception (see login page for the full story).
   const { redirect } = await import("next/navigation");
   if (!cookies().get("qr_sessionid")?.value) {
     redirect("/login?next=" + DEFAULT_NEXT);
   }
 
-  // V1: stats are placeholders until the admin summary endpoint (4C).
-  const stats: DashboardStats = {
-    menuCount: 0,
-    categoryCount: 0,
-    itemCount: 0,
-  };
+  // Fetch the admin summary. If the call fails (network glitch, transient
+  // 5xx), surface a friendly error card instead of crashing the page.
+  let summary;
+  let fetchError: string | null = null;
+  try {
+    summary = await fetchAdminSummary({ cookieHeader });
+  } catch (err) {
+    fetchError = err instanceof Error ? err.message : "Bilinmeyen hata";
+    summary = null;
+  }
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-6">
@@ -73,29 +122,75 @@ export default async function DashboardPage() {
           Admin paneli
         </h1>
         <p className="mt-1 text-sm text-muted">
-          Bugün menünüze yeni ürünler ekleyebilir, fiyatları güncelleyebilir
-          veya temanızı özelleştirebilirsiniz.
+          {summary?.organization ? (
+            <>
+              <span className="font-medium text-text">{summary.organization.name}</span>{" "}
+              işletmesi için özet.
+            </>
+          ) : (
+            <>Bugün menünüze yeni ürünler ekleyebilir, fiyatları güncelleyebilir veya temanızı özelleştirebilirsiniz.</>
+          )}
         </p>
       </header>
 
-      {/* Stats — placeholders for Sprint 4B */}
-      <section
-        aria-label="Hızlı istatistikler"
-        className="grid grid-cols-1 gap-4 sm:grid-cols-3"
-      >
-        <StatCard label="Menü" value={stats.menuCount} hint="Yayında" />
-        <StatCard label="Kategori" value={stats.categoryCount} hint="Toplam" />
-        <StatCard label="Ürün" value={stats.itemCount} hint="Aktif" />
-      </section>
+      {/* Fetch error banner (non-blocking) */}
+      {fetchError ? (
+        <div
+          role="alert"
+          className="rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-900"
+        >
+          Özet yüklenirken bir hata oluştu. Sayfayı yenilemeyi deneyin. ({fetchError})
+        </div>
+      ) : null}
 
-      {/* Empty state — first-run guidance */}
-      <section aria-label="Başlangıç" className="mt-2">
-        <AdminEmptyState
-          title="Henüz menünüz yok"
-          message="Sprint 4B ile menü oluşturma, kategori yönetimi ve ürün ekleme akışları eklenecek. Bu arada işletme bilgilerinizi ve temanızı ayarlayabilirsiniz."
-          icon={<ChefHat className="h-8 w-8" aria-hidden />}
-        />
-      </section>
+      {/* Live stat cards */}
+      {summary ? (
+        <section
+          aria-label="Hızlı istatistikler"
+          className="grid grid-cols-2 gap-4 sm:grid-cols-5"
+        >
+          <StatCard label="Menü" value={summary.menu_count} hint="Yayında" />
+          <StatCard label="Kategori" value={summary.category_count} hint="Toplam" />
+          <StatCard label="Ürün" value={summary.item_count} hint="Aktif" />
+          <StatCard label="Şube" value={summary.branch_count} hint="Aktif" />
+          <StatCard
+            label="Canlı ürün"
+            value={summary.active_item_count}
+            hint="Tükenmemiş"
+          />
+        </section>
+      ) : null}
+
+      {/* Recent audit events */}
+      {summary ? (
+        <section
+          aria-label="Son aktiviteler"
+          className="rounded-xl border border-border bg-surface p-5 shadow-sm"
+        >
+          <header className="mb-3 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 font-heading text-base font-semibold text-text">
+              <Activity className="h-4 w-4 text-primary" aria-hidden />
+              Son aktiviteler
+            </h2>
+            <span className="text-xs text-muted">
+              son {summary.recent_events.length} olay
+            </span>
+          </header>
+          {summary.recent_events.length === 0 ? (
+            <AdminEmptyState
+              title="Henüz aktivite yok"
+              message="Menü veya ürün değişiklikleri burada görünecek."
+              icon={<ChefHat className="h-8 w-8" aria-hidden />}
+            />
+          ) : (
+            <ul className="divide-y divide-border">
+              {summary.recent_events.map((event) => (
+                <EventRow key={event.id} event={event} />
+              ))}
+            </ul>
+          )}
+        </section>
+      ) : null}
 
       {/* Quick links */}
       <section
@@ -118,7 +213,8 @@ export default async function DashboardPage() {
 
       <p className="text-center text-xs text-muted">
         <Sparkles className="mr-1 inline h-3 w-3 align-text-bottom" />
-        Detaylı istatistikler ve son aktiviteler Sprint 4C ile eklenecek.
+        Modern Cafe demo verisiyle dolu. Fiyat değişiklikleri admin&apos;den
+        public menüye anlık yansır.
       </p>
     </div>
   );
@@ -144,59 +240,59 @@ function StatCard({
   );
 }
 
+function EventRow({ event }: { event: AuditEvent }) {
+  const summary = payloadSummary(event.action, event.payload);
+  return (
+    <li className="flex items-start justify-between gap-4 py-3">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm text-text">
+          <span className="font-medium">{event.target_repr}</span>{" "}
+          <span className="text-muted">{ACTION_LABEL[event.action]}</span>
+        </p>
+        {summary ? (
+          <p className="mt-0.5 font-mono text-xs text-primary">{summary}</p>
+        ) : null}
+        <p className="mt-0.5 text-xs text-muted">
+          {event.actor} · {event.target_type}
+        </p>
+      </div>
+      <time
+        dateTime={event.created_at}
+        className="shrink-0 text-xs text-muted"
+      >
+        {formatRelative(event.created_at)}
+      </time>
+    </li>
+  );
+}
+
 function QuickLink({
   href,
   title,
   description,
   icon,
-  comingSoon = false,
 }: {
   href: string;
   title: string;
   description: string;
   icon: React.ReactNode;
-  comingSoon?: boolean;
 }) {
-  const inner = (
-    <div
-      className={
-        "group flex h-full items-start gap-3 rounded-xl border border-border bg-surface p-4 shadow-sm transition " +
-        (comingSoon
-          ? "opacity-70"
-          : "hover:border-primary/40 hover:shadow-card")
-      }
-    >
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-        {icon}
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <p className="font-heading text-base font-semibold text-text">
-            {title}
-          </p>
-          {comingSoon ? (
-            <span className="rounded-full bg-muted/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted">
-              yakında
-            </span>
-          ) : null}
-        </div>
-        <p className="mt-1 text-sm text-muted">{description}</p>
-      </div>
-    </div>
-  );
-  if (comingSoon) {
-    return (
-      <div aria-disabled tabIndex={-1} className="cursor-not-allowed">
-        {inner}
-      </div>
-    );
-  }
   return (
     <Link
       href={href}
-      className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+      className="block rounded-xl border border-border bg-surface p-4 shadow-sm transition hover:border-primary/40 hover:shadow-card focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
     >
-      {inner}
+      <div className="flex items-start gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+          {icon}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="font-heading text-base font-semibold text-text">
+            {title}
+          </p>
+          <p className="mt-1 text-sm text-muted">{description}</p>
+        </div>
+      </div>
     </Link>
   );
 }
