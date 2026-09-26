@@ -19,6 +19,7 @@ import type {
   AdminMenuCategory,
   AdminMenuItem,
   AdminLocaleCode,
+  AdminSummary,
   Allergen,
   ApiEnvelope,
   CsrfResponse,
@@ -644,4 +645,16 @@ export async function fetchDietaryTags(
     { ...options },
   );
   return data.results ?? [];
+}
+
+// ---------------------------------------------------------------------------
+// Admin summary (Sprint 4C)
+// ---------------------------------------------------------------------------
+
+/** GET /api/v1/admin/summary — dashboard metrics + last 10 audit events.
+ *  Envelope-tolerant: accepts both `{data, meta}` and raw body. */
+export async function fetchAdminSummary(
+  options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
+): Promise<AdminSummary> {
+  return adminFetch<AdminSummary>("/api/v1/admin/summary/", { ...options });
 }
