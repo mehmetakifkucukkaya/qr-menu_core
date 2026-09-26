@@ -2,13 +2,27 @@
 
 Reuses `org_a` / `org_b` / `admin_user` from the root conftest, and adds
 menu/category/item fixtures scoped to org_a by default.
+
+Sprint 3: auto-clears the cache before each test so DRF's throttle counter
+(AnonRateThrottle, key=REMOTE_ADDR) doesn't leak between tests — the
+public menu throttle test makes 60+ requests in a row, which would
+otherwise poison every test that runs after it in the same process.
 """
 
 from __future__ import annotations
 
 import pytest
+from django.core.cache import cache
 
 pytestmark = pytest.mark.django_db
+
+
+@pytest.fixture(autouse=True)
+def _clear_throttle_cache():
+    """Reset DRF's cache between tests (autouse, function scope)."""
+    cache.clear()
+    yield
+    cache.clear()
 
 
 @pytest.fixture
