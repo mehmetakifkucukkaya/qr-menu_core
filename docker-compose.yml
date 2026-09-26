@@ -1,0 +1,71 @@
+# QR Menü — local development stack (Sprint 1).
+#
+# Usage:
+#   cp .env.example .env
+#   docker compose up -d --build
+#   docker compose exec backend python manage.py migrate
+#   docker compose exec backend python manage.py seed_demo
+#   curl http://localhost:8000/health
+
+name: qrmenu
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: qrmenu-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-qr_menu}
+      POSTGRES_USER: ${POSTGRES_USER:-qr_menu}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-qr_menu}
+      # Bind only on the docker network; never expose to host.
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      # Exposed on host for local debugging (e.g. psql). 5434 to avoid conflicts
+      # with other local Postgres instances (supabase, lezzet100, etc).
+      # Comment out if not needed.
+      - "5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-qr_menu} -d ${POSTGRES_DB:-qr_menu}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: qrmenu-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-config.settings.local}
+      # DATABASE_URL falls back to env in base.py; explicit here for clarity.
+      DATABASE_URL: ${DATABASE_URL:-postgres://qr_menu:qr_menu@postgres:5432/qr_menu}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persist user uploads + collected static outside the container.
+      - ./backend/media:/app/media
+      - ./backend/staticfiles:/app/staticfiles
+    # Run migrations then start gunicorn. Single command keeps things simple
+    # for local; production override uses just gunicorn + entrypoint script.
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py collectstatic --noinput || true &&
+             gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --access-logfile - --error-logfile -"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  pgdata:
+    driver: local
