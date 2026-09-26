@@ -69,6 +69,36 @@ services:
       retries: 3
       start_period: 30s
 
+  frontend:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    container_name: qrmenu-frontend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # Public API base URL — what the browser bundle uses.
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
+      # Server-side API base URL — used inside RSC to reach the backend
+      # over the docker network without a host-loopback hop.
+      INTERNAL_API_BASE_URL: ${INTERNAL_API_BASE_URL:-http://backend:8000}
+      NEXT_PUBLIC_DEFAULT_LOCALE: ${NEXT_PUBLIC_DEFAULT_LOCALE:-tr}
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    healthcheck:
+      # Standalone server.js doesn't expose /health by default; just
+      # confirm the port responds. The frontend is "healthy" the moment
+      # the Next.js server is up.
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3000/', (r) => { process.exit(r.statusCode < 500 ? 0 : 1) }).on('error', () => process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
 volumes:
   pgdata:
     driver: local
