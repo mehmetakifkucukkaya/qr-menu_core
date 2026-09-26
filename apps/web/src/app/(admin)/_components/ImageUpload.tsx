@@ -134,8 +134,8 @@ export function ImageUpload({
         ) : null}
       </div>
       <p className="text-[10px] text-muted">
-        V1'de görsel kaydetme multipart upload ile çalışır (Sprint 5'te cloud
-        storage'a geçilecek — D-011).
+        V1&apos;de görsel kaydetme multipart upload ile çalışır (Sprint 5&apos;te cloud
+        storage&apos;a geçilecek — D-011).
       </p>
     </div>
   );

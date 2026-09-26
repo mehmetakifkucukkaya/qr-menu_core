@@ -293,7 +293,7 @@ export function ItemForm({
         />
         {imagePreview ? (
           <p className="text-xs italic text-muted">
-            Yeni görsel seçildi (V1: multipart upload Sprint 5'te).
+            Yeni görsel seçildi (V1: multipart upload Sprint 5&apos;te).
           </p>
         ) : null}
       </section>
