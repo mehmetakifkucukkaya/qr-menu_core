@@ -507,6 +507,70 @@ Yeni karar her alındığında bu dosyaya eklenir; geri alınan kararlar üzeri 
 
 ---
 
+## KARAR D-013 — Next.js Config: `.mjs` (Standalone Build için Zorunlu) (Sprint 3B-1)
+
+**Karar:** `apps/web/next.config.mjs` (ESM JavaScript, TypeScript değil).
+
+**Tarih:** 2026-09-26
+
+**Bağlam:** Next.js 14'te `output: "standalone"` özelliği docker runner için gerekli; bu özellik `next.config.{js,mjs,ts}` dosyası arar. Next 15 `.ts`'yi destekler, ancak Next 14 resmi olarak yalnızca `.js` ve `.mjs`'i destekler (Next 14 changelog — `next.config.ts` Next 15 feature).
+
+**Alternatifler:**
+- `next.config.ts` — Next 15'te native destekleniyor; biz Next 14.2.x'teyiz
+- `next.config.js` (CJS) — çalışır ama projede ESM tutarlılığı için `.mjs` tercih edildi
+- **`next.config.mjs`** (ESM, seçilen)
+
+**Seçim gerekçesi:**
+- Standalone build çıktısı Docker runner stage'de `node server.js` ile çalışıyor; bu da `.mjs` ile uyumlu
+- ESM modül sistemi modern Node 20 ile uyumlu (D-007 — `node:20-bookworm-slim`)
+- Tüm frontend repo dosyaları `.ts/.tsx` veya `.mjs` (postcss.config.mjs dahil) — tutarlılık
+- Sprint 6+ Next upgrade geldiğinde `.ts`'ye geçiş küçük bir rename olur
+
+**Sonuçlar:**
+- `apps/web/next.config.mjs` — standalone output + image remotePatterns + reactStrictMode
+- `apps/web/postcss.config.mjs` — tailwindcss + autoprefixer
+- `apps/web/Dockerfile` — `COPY --from=builder /app/.next/standalone` + `CMD ["node", "server.js"]`
+
+**Notlar:**
+- ESLint config'i yine `.eslintrc.json` (Next 14 ESLint flat config desteği sınırlı)
+- TypeScript strict + isolatedModules aktif; next.config.mjs'de types `@type {import('next').NextConfig}` JSDoc ile
+
+---
+
+## KARAR D-014 — Theme Tokens: Inline CSS Variables Override (Sprint 3B-2)
+
+**Karar:** Per-business tema renkleri, `BusinessHero` component'inin root element'inde inline `style={{ "--color-primary": "R G B" }}` olarak override edilir; global token'lar `src/styles/tokens.css`'de `:root` altında Modern Cafe default'ları olarak kalır.
+
+**Tarih:** 2026-09-26
+
+**Bağlam:** V1'de tek işletme (Modern Cafe) çalışıyor; ancak Sprint 6 multi-tenant demo için her işletmenin kendi paleti olması gerekiyor. Backend payload'da `theme` objesi opsiyonel olarak geliyor (`{primary_color, secondary_color, ...}` — hex string). Tailwind utility'leri `rgb(var(--color-primary) / <alpha>)` formunda tanımlı (D-007 + tailwind.config.ts).
+
+**Alternatifler:**
+- **CSS class swap** (örn. `theme-modern-cafe`, `theme-blue-bistro`) — Tailwind JIT her varyantı generate etmeli, bundle şişer
+- **Runtime CSS variable override (inline style)** (seçilen) — sıfır bundle ek maliyeti, anında uygulanır, server component'ten render edilebilir
+- **Theme Provider + Context** — overkill V1 için, server-render'ı bozuyor
+- **Multiple `<link rel="stylesheet">`** — Sprint 6+ için aday, şimdilik inline yeterli
+
+**Seçim gerekçesi:**
+- Server component'te inline style kabul edilebilir (CSS-in-JS değil, düz `style` attr)
+- Override scope `BusinessHero`'nun root `<section>`'ına sınırlı — diğer bileşenler (ItemCard, CategoryNav, vs.) global token'ları kullanmaya devam eder; bu sayede kazara global leak yok
+- Tailwind `rgb(var(--color-primary) / <alpha>)` pattern'i zaten kurulu (D-007 + tailwind.config.ts)
+- `hexToRgbTriplet()` helper'ı `BusinessHero.tsx` içinde, 3-haneli kısa formu da destekler
+
+**Sonuçlar:**
+- `apps/web/src/components/public/BusinessHero.tsx` — `themeStyle` objesi, `hexToRgbTriplet()` helper
+- `apps/web/src/styles/tokens.css` — `:root` Modern Cafe default'ları (Sprint 3B-1)
+- `apps/web/tailwind.config.ts` — `rgb(var(--color-X) / <alpha-value>)` semantic tokens
+- `backend/apps/organizations/serializers.py` — `OrganizationSummarySerializer.theme` payload'a dahil (Sprint 3A)
+- `backend/apps/menu/services/visibility.py` — `theme_payload` dict (Sprint 3A)
+
+**Notlar:**
+- Inline CSS variable'lar React'te `style={{ "--color-primary": "139 90 60" }}` olarak set edilebilir (TypeScript typing için `as React.CSSProperties` cast gerekli)
+- Sprint 6 multi-tenant demo'da tenant picker bu override'ı tetikleyecek
+- Brand font override (`theme.font_family`) V2 backlog'unda (şimdilik sadece renkler)
+
+---
+
 ## Açık / Sonraki Sprint'lerde Netleşecek Kararlar
 
 Bu kararlar henüz netleşmedi; ilgili sprint'lerin başında değerlendirilecek.
