@@ -46,6 +46,15 @@ class AuditEvent(models.Model):
         ("ai_import_uploaded", "AI import: PDF uploaded"),
         ("ai_import_confirmed", "AI import: draft confirmed"),
         ("ai_import_discarded", "AI import: draft discarded"),
+        # Sprint 8A — Order flow (D-022). The trailing action names map
+        # 1:1 onto ``OrderStatus`` values to keep ``payload.from/to`` and
+        # ``order_<status>`` event lookups trivial.
+        ("order_placed", "Order: placed (customer submission)"),
+        ("order_confirmed", "Order: confirmed by admin"),
+        ("order_preparing", "Order: preparing (kitchen accepted)"),
+        ("order_ready", "Order: ready (customer notified)"),
+        ("order_delivered", "Order: delivered"),
+        ("order_cancelled", "Order: cancelled"),
     ]
 
     # ---- target type -----------------------------------------------------
@@ -58,6 +67,10 @@ class AuditEvent(models.Model):
         ("organization", "Organization"),
         # Sprint 7A — AI PDF menu import (D-021).
         ("menu_import_draft", "Menu Import Draft"),
+        # Sprint 8A — Order flow (D-022). Generic FK target for both
+        # customer-side ``order_placed`` and admin-side status
+        # transition events. ``target_id`` = Order.pk.
+        ("order", "Order"),
     ]
 
     actor = models.ForeignKey(
