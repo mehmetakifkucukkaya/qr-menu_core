@@ -594,3 +594,47 @@ Sentry self-hosted vs SaaS, uptime monitoring tool'u (Better Stack / UptimeRobot
 ### OP-11 — Postgres Host Port (Sprint 1 notu)
 Local'de birden fazla Postgres instance çakışmasın diye ana stack'te host port **5434 → 5432** kullanılır.
 Üretimde bu mapping yok (Caddy/Cloudflare üzerinden erişim). Gerekirse `.env`'de değiştirilebilir.
+
+---
+
+## KARAR D-015 — Admin Panel V1 Scope (Sprint 4B)
+
+**Karar:** Admin panel V1 kapsamı: işletme + menü + kategori + ürün + tema CRUD, fiyat/durum inline edit, kategori reorder, çeviri (TR/EN) tab interface, alerjen/diyet chip seçimi. Görsel upload V1'de önizleme-only (multipart endpoint Sprint 5'te, D-011). Audit log, admin summary endpoint, AI menü import, müşteri hesabı, sipariş/ödeme V1 dışı.
+
+**Tarih:** 2026-09-26
+
+**Bağlam:** Sprint 4A'da auth + layout + dashboard + login tamamlandı. Sprint 4B'de admin operatörünün menüyü uçtan uca yönetebildiği demo akışı hedefleniyor: login → menu → kategori → ürün → fiyat değiştir → public sayfada gör. Backend 12 admin endpoint Sprint 2'de hazır ve tenant-isolated (D-002 + IsOrganizationMember). Frontend altyapısı 4A'dan reusable.
+
+**Alternatifler:**
+- **Inline-only edit** (örn. her şey tabloda, modal ile) — hızlı ama keşfedilebilirlik düşük, SEO/erişilebilirlik zayıf
+- **Full edit page + quick actions** (seçilen) — list page'lerde inline price + status toggle, full form için `/.../edit` route'ları
+- **Drag-and-drop reorder** — UX güzel ama Sprint 5'teki keyboard a11y + touch parity'si ek iş; up/down butonları yeterli V1
+- **Image upload cloud-first** (S3/R2) — Sprint 5'e ertelendi (D-011); V1'de ObjectURL preview + mevcut MEDIA_ROOT upload Sprint 5'te
+
+**Seçim gerekçesi:**
+- Full edit pages SEO-friendly URL'ler veriyor (deep link, bookmark, browser back düzgün çalışıyor)
+- Inline price/status toggle operatörün günlük akışını hızlandırıyor — ayrı sayfa açmadan 1 saniyede fiyat güncellemesi
+- Up/down reorder yeterli çünkü V1'de ortalama kategori sayısı < 10; drag-drop ekran okuyucu desteği + touch parity'si + bundle maliyeti gerektiriyor
+- TranslationTabs ayrı component → tüm formlarda reusable, her seferinde TR/EN state'ini sıfırdan yazmıyoruz
+- AllergenSelector + DietaryTagSelector: backend `icon` alanını zaten string olarak veriyor (lucide-react icon adı); V1'de emoji fallback yeterli, full lucide icon registry Sprint 5+
+
+**Sonuçlar:**
+- 14 admin route build edildi (`npm run build` clean): dashboard + business + theme + menus + categories (3) + items (3)
+- 7 yeni component: TranslationTabs, AllergenSelector, DietaryTagSelector, ImageUpload, ConfirmDialog, PriceEditor, MenuForm, CategoryForm, ItemForm, BusinessForm, ThemeForm, ItemsListClient, CategoriesReorder, DeleteMenuButton (client islands)
+- `lib/api-admin.ts` 12 yeni typed wrapper (menus/categories/items CRUD + reorder + allergens/tags/orgs/theme)
+- `types/admin.ts` 4A'dan gelen model'ler yeterli — değişiklik yok
+- Backend tarafında değişiklik yok; Sprint 2'deki 67 test hâlâ yeşil
+- Image upload V1 sınırı: parent form `ImageUpload` component'ini kullanır ama gerçek multipart upload Sprint 5'te (D-011). Bu sprint'te görsel önizleme + delete çalışıyor, mevcut görsel backend'de korunuyor.
+
+**Notlar:**
+- Backend envelope inconsistency: `menus/categories/menu-items` list+detail `_wrap()` ile `{data, meta}` dönüyor; `organizations/theme/allergens/dietary-tags` default ModelViewSet.list() kullanıyor (raw payload). adminFetch envelope-tolerant yapıldı (`data` varsa VE `count/results` yoksa unwrap, yoksa raw) — D-015-fix
+- Tema create path org'a ThemeConfig seed'lenmesini gerektiriyor; V1'de sadece PATCH var (POST yolu hata mesajıyla guard'lı), seed_management komutu Sprint 4C
+- Auth expire UX: session expire olunca layout sessizce `/login`'e atıyor, toast yok — Sprint 5+ UX polish'inde
+- `/admin/menus/[menuId]/categories/[categoryId]/items/new` POST sonrası edit sayfasına redirect ediyor (kategoriye değil) — operatör hemen çevirileri tamamlasın diye
+
+### Açık Sorular (Sprint 4C / 5 için)
+
+- Backend ThemeConfig serializer'ı create için `organization_id` zorunlu kılıyor; Sprint 4C'de seed_demo'ya default ThemeConfig seed'i eklemek mantıklı
+- Reorder optimistic update + rollback UI'ı yok; başarısız olursa banner gösteriyoruz (mevcut kategori sırası korunuyor). Sprint 4C'de toast/undo eklenebilir
+- `Organization.supported_locales` + `Menu.supported_locales` duplicate field — birinden birini düşürebiliriz (org-level yeterli mi?). Sprint 4C temizlik
+- Tenant switcher / multi-org dropdown V1'de yok (tek org varsayımı); Sprint 5 multi-tenant demo'da gerekecek
