@@ -223,27 +223,21 @@ Yukarıdaki kanıtlar bölümünde tam çıktılar var. Burada kritik noktalar:
 
 ## 4. Commit Listesi (Sprint 2)
 
-Ayrı commit'lerle main'e push edildi (aşağıdaki listeye bakın):
+9 Sprint 2 commit'i main'e push edildi (`git log --oneline -10 origin/main`):
 
 ```
-chore(backend): menu app scaffold + config + URL wiring
-feat(menu): Menu + MenuCategory + MenuItem core models
-feat(menu): CategoryTranslation + ItemTranslation models
-feat(menu): Allergen + DietaryTag reference data models
-feat(menu): MenuItemAllergen + MenuItemDietaryTag M2M through
-feat(ops): seed_allergens_tags management command
-feat(menu): visibility service (active/passive rules)
-feat(menu): translation fallback service (3-tier)
-feat(menu): reorder service (transactional + ownership check)
-feat(menu): working_hours schema validator (OP-8)
-feat(menu): CRUD API endpoints (menu/category/item + reference data)
-feat(menu): reorder endpoints (categories + items)
-feat(ops): seed_demo güncelleme (Modern Cafe minimal menu)
-feat(branches): working_hours_json admin field polish (OP-8)
-test(backend): 43 menu/visibility/fallback/decimal/reorder/working_hours tests
-chore(branches): Branch slug opsiyonel + BranchSummarySerializer export
-chore(docs): DECISIONS D-011/D-012/OP-6/OP-8 + Sprint 2 report
+945f58e chore(docs): DECISIONS D-011/D-012/OP-6/OP-8 + Sprint 2 plan + report
+7fafbbd test(backend): 43 menu/visibility/fallback/decimal/reorder/working_hours tests
+ccdb682 feat(branches): working_hours_json admin polish (OP-8) + Branch slug optional
+4c8d708 feat(ops): seed_demo updated — Modern Cafe minimal menu (1 menu + 2 placeholder categories)
+7f501e2 feat(menu): CRUD API endpoints + admin (menu/category/item + reference data)
+7de273e feat(menu): services (visibility, translation, reorder, working_hours)
+39f1b55 feat(ops): seed_allergens_tags management command
+ea82ea4 feat(menu): Menu + MenuCategory + MenuItem + Allergen + DietaryTag models (7 + 2 through)
+4bb1d38 chore(backend): menu app scaffold + INSTALLED_APPS + URL routing + root conftest
 ```
+
+**Not:** Plan'da ~14 commit öngörülmüştü; Sprint 2 boyunca bazı commitler birleştirildi (örn. 4 service tek commit, 7 model tek commit). Toplam 9 mantıksal grup, hepsi sprint scope'una uygun ve geriye dönük takibi kolay.
 
 ---
 
