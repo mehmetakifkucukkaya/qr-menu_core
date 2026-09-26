@@ -18,6 +18,9 @@ class BranchSerializer(serializers.ModelSerializer):
         # Queryset is overridden in __init__ to scope to user's memberships.
         queryset=Organization.objects.none(),
     )
+    # Override slug to make it truly optional (admin uses prepopulated_fields
+    # but API callers may POST with just a name).
+    slug = serializers.SlugField(max_length=120, required=False, allow_blank=True, default="")
 
     class Meta:
         model = Branch
@@ -37,9 +40,6 @@ class BranchSerializer(serializers.ModelSerializer):
             "updated_at",
         )
         read_only_fields = ("id", "created_at", "updated_at", "organization")
-        extra_kwargs = {
-            "slug": {"required": False},
-        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -52,3 +52,14 @@ class BranchSerializer(serializers.ModelSerializer):
         else:
             qs = Organization.objects.filter(memberships__user=user).distinct()
         self.fields["organization_id"].queryset = qs
+
+
+class BranchSummarySerializer(serializers.ModelSerializer):
+    """Minimal branch representation for nested resources (e.g., Menu.branch)."""
+
+    class Meta:
+        from .models import Branch
+
+        model = Branch
+        fields = ("id", "name", "slug")
+        read_only_fields = fields
