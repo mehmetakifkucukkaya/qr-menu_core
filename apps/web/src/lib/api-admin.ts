@@ -149,8 +149,24 @@ export async function adminFetch<T>(
     throw new AdminApiError(res.status, errCode, errMessage);
   }
 
-  const envelope = (await res.json()) as ApiEnvelope<T>;
-  return envelope.data;
+  const payload = (await res.json()) as unknown;
+  // Two response shapes coexist in the backend today:
+  //   1. Custom _wrap() — { data, meta }      (menus, categories, menu-items lists + details)
+  //   2. DRF default    — raw object / paginated { count, results, ... }
+  //                      (organizations, theme, allergens, dietary-tags lists + detail retrieves)
+  // Tolerate both: unwrap when `data` is present, otherwise return the
+  // raw payload cast to T. The wrappers that need `count/next/previous`
+  // (lists) inspect the response shape themselves.
+  if (
+    payload !== null &&
+    typeof payload === "object" &&
+    "data" in (payload as Record<string, unknown>) &&
+    !("count" in (payload as Record<string, unknown>)) &&
+    !("results" in (payload as Record<string, unknown>))
+  ) {
+    return (payload as ApiEnvelope<T>).data;
+  }
+  return payload as T;
 }
 
 // ---------------------------------------------------------------------------
@@ -214,15 +230,22 @@ export async function fetchCurrentUser(
  * GET /api/v1/admin/organizations/ — list organizations the user is a
  * member of. V1 typically has exactly one organization per user.
  *
+ * NOTE: this endpoint uses DRF's default ModelViewSet.list() (no custom
+ * `_wrap` envelope), so the response is a raw paginated payload:
+ *   { count, next, previous, results: Organization[] }
+ * adminFetch is envelope-tolerant — it returns the raw payload cast to T.
+ *
  * Server-side: pass `internal: true` so we hit `backend` over the Docker
  * network. The browser never calls this directly — it consumes RSC output.
  */
 export async function fetchOrganizations(
   options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
 ): Promise<Organization[]> {
-  return adminFetch<Organization[]>("/api/v1/admin/organizations/", {
-    ...options,
-  });
+  const data = await adminFetch<{ count: number; results: Organization[] }>(
+    "/api/v1/admin/organizations/",
+    { ...options },
+  );
+  return data.results ?? [];
 }
 
 /** Convenience — picks the user's first (and usually only) organization. */
@@ -259,13 +282,18 @@ export async function updateOrganization(
 // Theme
 // ---------------------------------------------------------------------------
 
-/** GET /api/v1/admin/theme/ — list theme configs the user can access. */
+/** GET /api/v1/admin/theme/ — list theme configs the user can access.
+ *
+ * NOTE: this endpoint uses DRF's default ModelViewSet.list() (no custom
+ * `_wrap` envelope), so the response is a raw paginated payload. */
 export async function fetchThemeConfigs(
   options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
 ): Promise<ThemeConfig[]> {
-  return adminFetch<ThemeConfig[]>("/api/v1/admin/theme/", {
-    ...options,
-  });
+  const data = await adminFetch<{ count: number; results: ThemeConfig[] }>(
+    "/api/v1/admin/theme/",
+    { ...options },
+  );
+  return data.results ?? [];
 }
 
 /** Convenience — picks the first theme config (V1: one per org). */
@@ -592,7 +620,10 @@ export async function deleteItem(
 // Reference data (Allergen, DietaryTag)
 // ---------------------------------------------------------------------------
 
-/** GET /api/v1/admin/allergens/ — list all allergens (global, not tenant-scoped). */
+/** GET /api/v1/admin/allergens/ — list all allergens (global, not tenant-scoped).
+ *
+ * NOTE: ReadOnlyModelViewSet uses DRF's default list, so the response
+ * is a raw paginated payload (no `{ data, meta }` envelope). */
 export async function fetchAllergens(
   options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
 ): Promise<Allergen[]> {
@@ -603,7 +634,8 @@ export async function fetchAllergens(
   return data.results ?? [];
 }
 
-/** GET /api/v1/admin/dietary-tags/ — list all dietary tags. */
+/** GET /api/v1/admin/dietary-tags/ — list all dietary tags. Same shape
+ *  as fetchAllergens (raw paginated payload). */
 export async function fetchDietaryTags(
   options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
 ): Promise<DietaryTag[]> {
