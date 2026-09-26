@@ -21,3 +21,10 @@ qrcode[pil]==7.4.2
 
 # --- CORS (frontend cross-origin in dev) ---
 django-cors-headers==4.7.0
+
+# --- Production monitoring (Sprint 6A — D-018) ---
+# Optional SDK — only initialised when SENTRY_DSN is set in
+# config/settings/production.py. Pinned here so the image ships with the
+# integration present; the runtime cost is one import that's a no-op when
+# DSN is empty.
+sentry-sdk[django]==2.19.2
