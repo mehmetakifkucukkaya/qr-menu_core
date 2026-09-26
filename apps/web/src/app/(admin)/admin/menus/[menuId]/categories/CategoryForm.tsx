@@ -192,7 +192,7 @@ export function CategoryForm({
               ))}
           </select>
           <p className="text-xs text-muted">
-            İç içe kategoriler için (örn. Kahve / Türk Kahvesi). V1'de basit
+            İç içe kategoriler için (örn. Kahve / Türk Kahvesi). V1&apos;de basit
             liste tercih edebilirsiniz.
           </p>
         </div>
@@ -228,7 +228,7 @@ export function CategoryForm({
       />
       {imagePreview ? (
         <p className="text-xs italic text-muted">
-          Yeni görsel seçildi (V1: multipart upload Sprint 5'te).
+          Yeni görsel seçildi (V1: multipart upload Sprint 5&apos;te).
         </p>
       ) : null}
 
