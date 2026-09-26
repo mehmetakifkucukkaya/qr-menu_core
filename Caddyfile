@@ -1,0 +1,70 @@
+# ============================================================================
+# QR Menü — Caddy reverse-proxy + automatic HTTPS (D-004 / D-018, Sprint 6A).
+#
+# Caddy handles:
+#   - Automatic Let's Encrypt certificate provisioning + renewal.
+#   - HTTP → HTTPS redirect.
+#   - Reverse proxy to the frontend (Next.js, port 3000) and backend
+#     (Django, port 8000) based on URL prefix.
+#   - Security headers (HSTS, X-Content-Type-Options, X-Frame-Options,
+#     Referrer-Policy). These are applied to BOTH the proxied and direct
+#     responses, so they're set globally on the site block.
+#
+# The DOMAIN and EMAIL placeholders are pulled from the .env.production file
+# (via docker-compose.production.yml → Caddy env_file). When you run the
+# stack locally for a smoke test, both default to ``localhost`` /
+# ``[email protected]`` and Caddy will serve plain HTTP on :80 — fine for
+# local checks, never deploy that to prod.
+#
+# To add a second domain later (e.g. api.menu.example.com pointing at the
+# backend), add a second site block here and the matching entry to
+# DJANGO_ALLOWED_HOSTS in .env.production.
+# ============================================================================
+
+# ---- Primary site ----
+{$DOMAIN:localhost} {
+    # Encode responses — gzip + zstd for non-binary bodies.
+    encode gzip zstd
+
+    # Security headers — applied to every response leaving this site.
+    header {
+        # HSTS — match Django's settings (1 year, includeSubDomains, preload).
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        # Prevent MIME sniffing.
+        X-Content-Type-Options "nosniff"
+        # Clickjacking protection — DENY blocks all iframes.
+        X-Frame-Options "DENY"
+        # Referrer — only send origin on cross-origin requests.
+        Referrer-Policy "strict-origin-when-cross-origin"
+        # Permissions policy — disable features we don't use.
+        Permissions-Policy "geolocation=(), microphone=(), camera=()"
+        # Remove the Server header (Caddy already strips this, but make it explicit).
+        -Server
+    }
+
+    # ---- Backend routes (API + health + admin + media + static) ----
+    # Order matters: more specific paths first. The catch-all at the end
+    # sends everything else to the frontend.
+    reverse_proxy /health backend:8000
+    reverse_proxy /api/* backend:8000
+    reverse_proxy /admin/* backend:8000
+    reverse_proxy /media/* backend:8000
+    reverse_proxy /static/* backend:8000
+
+    # ---- Frontend catch-all ----
+    # Next.js handles its own routing (App Router, route groups).
+    reverse_proxy frontend:3000
+}
+
+# ---- Optional: api subdomain (commented out — single-domain is enough for V1) ----
+# api.{$DOMAIN:localhost} {
+#     reverse_proxy backend:8000
+#     encode gzip zstd
+#     header {
+#         Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+#         X-Content-Type-Options "nosniff"
+#         X-Frame-Options "DENY"
+#         Referrer-Policy "strict-origin-when-cross-origin"
+#         -Server
+#     }
+# }
