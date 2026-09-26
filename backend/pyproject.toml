@@ -1,0 +1,42 @@
+# QR Menü — backend project metadata + tool config.
+# We use `requirements.txt` as the source of truth for pip installs in Docker,
+# but pyproject.toml provides tool config (pytest, ruff, etc.) so editors and
+# CI can pick it up without a separate config file.
+
+[project]
+name = "qr-menu-backend"
+version = "1.0.0"
+description = "QR Menü / qr-menu_core backend — Django + DRF API"
+requires-python = ">=3.12,<3.15"
+readme = "../README.md"
+
+# --- Tool config ---
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings.test"
+python_files = ["test_*.py", "*_test.py"]
+testpaths = ["tests"]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "--tb=short",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning:pkg_resources",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "DJ", "RUF"]
+ignore = [
+    "E501",  # line length (handled by formatter)
+    "B008",  # function call in default argument (DRF viewsets pattern)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"apps/*/migrations/*.py" = ["E", "F", "I", "B", "UP", "RUF"]
+"tests/*.py" = ["B"]

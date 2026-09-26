@@ -1,0 +1,29 @@
+# Backend-local ignores (root .gitignore covers most cases; this adds backend-specific ones).
+
+__pycache__/
+*.py[cod]
+*.pyo
+*$py.class
+*.so
+
+.venv/
+venv/
+env/
+
+# Test / lint artifacts
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+
+# Runtime artifacts (mounted as volumes in docker-compose)
+media/
+staticfiles/
+db.sqlite3
+*.log
+
+# Env
+.env.local
+.env.*.local

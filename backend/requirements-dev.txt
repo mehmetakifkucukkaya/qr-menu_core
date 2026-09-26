@@ -1,0 +1,9 @@
+# QR Menü — backend dev / test dependencies
+# Layered on top of requirements.txt.
+
+-r requirements.txt
+
+# --- Test ---
+pytest==8.4.2
+pytest-django==4.9.0
+pytest-cov==6.2.1
