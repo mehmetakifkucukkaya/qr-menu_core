@@ -298,3 +298,124 @@ Sentry self-hosted vs SaaS, uptime monitoring tool'u (Better Stack / UptimeRobot
 | D-005 | 2026-09-26 | GitHub remote = qr-menu_core, public, MIT | aktif |
 | D-006 | 2026-09-26 | Demo görseller = logo/kapak AI + ürün/kategori stock | aktif |
 | D-007 | 2026-09-26 | Container sabitleme = Python 3.12, Node 20 LTS, PG 16 | aktif |
+
+---
+
+## KARAR D-008 — Custom User: Email USERNAME_FIELD + Role + Membership Ayrımı (Sprint 1)
+
+**Karar:**
+- `User.email` USERNAME_FIELD, password Django built-in, `role` (admin/agency_admin/owner/manager/staff) global kullanıcı rolü
+- `Membership(user, organization, role)` ile per-org rol ayrımı: aynı kullanıcı farklı organizasyonlarda farklı role sahip olabilir
+- `is_platform_admin` (User.role == admin veya is_superuser) tenant isolation'ı bypass eder
+
+**Tarih:** 2026-09-26
+
+**Bağlam:** `TECHNICAL_PLAN.md §3` Organization/Branch alanları ve `OP-5` admin auth kararı.
+
+**Alternatifler:**
+- User üzerinde tek `organization` FK (tek-tenant kullanıcı) — multi-org kullanımı zorlaştırır
+- Group/Permission tabanlı RBAC — V1 için fazla karmaşık, Sprint 4+ değerlendirilebilir
+
+**Seçim gerekçesi:**
+- Agency'nin kendi staff'ı (agency_admin) birden fazla işletmeyi yönetebilmelidir → Membership tablosu zorunlu
+- Per-org role (owner/manager/staff/agency_admin) ile yetki ayrımı net
+- `is_platform_admin` bypass'ı acil müdahale ve demo için gerekli; production'da daraltılabilir
+
+**Sonuçlar:**
+- `apps/accounts/models.py` — User + Membership
+- `apps/accounts/permissions.py` — IsOrganizationMember (object-level + queryset filter)
+- `apps/organizations/views.py` — queryset `Organization.objects.for_user(user)`
+- Serializer'lar (Branch, ThemeConfig) `organization_id` queryset'ini user memberships'a göre filtreler; başka org'a yazma denemesi → 400
+
+---
+
+## KARAR D-009 — Settings & Dependency Yönetimi (Sprint 1)
+
+**Karar:**
+- `requirements.txt` (prod) + `requirements-dev.txt` (test) + `pyproject.toml` (tool config) — poetry kullanmıyoruz
+- Settings modülleri: `base.py` → `local.py` / `test.py` / `production.py`
+- `DJANGO_SETTINGS_MODULE` env ile seçilir; default local
+
+**Tarih:** 2026-09-26
+
+**Bağlam:** Docker build'i sade tutmak ve opsiyonel poetry lock karmaşıklığından kaçınmak.
+
+**Alternatifler:**
+- Poetry + `poetry.lock` — daha katı reproducibility, ama Dockerfile'a poetry binary eklemek + cache katmanları daha karmaşık
+- Pipenv — benzer nedenlerle tercih edilmedi
+- Sadece `pyproject.toml` (PEP 621) — Django 5.2 için çalışır ama `pip install .` prod deps'i çözemiyor
+
+**Seçim gerekçesi:**
+- `requirements.txt` Docker layer cache için ideal (değişmeyen dosya erken install)
+- `pyproject.toml` test/lint tool config'i için zaten gerekli (pytest, ruff)
+- Poetry'nin V1 başlangıcında getirdiği ek yük (lock sync, keyring, virtualenv handling) değerine göre yüksek
+
+**Sonuçlar:**
+- Versiyonlar `requirements.txt`'te pinned (Django==5.2.7, djangorestframework==3.16.1, ...)
+- Container'da hem `requirements.txt` hem `requirements-dev.txt` install edilir → `docker compose exec backend pytest` çalışır
+- İleride Poetry'ye geçiş istenirse: `requirements.txt` → `pyproject.toml` dependency block + `pip install .` komutu
+
+---
+
+## KARAR D-010 — CSRF Akışı (Sprint 1)
+
+**Karar:**
+- DRF SessionAuthentication default (CSRF unsafe method'larda aktif)
+- Login endpoint'i JSON POST, CSRF korumalı; önce `GET /api/v1/auth/csrf` ile token alınır
+- CSRF cookie adı `qr_csrftoken`, session cookie adı `qr_sessionid`
+
+**Tarih:** 2026-09-26
+
+**Bağlam:** `OP-5` admin auth kararı: cookie tabanlı session + CSRF aktif.
+
+**Alternatifler:**
+- Token auth (DRF TokenAuthentication) — frontend BFF proxy'si için ek yük; V1 admin panel browser tabanlı, cookie daha doğal
+- Custom header token (X-Auth-Token) — CSRF yok ama session hijacking riski
+- SameSite=Strict cookie — daha sıkı ama bazı cross-site akışları bozar
+
+**Seçim gerekçesi:**
+- Tarayıcı tabanlı admin paneli için cookie + CSRF endüstri standardı
+- SameSite=Lax default; production'da Secure=true (HTTPS)
+- DRF SessionAuth CSRF enforcement default'u zaten var, ek birşey yazmaya gerek yok
+
+**Sonuçlar:**
+- `apps/accounts/auth_views.py` — LoginView, LogoutView, MeView, CSRFView
+- Login response'da session cookie + CSRF cookie set edilir (DRF `login()` + `request.session.save()`)
+- Logout unsafe method, X-CSRFToken header zorunlu
+
+---
+
+## Açık / Sonraki Sprint'lerde Netleşecek Kararlar
+
+Bu kararlar henüz netleşmedi; ilgili sprint'lerin başında değerlendirilecek.
+
+### OP-1 — Object Storage Sağlayıcısı (Sprint 5)
+S3-compatible storage (logo, kapak, ürün görseli) için Hetzner Object Storage / Cloudflare R2 / AWS S3 / MinIO self-hosted karşılaştırması Sprint 5 öncesi yapılacak.
+- Adaylar: Hetzner Storage Box (ucuz, AB), R2 (egress ücretsiz), MinIO (self-hosted, kontrol)
+
+### OP-2 — Production Domain (Sprint 6)
+Hangi domain ve alt domain'ler kullanılacak (örn. `menu.{brand}.com`, `app.{brand}.com`). Marka kararı Sprint 6 deployment doc'ta netleşir.
+
+### OP-3 — Hetzner VPS Lokasyonu ve Boyutu (Sprint 6)
+NBG1 vs FSN1 vs HEL1, CX22 (4GB RAM) vs CX32 (8GB RAM). İlk pilot için CX22 yeterli olabilir; yük artarsa CX32 upgrade'i.
+
+### OP-4 — Database Backup ve Recovery (Sprint 6)
+Postgres backup stratejisi (pg_dump cron, point-in-time, offsite). Günlük/haftalık otomasyonu; Hetzner Storage Box ile offsite.
+
+### OP-8 — Working Hours JSON Şeması (Sprint 2)
+`Branch.working_hours_json` alanının yapısı. Olası şema:
+```json
+{
+  "mon": [{"open": "08:00", "close": "22:00"}],
+  "tue": [{"open": "08:00", "close": "22:00"}],
+  ...
+}
+```
+P2 özellik ama veri şeması erkenden gerekiyor; Sprint 2 model tanımında netleşecek.
+
+### OP-9 — Sentry / Monitoring (Sprint 6)
+Sentry self-hosted vs SaaS, uptime monitoring tool'u (Better Stack / UptimeRobot / Healthchecks.io).
+
+### OP-11 — Postgres Host Port (Sprint 1 notu)
+Local'de birden fazla Postgres instance çakışmasın diye ana stack'te host port **5434 → 5432** kullanılır.
+Üretimde bu mapping yok (Caddy/Cloudflare üzerinden erişim). Gerekirse `.env`'de değiştirilebilir.
