@@ -290,6 +290,20 @@ export async function updateTheme(
   });
 }
 
+/** POST /api/v1/admin/theme/ — create a theme config (rare; orgs seed
+ *  their default config via the backend management command). */
+export async function createTheme(
+  payload: Partial<ThemeConfig> & { organization_id: number },
+  options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader" | "csrfToken"> = {},
+): Promise<ThemeConfig> {
+  return adminFetch<ThemeConfig>("/api/v1/admin/theme/", {
+    method: "POST",
+    csrfToken: options.csrfToken,
+    body: payload,
+    ...options,
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Menu CRUD
 // ---------------------------------------------------------------------------

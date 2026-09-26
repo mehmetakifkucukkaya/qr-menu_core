@@ -107,14 +107,12 @@ export default async function DashboardPage() {
           title="İşletme bilgileri"
           description="Logo, iletişim ve adres bilgilerini düzenleyin."
           icon={<Store className="h-5 w-5" aria-hidden />}
-          comingSoon
         />
         <QuickLink
           href="/admin/theme"
           title="Tema ayarları"
           description="Renk paleti ve yerleşim seçeneklerini özelleştirin."
           icon={<Palette className="h-5 w-5" aria-hidden />}
-          comingSoon
         />
       </section>
 
