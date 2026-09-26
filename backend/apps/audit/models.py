@@ -42,6 +42,10 @@ class AuditEvent(models.Model):
         ("deactivated", "Deactivated"),
         ("reactivated", "Reactivated"),
         ("reordered", "Reordered"),
+        # Sprint 7A — AI PDF menu import (D-021).
+        ("ai_import_uploaded", "AI import: PDF uploaded"),
+        ("ai_import_confirmed", "AI import: draft confirmed"),
+        ("ai_import_discarded", "AI import: draft discarded"),
     ]
 
     # ---- target type -----------------------------------------------------
@@ -52,6 +56,8 @@ class AuditEvent(models.Model):
         ("branch", "Branch"),
         ("theme", "Theme"),
         ("organization", "Organization"),
+        # Sprint 7A — AI PDF menu import (D-021).
+        ("menu_import_draft", "Menu Import Draft"),
     ]
 
     actor = models.ForeignKey(
@@ -68,7 +74,7 @@ class AuditEvent(models.Model):
         related_name="audit_events",
     )
     action = models.CharField(max_length=30, choices=ACTION_CHOICES)
-    target_type = models.CharField(max_length=20, choices=TARGET_CHOICES)
+    target_type = models.CharField(max_length=30, choices=TARGET_CHOICES)
     target_id = models.PositiveIntegerField()
     target_repr = models.CharField(
         max_length=200,
