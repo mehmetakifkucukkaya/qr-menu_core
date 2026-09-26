@@ -1,0 +1,97 @@
+# ----- Python / Django -----
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual envs
+.venv/
+venv/
+env/
+ENV/
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+celerybeat-schedule
+celerybeat.pid
+
+# ----- Node / Next.js -----
+node_modules/
+.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# Testing
+coverage/
+.nyc_output/
+
+# Next.js
+.next/
+out/
+build/
+dist/
+.swc/
+next-env.d.ts
+
+# Production
+*.tsbuildinfo
+
+# Misc
+.DS_Store
+*.pem
+.vscode/
+.idea/
+*.swp
+
+# ----- Environment -----
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+!.env.example
+
+# ----- Docker -----
+.docker/
+docker-compose.override.yml
+
+# ----- OS -----
+Thumbs.db
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+ehthumbs.db
+Desktop.ini
+
+# ----- Secrets (defense in depth) -----
+*.pem
+*.key
+secrets/
