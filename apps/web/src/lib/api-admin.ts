@@ -899,3 +899,90 @@ export function qrDownloadUrl(id: number): string {
   ).replace(/\/$/, "");
   return `${base}/api/v1/admin/qr-codes/${id}/download`;
 }
+
+// ---------------------------------------------------------------------------
+// Analytics overview (Sprint 5B-2 — backend shipped in 5A)
+// ---------------------------------------------------------------------------
+
+/**
+ * EventType union — mirrors `apps.analytics.models.MenuViewEvent.EVENT_CHOICES`.
+ * The backend serializes the same snake_case identifiers in `event_counts`,
+ * so the keys of `AnalyticsEventCounts` are exactly this union.
+ */
+export type AnalyticsEventType =
+  | "menu_view"
+  | "language_change"
+  | "whatsapp_click"
+  | "phone_click"
+  | "qr_open";
+
+/**
+ * Per-event-type counts over the chosen window. Backend always returns
+ * all five keys (zero when no events exist) — see `TODAY_EVENT_TYPES`
+ * in `apps/analytics/views_admin.py`.
+ */
+export interface AnalyticsEventCounts {
+  menu_view: number;
+  language_change: number;
+  whatsapp_click: number;
+  phone_click: number;
+  qr_open: number;
+}
+
+/** Top QR code row from the analytics overview (id + label + scan count). */
+export interface AnalyticsTopQRCode {
+  id: number;
+  label: string;
+  scan_count: number;
+}
+
+/** Single day in the daily views time-series. */
+export interface AnalyticsDailyView {
+  /** ISO date "YYYY-MM-DD" (TruncDate result). */
+  date: string;
+  count: number;
+}
+
+/**
+ * Response payload of `GET /api/v1/admin/analytics/overview`.
+ *
+ * Backend returns this wrapped in `{ data, meta }` — `adminFetch`
+ * unwraps automatically (no `count`/`results` keys present).
+ *
+ * All counts are tenant-scoped via `IsOrganizationMember` + the user's
+ * `Membership.organization` — the frontend never passes an `org_id`
+ * filter.
+ */
+export interface AnalyticsOverview {
+  today_views: number;
+  week_views: number;
+  month_views: number;
+  event_counts: AnalyticsEventCounts;
+  /** Locale → ratio (0..1). Keys present only when at least one event
+   *  exists in the window (backend skips empty windows). */
+  language_distribution: Record<string, number>;
+  top_qr_codes: AnalyticsTopQRCode[];
+  daily_views: AnalyticsDailyView[];
+}
+
+/**
+ * GET /api/v1/admin/analytics/overview?days={N}
+ *
+ * Dashboard payload used by `/admin/analytics`. `days` defaults to 30
+ * (mirroring backend default). The backend clamps the window to
+ * [1, 90] so passing larger values is safe.
+ *
+ * Tenant-safe — the backend resolves the organization from the session
+ * cookie. Errors surface as `AdminApiError` with the same codes used by
+ * every other admin endpoint (`auth.unauthenticated`, `api.error`, …).
+ */
+export async function fetchAnalyticsOverview(
+  days: number = 30,
+  options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
+): Promise<AnalyticsOverview> {
+  const safeDays = Math.max(1, Math.min(90, Math.floor(Number(days) || 30)));
+  return adminFetch<AnalyticsOverview>(
+    `/api/v1/admin/analytics/overview?days=${safeDays}`,
+    { ...options },
+  );
+}
