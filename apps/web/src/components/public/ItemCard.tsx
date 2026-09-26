@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ChevronRight } from "lucide-react";
 import type { PublicMenuCategory, PublicMenuItem } from "@/types/menu";
 import { getItemPlaceholder } from "@/lib/placeholder";
 import { formatPrice } from "@/lib/format";
@@ -87,8 +88,7 @@ export function ItemCard({ item, category, onSelect }: ItemCardProps) {
         aria-label={`${item.name} detayını aç`}
         className="touch-target self-center rounded-full p-2 text-muted transition hover:bg-background focus:bg-background focus:outline-none focus:ring-2 focus:ring-primary"
       >
-        {/* chevron-right visual cue; lucide-react deferred to Part 2 */}
-        <span aria-hidden>›</span>
+        <ChevronRight className="h-5 w-5" aria-hidden />
       </button>
     </article>
   );
