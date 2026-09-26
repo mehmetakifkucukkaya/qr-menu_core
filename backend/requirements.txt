@@ -16,5 +16,8 @@ gunicorn==23.0.0
 # --- Pillow (ImageField / logo / cover_image) ---
 pillow==11.3.0
 
+# --- QR code generation (Sprint 5A — qr PNG download endpoint) ---
+qrcode[pil]==7.4.2
+
 # --- CORS (frontend cross-origin in dev) ---
 django-cors-headers==4.7.0

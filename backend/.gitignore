@@ -19,8 +19,11 @@ htmlcov/
 .tox/
 
 # Runtime artifacts (mounted as volumes in docker-compose)
-media/
-staticfiles/
+# Ignore the runtime media + staticfiles dirs explicitly so they don't
+# swallow app source trees that happen to live under ``media/`` (e.g.
+# the ``apps.media`` Python package).
+/media/
+/staticfiles/
 db.sqlite3
 *.log
 
