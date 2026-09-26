@@ -24,6 +24,8 @@ urlpatterns = [
     path("api/v1/admin/media/", include("apps.media.urls")),
     # Sprint 5A — admin analytics overview.
     path("api/v1/admin/analytics/", include("apps.analytics.urls_admin")),
+    # Sprint 7A — AI PDF menu import (D-021).
+    path("api/v1/admin/pdf-import/", include("apps.pdf_import.urls")),
     # Sprint 3 — public unauthenticated read endpoints (throttled).
     path("api/v1/public/", include("apps.menu.urls_public")),
     # Sprint 5A — public events endpoint (throttled, IP/UA hash).
