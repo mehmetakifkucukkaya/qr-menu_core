@@ -43,7 +43,7 @@ from django.utils import timezone
 
 from apps.menu.models import MenuItem
 
-from .models import Order, OrderItem
+from .models import Order, OrderItem, OrderStatus
 
 logger = logging.getLogger(__name__)
 
