@@ -4,6 +4,7 @@ import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
 import { Globe } from "lucide-react";
 import type { LocaleCode } from "@/types/menu";
+import { trackEvent } from "@/lib/events";
 
 interface LocaleSelectorProps {
   current: LocaleCode;
@@ -18,6 +19,10 @@ interface LocaleSelectorProps {
  * payload with the new locale, so we don't need a client-side cache
  * to invalidate. The transition keeps the previous render alive for
  * ~250ms which gives a "skeleton flash" feel — acceptable in V1.
+ *
+ * Analytics (Sprint 5B): fires `language_change` when the user picks
+ * a non-current locale. The event is sent BEFORE the navigation so we
+ * still record the change even if the page transition throws.
  */
 export function LocaleSelector({
   current,
@@ -38,6 +43,9 @@ export function LocaleSelector({
       params.set("locale", next);
     }
     const qs = params.toString();
+    // Fire analytics first — keepalive on the fetch in `trackEvent`
+    // means it survives the navigation if the user clicks through fast.
+    trackEvent("language_change", { locale: next });
     startTransition(() => {
       router.push(`${pathname}${qs ? `?${qs}` : ""}`);
       router.refresh();
