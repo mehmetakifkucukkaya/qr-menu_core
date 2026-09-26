@@ -497,6 +497,66 @@ class Command(BaseCommand):
                         [tag_index[c] for c in tag_codes if c in tag_index]
                     )
 
+        # ----------------------------------------------------------------
+        # QR codes for the demo business (Sprint 6B)
+        # ----------------------------------------------------------------
+        from apps.branches.models import Branch as _Branch  # noqa: PLC0415
+        from apps.qr.models import QRCode as _QRCode  # noqa: PLC0415
+        from apps.qr.utils import build_target_url as _build_target_url  # noqa: PLC0415
+
+        main_branch_qs = _Branch.objects.filter(organization=organization, is_active=True)
+        main_branch = main_branch_qs.first()
+        if main_branch is None:
+            # Fallback: spin up a default branch so the QR demo flow still works.
+            main_branch, _ = _Branch.objects.get_or_create(
+                organization=organization,
+                slug="merkez",
+                defaults={
+                    "name": "Merkez",
+                    "phone": organization.phone or "+90 212 555 0123",
+                    "whatsapp_phone": organization.whatsapp_phone or "+90 532 555 0123",
+                    "address": organization.address or "Kadıköy, İstanbul",
+                    "is_active": True,
+                },
+            )
+
+        qr_seed_rows = [
+            {"label": "Kasa Önü", "table_number": ""},
+            {"label": "Masa 1", "table_number": "1"},
+            {"label": "Masa 2", "table_number": "2"},
+            {"label": "Bahçe Masa 3", "table_number": "3"},
+            {"label": "Bahçe Masa 4", "table_number": "4"},
+        ]
+        created_qrs = 0
+        for row in qr_seed_rows:
+            target_url = _build_target_url(
+                business_slug=organization.slug,
+                branch_slug=main_branch.slug,
+                qr_id=None,  # id is filled after creation below
+            )
+            qr, qr_created = _QRCode.objects.get_or_create(
+                organization=organization,
+                label=row["label"],
+                defaults={
+                    "branch": main_branch,
+                    "menu": menu,
+                    "table_number": row["table_number"],
+                    "target_url": target_url,
+                    "is_active": True,
+                },
+            )
+            # Keep target_url in sync with the actual id (so the public URL has qr=<id>)
+            new_url = _build_target_url(
+                business_slug=organization.slug,
+                branch_slug=main_branch.slug,
+                qr_id=qr.id,
+            )
+            if qr.target_url != new_url:
+                qr.target_url = new_url
+                qr.save(update_fields=["target_url", "updated_at"])
+            if qr_created:
+                created_qrs += 1
+
         self.stdout.write(self.style.SUCCESS("Demo seed OK"))
         self.stdout.write(f"  admin user   : {admin_email}  (id={user.pk})")
         self.stdout.write(
@@ -513,6 +573,10 @@ class Command(BaseCommand):
         self.stdout.write(
             f"  items        : {MenuItem.objects.filter(menu=menu).count()} "
             f"({created_items} created this run)"
+        )
+        self.stdout.write(
+            f"  QR codes     : {_QRCode.objects.filter(organization=organization).count()} "
+            f"({created_qrs} created this run)"
         )
         self.stdout.write(
             f"  translations : "

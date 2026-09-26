@@ -37,6 +37,8 @@ db.sqlite3-journal
 # to avoid clobbering source trees under ``media/`` directories.
 /backend/media/
 /backend/staticfiles/
+/backend/config/staticfiles/
+/backend/test_real.jpg
 .coverage
 htmlcov/
 .pytest_cache/

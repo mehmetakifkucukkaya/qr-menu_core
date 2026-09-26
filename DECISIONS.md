@@ -717,6 +717,43 @@ Local'de birden fazla Postgres instance çakışmasın diye ana stack'te host po
 
 ---
 
+## KARAR D-019 — AI Multimodal Image Generation (Sprint 6B)
+
+**Karar:** mcode-tools `connector__matrix__generate_image` tool'u kullanılarak logo + kapak üretimi.
+
+**Pattern:**
+1. `mcode-tools connector call connector__matrix__generate_image --args '{"requests": [{"prompt": "...", "aspect_ratio": "1:1" veya "16:9", "resolution": "1K", "output_file": "modern-cafe-{logo,cover}"}]}'`
+2. Response: `success_items[0].node_id` (örn. 446014663938318)
+3. `mcode-tools get-asset-url <node_id>` → short-lived OSS URL (24h expiry)
+4. `curl -fsS -o /tmp/orig.jpg "<oss_url>"` → indir
+5. PIL ile optimize (resize, convert to WebP, quality 85-90, method 6)
+6. Final: `apps/web/public/demo-assets/modern-cafe-{logo,cover}.webp` (git'e commit)
+
+**Prompt patterns (Modern Cafe için):**
+- Logo (1:1, 512x512): "Minimalist modern coffee shop logo, single letter M intertwined with a stylized coffee cup steam swirl, warm earth tones (cream + coffee brown + terracotta accent), flat vector design, white background"
+- Kapak (16:9, 1200x675): "Modern specialty coffee shop interior, warm natural lighting, wooden counter with brass details, exposed brick wall, soft focus latte art on cup in foreground, golden hour, editorial food photography style"
+
+**Tarih:** 2026-09-26
+
+**Bağlam:** D-006 kararı "logo + kapak AI ile, ürün/kategori stock placeholder". V1 demo için profesyonel marka görseli.
+
+**Sonuçlar:**
+- `apps/web/public/demo-assets/modern-cafe-logo.webp` (10.9 KB, 512x512)
+- `apps/web/public/demo-assets/modern-cafe-cover.webp` (96.2 KB, 1200x675)
+- `apps/web/public/demo-assets/og-image.jpg` (138.2 KB, 1200x630)
+- `apps/web/public/favicon.ico` (modern-cafe-logo.webp kopyası)
+- `apps/web/src/app/layout.tsx` root metadata (OG image, favicon, twitter card)
+- `apps/web/src/app/(public)/m/[businessSlug]/page.tsx` `generateMetadata()` (per-business OG + twitter)
+
+**Notlar:**
+- 2 image generation call (logo + kapak), toplam < 30 saniye
+- OSS URL 24h expire, image generation sonrası hemen indirmek gerekli
+- Varyasyon: 2 logo üretip en iyisini seçmek (V2'de A/B test)
+- WebP optimize method 6 (lanczos resize + quality 85-90) — kalite/boyut optimal
+- OG image JPEG olarak kalır (Twitter/Facebook JPEG daha iyi destekler)
+
+---
+
 ## Karar Geçmişi (Güncel)
 
 | ID | Tarih | Karar | Durum |
@@ -737,6 +774,9 @@ Local'de birden fazla Postgres instance çakışmasın diye ana stack'te host po
 | D-014 | 2026-09-26 | Theme override = inline CSS variables (component-level) | aktif |
 | D-015 | 2026-09-26 | Admin Panel V1 scope (catalog CRUD + inline edit + reorder + i18n tabs + chip selectors; görsel upload preview-only) | aktif |
 | D-016 | 2026-09-26 | Audit Log + Admin Summary (generic FK pattern + thread-local context + pre_save snapshot + immutable append-only; counts + 10 recent events) | aktif |
+| D-017 | 2026-09-26 | QR + Media + Analytics (qrcode[pil] lib, multipart upload mime/size validation, MenuViewEvent + IP/UA hash with ANALYTICS_SALT) | aktif |
+| D-018 | 2026-09-26 | Production settings (env-driven, Caddy-proxied HSTS, secure cookies, JSON logging, Sentry opt-in, dj-database-url) | aktif |
+| D-019 | 2026-09-26 | AI multimodal generation pattern (mcode-tools `connector__matrix__generate_image`; aspect_ratio + resolution; output_file; node_id → get_asset_url → curl → PIL optimize WebP 512x512 / 1200x675) | aktif |
 | D-017 | 2026-09-26 | QR Codes + Media Upload + Analytics Pattern (qrcode[pil] PNG; tenant-prefix uploads; sha256+salt IP/UA hashing; per-event throttle; Postgres-side aggregation) | aktif |
 | D-018 | 2026-09-26 | Production settings pattern (env-driven; SECRET_KEY/ALLOWED_HOSTS/CORS runtime guards; Caddy-proxied HTTPS; JSON-to-stdout logging; optional Sentry) | aktif |
 ---
