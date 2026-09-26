@@ -89,6 +89,8 @@ LOCAL_APPS = [
     "apps.qr",
     "apps.media",
     "apps.analytics",
+    # Sprint 7A — AI PDF menu import (D-021).
+    "apps.pdf_import",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -184,6 +186,26 @@ PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "http://localhost:3000")
 ANALYTICS_SALT = os.environ.get(
     "ANALYTICS_SALT", "qr-menu-default-salt-change-me"
 )
+
+# ---------------------------------------------------------------------------
+# Sprint 7A — AI PDF menu import (D-021)
+# ---------------------------------------------------------------------------
+# OpenAI is the primary provider (GPT-4o vision + structured JSON output).
+# Anthropic (Claude 3.5 Sonnet) is the fallback — see apps/pdf_import/services.
+# Either can be left empty in development: the upload endpoint will surface
+# a 502 with code `ai.parse_failed` if no provider is configured.
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+OPENAI_DEFAULT_MODEL = os.environ.get("OPENAI_DEFAULT_MODEL", "gpt-4o")
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+ANTHROPIC_DEFAULT_MODEL = os.environ.get(
+    "ANTHROPIC_DEFAULT_MODEL", "claude-3-5-sonnet-20241022"
+)
+
+# PDF upload guardrails (OP-16). 10 MB / 20 pages is enough for typical
+# single-language restaurant menus; the upload endpoint returns 400 if the
+# file exceeds either cap.
+PDF_IMPORT_MAX_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
+PDF_IMPORT_MAX_PAGES = 20
 
 # ---------------------------------------------------------------------------
 # DRF

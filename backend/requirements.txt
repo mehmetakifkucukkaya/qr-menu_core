@@ -28,3 +28,13 @@ django-cors-headers==4.7.0
 # integration present; the runtime cost is one import that's a no-op when
 # DSN is empty.
 sentry-sdk[django]==2.19.2
+
+# --- AI PDF menu import (Sprint 7A — D-021) ---
+# OpenAI primary (GPT-4o vision + structured JSON output).
+openai==1.54.0
+# Anthropic fallback (Claude 3.5 Sonnet — used when OpenAI errors / rate-limits).
+anthropic==0.36.2
+# pypdf kept as a future text-fallback path (V2 ileri) — currently the AI
+# reads the PDF visually; we still pin a version so the dependency graph
+# stays explicit for ops planning.
+pypdf==5.1.0
