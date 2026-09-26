@@ -18,8 +18,16 @@ urlpatterns = [
     path("api/v1/admin/", include("apps.menu.urls")),
     # Sprint 4C — admin dashboard summary (counts + recent events).
     path("api/v1/admin/", include("apps.audit.urls")),
+    # Sprint 5A — QR code admin CRUD + PNG download.
+    path("api/v1/admin/", include("apps.qr.urls")),
+    # Sprint 5A — multipart media upload.
+    path("api/v1/admin/media/", include("apps.media.urls")),
+    # Sprint 5A — admin analytics overview.
+    path("api/v1/admin/analytics/", include("apps.analytics.urls_admin")),
     # Sprint 3 — public unauthenticated read endpoints (throttled).
     path("api/v1/public/", include("apps.menu.urls_public")),
+    # Sprint 5A — public events endpoint (throttled, IP/UA hash).
+    path("api/v1/public/", include("apps.analytics.urls_public")),
 ]
 
 if settings.DEBUG:
