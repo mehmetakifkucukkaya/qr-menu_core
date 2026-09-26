@@ -24,6 +24,24 @@ from django.db.models import QuerySet
 from apps.menu.models import Menu, MenuCategory, MenuItem
 
 
+def image_url(field) -> str | None:
+    """Resolve an ImageField-style value to a public URL.
+
+    Django's `ImageField.url` returns ``MEDIA_URL + storage_name``. That
+    works for plain filenames (e.g. ``items/real.jpg``) but mangles
+    absolute URLs (e.g. ``http://localhost:3000/media/uploads/1/x.jpg``
+    becomes ``/media/http%3A/localhost...``). The frontend uploads via
+    ``/api/v1/admin/media/upload`` which returns an absolute URL, so we
+    need to detect that and pass it through unchanged.
+    """
+    if not field:
+        return None
+    value = str(field)
+    if value.startswith(("http://", "https://")):
+        return value
+    return field.url
+
+
 def get_active_menu(organization, branch=None) -> Menu | None:
     """Return the active published menu for an organization.
 
@@ -142,7 +160,7 @@ def get_full_menu_payload(organization, locale: str = "tr", branch=None) -> dict
                             else None
                         ),
                         "currency": item.currency,
-                        "image": item.image.url if item.image else None,
+                        "image": image_url(item.image),
                         "is_featured": item.is_featured,
                         "is_popular": item.is_popular,
                         "is_new": item.is_new,
@@ -167,7 +185,7 @@ def get_full_menu_payload(organization, locale: str = "tr", branch=None) -> dict
                     "name": cat_text["name"],
                     "description": cat_text["description"],
                     "locale_used": cat_text["locale_used"],
-                    "image": category.image.url if category.image else None,
+                    "image": image_url(category.image),
                     "items": items_payload,
                 }
             )

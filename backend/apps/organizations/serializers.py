@@ -10,6 +10,16 @@ from .models import Organization
 class OrganizationSerializer(serializers.ModelSerializer):
     """Full organization representation (admin endpoints)."""
 
+    # See MenuCategorySerializer — accept URL strings for image fields so the
+    # multipart-upload-then-PATCH-URL flow (Sprint 5B) works without forcing
+    # the client to send multipart on every PATCH.
+    logo = serializers.CharField(
+        max_length=500, required=False, allow_blank=True, allow_null=True
+    )
+    cover_image = serializers.CharField(
+        max_length=500, required=False, allow_blank=True, allow_null=True
+    )
+
     class Meta:
         model = Organization
         fields = (
@@ -39,6 +49,13 @@ class OrganizationSerializer(serializers.ModelSerializer):
 
 class OrganizationSummarySerializer(serializers.ModelSerializer):
     """Minimal org representation for nested resources."""
+
+    # See OrganizationSerializer — accept URL strings so the
+    # multipart-upload-then-PATCH-URL flow works (Sprint 5B). Auto-derived
+    # ImageField serializer would prepend MEDIA_URL to absolute URLs.
+    logo = serializers.CharField(
+        max_length=500, required=False, allow_blank=True, allow_null=True
+    )
 
     class Meta:
         model = Organization

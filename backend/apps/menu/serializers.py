@@ -153,6 +153,14 @@ class MenuCategorySerializer(serializers.ModelSerializer):
     translations = MenuCategoryTranslationSerializer(many=True, required=False)
     # Override slug to make it truly optional (auto-generated in MenuCategory.save()).
     slug = serializers.SlugField(max_length=80, required=False, allow_blank=True, default="")
+    # ImageField in DRF rejects URL strings on JSON PATCH (it expects a file-like
+    # value). In V1 the upload flow is: client POSTs multipart to
+    # /api/v1/admin/media/upload, gets back a public URL, then PATCHes the URL
+    # here. We accept the URL as a plain string instead — Django's ImageField
+    # stores strings in the DB either way.
+    image = serializers.CharField(
+        max_length=500, required=False, allow_blank=True, allow_null=True
+    )
 
     class Meta:
         model = MenuCategory
@@ -237,6 +245,11 @@ class MenuItemSerializer(serializers.ModelSerializer):
         required=False,
     )
     translations = MenuItemTranslationSerializer(many=True, required=False)
+    # See MenuCategorySerializer — accept URL strings for the image field
+    # so the multipart-upload-then-PATCH-URL flow (Sprint 5B) works.
+    image = serializers.CharField(
+        max_length=500, required=False, allow_blank=True, allow_null=True
+    )
 
     class Meta:
         model = MenuItem
