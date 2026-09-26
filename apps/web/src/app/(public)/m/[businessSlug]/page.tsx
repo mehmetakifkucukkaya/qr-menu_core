@@ -6,6 +6,7 @@ import { LocaleSelector } from "@/components/public/LocaleSelector";
 import { FloatingCtas } from "@/components/public/FloatingCtas";
 import { EmptyState } from "@/components/public/EmptyState";
 import { MenuViewClient } from "@/components/public/MenuViewClient";
+import { HeaderCartIcon } from "@/components/public/HeaderCartIcon";
 import { fetchPublicMenu, PublicMenuError } from "@/lib/api";
 import { humanizeSlug } from "@/lib/format";
 import type { LocaleCode } from "@/types/menu";
@@ -29,10 +30,10 @@ function resolveLocale(raw?: string): LocaleCode {
  * Docker internal network (`internal: true`), and streams the rendered
  * HTML. The browser never talks to the backend directly in V1.
  *
- * Composition (Sprint 3B-2):
- *   - sticky header (logo + business name + LocaleSelector + CTAs)
+ * Composition (Sprint 3B-2 + Sprint 8B):
+ *   - sticky header (logo + business name + LocaleSelector + HeaderCartIcon + CTAs)
  *   - BusinessHero (cover + logo + name + theme override)
- *   - MenuViewClient (CategoryNav + CategorySection + ItemDetailDrawer)
+ *   - MenuViewClient (CategoryNav + CategorySection + ItemDetailDrawer + CartFab + CartDrawer)
  *   - FloatingCtas (mobile only bottom bar)
  *   - footer
  */
@@ -46,7 +47,13 @@ export default async function PublicMenuPage({ params, searchParams }: PageProps
       branch,
       internal: true,
     });
-    return <MenuView payload={payload} locale={locale} />;
+    return (
+      <MenuView
+        payload={payload}
+        locale={locale}
+        businessSlug={params.businessSlug}
+      />
+    );
   } catch (err) {
     if (err instanceof PublicMenuError) {
       // 404 → bubble up to the not-found.tsx in this segment.
@@ -95,9 +102,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 function MenuView({
   payload,
   locale,
+  businessSlug,
 }: {
   payload: Awaited<ReturnType<typeof fetchPublicMenu>>;
   locale: LocaleCode;
+  businessSlug: string;
 }) {
   const { business, menu, theme, categories, cta, allergens, dietary_tags } =
     payload;
@@ -107,9 +116,7 @@ function MenuView({
 
   return (
     <main className="min-h-screen bg-background">
-      {/* Sticky top bar: logo + name + locale selector + inline CTAs (sm+).
-          Hidden behind a translucent background; becomes solid on scroll via
-          bg-background/85 + backdrop-blur. */}
+      {/* Sticky top bar: logo + name + locale selector + cart icon + inline CTAs (sm+). */}
       <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70">
         <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 py-2.5">
           <div className="flex min-w-0 items-center gap-2">
@@ -138,6 +145,7 @@ function MenuView({
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <LocaleSelector current={locale} />
+            <HeaderCartIcon />
           </div>
         </div>
       </header>
@@ -156,6 +164,7 @@ function MenuView({
         </div>
       ) : (
         <MenuViewClient
+          businessSlug={businessSlug}
           categories={categories}
           allergens={allergens}
           dietaryTags={dietary_tags}
