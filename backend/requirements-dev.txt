@@ -7,3 +7,10 @@
 pytest==8.4.2
 pytest-django==4.9.0
 pytest-cov==6.2.1
+
+# --- Production-shaped logging (Sprint 6A — D-018) ---
+# JSON log formatter used by config/settings/production.py. Installed in
+# dev too so log lines match between local and prod; the formatter is
+# selected only when DEBUG is False, so local dev keeps the readable
+# simple format.
+json-logging==1.4.1
