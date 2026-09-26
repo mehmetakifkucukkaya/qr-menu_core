@@ -12,8 +12,11 @@ import { trackEvent } from "@/lib/events";
 import { CategoryNav } from "./CategoryNav";
 import { CategorySection } from "./CategorySection";
 import { ItemDetailDrawer } from "./ItemDetailDrawer";
+import { CartDrawer } from "./CartDrawer";
+import { useCartStore } from "@/lib/cart-store";
 
 interface MenuViewClientProps {
+  businessSlug: string;
   categories: PublicMenuCategory[];
   allergens: PublicMenuAllergen[];
   dietaryTags: PublicMenuDietaryTag[];
@@ -37,8 +40,13 @@ interface MenuViewClientProps {
  *     analytics dashboard can split organic vs. QR traffic.
  *   - Refs guard the `useEffect` so the events fire exactly once per
  *     page lifetime even under React's StrictMode double-invoke.
+ *
+ * Sprint 8B:
+ *   - Mounts `CartDrawer` and the floating cart button so the public
+ *     menu page can place an order.
  */
 export function MenuViewClient({
+  businessSlug,
   categories,
   allergens,
   dietaryTags,
@@ -75,10 +83,30 @@ export function MenuViewClient({
     }
   }, [locale]);
 
+  // Catalog lookup for cart thumbnails (fallback when an ItemCard was
+  // rendered with a stale placeholder image — we still want to show the
+  // real image inside the drawer).
+  const catalogLookup: Record<number, PublicMenuItem> = {};
+  for (const cat of categories) {
+    for (const it of cat.items) {
+      catalogLookup[it.id] = it;
+    }
+  }
+
+  const totalItems = useCartStore((s) => s.totalItems());
+  const openDrawer = useCartStore((s) => s.openDrawer);
+
+  // Currency comes from the first category's first item (V1: one menu
+  // per business so currency is uniform across the page).
+  const currency =
+    categories[0]?.items[0]?.currency ?? categories[0]?.name
+      ? "TRY"
+      : "TRY";
+
   return (
     <>
       <CategoryNav categories={categories} />
-      <div className="mx-auto mt-6 max-w-2xl space-y-8 px-4 pb-28 sm:pb-10">
+      <div className="mx-auto mt-6 max-w-2xl space-y-8 px-4 pb-32 sm:pb-10">
         {categories.map((category) => (
           <CategorySection
             key={category.id}
@@ -87,6 +115,11 @@ export function MenuViewClient({
           />
         ))}
       </div>
+
+      {/* Floating cart button (mobile only — desktop gets the header
+          icon from the menu page itself). */}
+      <CartFab count={totalItems} onClick={openDrawer} />
+
       <ItemDetailDrawer
         item={activeItem}
         allergens={allergens}
@@ -94,6 +127,27 @@ export function MenuViewClient({
         locale={locale}
         onClose={handleClose}
       />
+
+      <CartDrawer
+        businessSlug={businessSlug}
+        currency={currency}
+        catalogLookup={catalogLookup}
+      />
     </>
+  );
+}
+
+function CartFab({ count, onClick }: { count: number; onClick: () => void }) {
+  if (count <= 0) return null;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={`Sepetim — ${count} ürün`}
+      className="fixed bottom-6 right-4 z-30 inline-flex items-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-bold uppercase tracking-wider text-primary-foreground shadow-floating transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 sm:hidden"
+    >
+      <span aria-hidden>🛒</span>
+      Sepetim · {count}
+    </button>
   );
 }
