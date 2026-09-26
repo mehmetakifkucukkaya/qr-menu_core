@@ -27,6 +27,8 @@ export interface PublicMenuBusiness {
   name: string;
   slug: string;
   logo: string | null;
+  cover_image?: string | null;
+  description?: string;
   default_locale: LocaleCode;
   currency: string;
 }
@@ -35,6 +37,7 @@ export interface PublicMenuMenu {
   id: number;
   name: string;
   slug: string;
+  description?: string;
   default_locale: LocaleCode;
   supported_locales: LocaleCode[];
   currency: string;

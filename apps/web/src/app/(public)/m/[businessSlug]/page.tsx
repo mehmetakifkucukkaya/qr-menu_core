@@ -64,9 +64,26 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       locale: DEFAULT_LOCALE,
       internal: true,
     });
+    const { business, menu } = payload;
+    const ogImage = business.cover_image || "/demo-assets/og-image.jpg";
+    const description = `${business.name} — dijital menü${menu?.description ? `: ${menu.description}` : ""}`.slice(0, 200);
     return {
-      title: payload.business.name,
-      description: `${payload.business.name} — dijital menü`,
+      title: business.name,
+      description,
+      openGraph: {
+        title: `${business.name} — Dijital Menü`,
+        description,
+        type: "website",
+        locale: "tr_TR",
+        images: [{ url: ogImage, width: 1200, height: 630, alt: `${business.name} dijital menü` }],
+      },
+      twitter: {
+        card: "summary_large_image",
+        title: `${business.name} — Dijital Menü`,
+        description,
+        images: [ogImage],
+      },
+      robots: { index: true, follow: true },
     };
   } catch {
     return {
