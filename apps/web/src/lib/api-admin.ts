@@ -1138,3 +1138,118 @@ export async function discardImportDraft(
     },
   );
 }
+
+// ---------------------------------------------------------------------------
+// Orders (Sprint 8B)
+// ---------------------------------------------------------------------------
+
+/** Status enum mirrors `apps.orders.models.OrderStatus`. */
+export type AdminOrderStatus =
+  | "pending"
+  | "confirmed"
+  | "preparing"
+  | "ready"
+  | "delivered"
+  | "cancelled";
+
+/** Shape returned by `GET /api/v1/admin/orders/` (list). */
+export interface AdminOrder {
+  id: number;
+  order_number: string;
+  status: AdminOrderStatus;
+  table_number: string;
+  customer_name: string;
+  customer_phone: string;
+  total_amount: string;
+  currency: string;
+  item_count: number;
+  branch_name: string | null;
+  placed_at: string;
+}
+
+/** Shape returned by `GET /api/v1/admin/orders/{id}` (detail). */
+export interface AdminOrderDetail extends AdminOrder {
+  notes: string;
+  items: Array<{
+    id: number;
+    menu_item: number | null;
+    name: string;
+    price: string;
+    quantity: number;
+    notes: string;
+  }>;
+  confirmed_at: string | null;
+  preparing_at: string | null;
+  ready_at: string | null;
+  delivered_at: string | null;
+  cancelled_at: string | null;
+}
+
+/** Shape returned by `POST /api/v1/admin/orders/{id}/status`. */
+export interface AdminOrderStatusResponse {
+  order_number: string;
+  status: AdminOrderStatus;
+  placed_at: string;
+  confirmed_at: string | null;
+  preparing_at: string | null;
+  ready_at: string | null;
+  delivered_at: string | null;
+  cancelled_at: string | null;
+}
+
+export interface FetchOrdersFilters {
+  status?: AdminOrderStatus;
+  date?: string; // YYYY-MM-DD
+}
+
+/**
+ * GET /api/v1/admin/orders/ — tenant-scoped list with optional filters.
+ * Backend caps at 100 most recent rows (soft cap; explicit pagination is
+ * V2 ileri).
+ */
+export async function fetchOrders(
+  filters: FetchOrdersFilters = {},
+  options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
+): Promise<AdminOrder[]> {
+  const params = new URLSearchParams();
+  if (filters.status) params.set("status", filters.status);
+  if (filters.date) params.set("date", filters.date);
+  const query = params.toString();
+  const data = await adminFetch<{ count: number; results: AdminOrder[] }>(
+    `/api/v1/admin/orders/${query ? `?${query}` : ""}`,
+    { ...options },
+  );
+  return data.results ?? [];
+}
+
+/** GET /api/v1/admin/orders/{id}/ — full detail with items + timestamps. */
+export async function fetchOrderDetail(
+  id: number,
+  options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
+): Promise<AdminOrderDetail> {
+  return adminFetch<AdminOrderDetail>(`/api/v1/admin/orders/${id}/`, {
+    ...options,
+  });
+}
+
+/**
+ * POST /api/v1/admin/orders/{id}/status/ — state-machine transition.
+ *
+ * CSRF is required for unsafe methods — caller must pass a token obtained
+ * from `fetchCsrfToken()`. Returns the updated order summary.
+ */
+export async function updateOrderStatus(
+  id: number,
+  newStatus: AdminOrderStatus,
+  options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader" | "csrfToken"> = {},
+): Promise<AdminOrderStatusResponse> {
+  return adminFetch<AdminOrderStatusResponse>(
+    `/api/v1/admin/orders/${id}/status/`,
+    {
+      method: "POST",
+      csrfToken: options.csrfToken,
+      body: { status: newStatus },
+      ...options,
+    },
+  );
+}

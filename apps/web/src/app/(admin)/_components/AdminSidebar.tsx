@@ -10,6 +10,7 @@ import {
   QrCode,
   BarChart3,
   FileUp,
+  Receipt,
   LogOut,
   type LucideIcon,
 } from "lucide-react";
@@ -26,6 +27,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/menus", label: "Menüler", icon: UtensilsCrossed },
+  { href: "/admin/orders", label: "Siparişler", icon: Receipt },
   { href: "/admin/qr-codes", label: "QR Kodlar", icon: QrCode },
   { href: "/admin/pdf-import", label: "PDF Import", icon: FileUp },
   { href: "/admin/analytics", label: "Analitik", icon: BarChart3 },
