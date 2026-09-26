@@ -1,5 +1,8 @@
+"use client";
+
 import { Phone, MessageCircle } from "lucide-react";
 import type { PublicMenuCta } from "@/types/menu";
+import { trackEvent } from "@/lib/events";
 
 interface FloatingCtasProps {
   cta: PublicMenuCta;
@@ -14,9 +17,9 @@ interface FloatingCtasProps {
  * - WhatsApp uses `https://wa.me/{digits}` (works on all platforms;
  *   on desktop opens WhatsApp Web in a new tab).
  *
- * The number strings are kept with their original formatting for the
- * `tel:` href (so the dialer shows the human-readable form) and then
- * stripped of non-digits for the `wa.me/` URL.
+ * Analytics (Sprint 5B): fires `whatsapp_click` / `phone_click` before
+ * the navigation. The native `tel:` / `wa.me` handlers run after the
+ * event so we don't lose either signal.
  */
 export function FloatingCtas({ cta }: FloatingCtasProps) {
   const callPhone = cta.call_phone?.trim();
@@ -24,12 +27,21 @@ export function FloatingCtas({ cta }: FloatingCtasProps) {
 
   if (!callPhone && !whatsapp) return null;
 
+  const onPhoneClick = () => {
+    trackEvent("phone_click");
+  };
+
+  const onWhatsappClick = () => {
+    trackEvent("whatsapp_click");
+  };
+
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex justify-center px-4 pb-4 sm:hidden">
       <div className="pointer-events-auto flex gap-2 rounded-full bg-surface/95 px-3 py-2 shadow-floating ring-1 ring-border backdrop-blur">
         {callPhone ? (
           <a
             href={`tel:${callPhone.replace(/\s+/g, "")}`}
+            onClick={onPhoneClick}
             className="touch-target inline-flex items-center gap-1.5 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
           >
             <Phone className="h-4 w-4" aria-hidden />
@@ -41,6 +53,7 @@ export function FloatingCtas({ cta }: FloatingCtasProps) {
             href={`https://wa.me/${whatsapp.replace(/[^\d]/g, "")}`}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={onWhatsappClick}
             className="touch-target inline-flex items-center gap-1.5 rounded-full bg-accent px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-accent/90 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
           >
             <MessageCircle className="h-4 w-4" aria-hidden />
