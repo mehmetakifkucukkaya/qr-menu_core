@@ -1,0 +1,31 @@
+@import "../styles/tokens.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-background text-text font-body antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-heading;
+  }
+}
+
+@layer utilities {
+  .touch-target {
+    /* Mobile-friendly tap target: Apple HIG ≥ 44px, Material ≥ 48px. */
+    min-width: 44px;
+    min-height: 44px;
+  }
+}

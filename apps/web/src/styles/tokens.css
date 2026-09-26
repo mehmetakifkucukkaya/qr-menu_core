@@ -1,0 +1,30 @@
+/* ============================================================
+ * Theme tokens — Modern Cafe default palette.
+ *
+ * All colors are stored as space-separated RGB triplets so Tailwind's
+ * `rgb(var(--token) / <alpha-value>)` pattern works (see tailwind.config.ts).
+ *
+ * Per-business themes override these values via inline style on the
+ * BusinessHero wrapper (or anywhere higher in the tree). See
+ * docs/SPRINT_3_PLAN.md → "Theme Tokens".
+ * ============================================================ */
+
+:root {
+  /* Modern Cafe palette (see FRONTEND_PLACEHOLDERS.md / Modern Cafe seed) */
+  --color-primary: 139 90 60;          /* #8B5A3C warm brown */
+  --color-primary-foreground: 255 255 255;
+  --color-secondary: 212 165 116;      /* #D4A574 tan */
+  --color-accent: 224 120 86;          /* #E07856 terracotta */
+  --color-background: 245 239 230;     /* #F5EFE6 cream */
+  --color-surface: 255 255 255;
+  --color-text: 44 24 16;              /* #2C1810 dark espresso */
+  --color-muted: 122 107 95;
+  --color-border: 222 211 196;
+
+  /* Typography */
+  --font-heading: "Playfair Display", "Georgia", serif;
+  --font-body: "Inter", "system-ui", sans-serif;
+
+  /* Geometry */
+  --radius: 0.5rem;
+}
