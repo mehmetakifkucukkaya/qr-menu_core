@@ -671,6 +671,52 @@ Local'de birden fazla Postgres instance çakışmasın diye ana stack'te host po
 
 ---
 
+## KARAR D-017 — QR Codes + Media Upload + Analytics Pattern (Sprint 5A)
+
+**Karar:**
+- **QRCode model + target URL pattern** — `apps.qr.models.QRCode` (organization FK, branch FK nullable, menu FK, label/table_number, scan_count, is_active) + `target_url` auto-computed on save as `{PUBLIC_BASE_URL}/m/{business_slug}?branch={branch_slug}&qr={qr_id}`
+- **PNG generation** — `qrcode[pil]==7.4.2` library (`generate_qr_png` in `apps/qr/utils.py`), encoder version auto-selected, black-on-white, no custom error correction. QR endpoint = `/api/v1/admin/qr-codes/{id}/download` (returns `image/png`, no envelope)
+- **Media upload endpoint** — `/api/v1/admin/media/upload` multipart with strict validation: MIME whitelist (`image/jpeg`/`image/png`/`image/webp`), 5 MB cap, extension whitelist, tenant-scoped path `MEDIA_ROOT/uploads/{org_id}/{uuid}-{sanitized_filename}`. Local storage only (D-011 — S3/R2 V2). Mid-stream size re-check so a client that lies about Content-Length is rejected on the second chunk
+- **MenuViewEvent generic telemetry** — `apps.analytics.models.MenuViewEvent` for any public menu interaction (menu_view, language_change, whatsapp_click, phone_click, qr_open). Tenant-isolated with explicit `organization` FK (D-016 uyumlu). No contenttypes/generic FK — flat rows + dedicated index `(organization, event_type, -created_at)` keeps GROUP BY trivial
+- **IP/UA hashing** — sha256(`ANALYTICS_SALT` + ':' + value) truncated 64 chars. Salt from `ANALYTICS_SALT` env (default `qr-menu-default-salt-change-me`). Production'da 32+ karakter random token set edilmeli. Plain IP ve User-Agent string'i DB'ye ASLA yazılmıyor (`apps.analytics.hashing`)
+- **Public events throttle** — DRF `AnonRateThrottle` scope `"public_events"` 30/min/IP. Test skip pattern Sprint 4A gibi (DRF throttle cache process-level, pytest'te izole edilemiyor). Manual curl smoke ile doğrulanır
+- **Analytics overview** — `/api/v1/admin/analytics/overview` returns `today_views`, `week_views`, `month_views`, `event_counts` (per-type), `language_distribution` (per-locale ratio), `top_qr_codes` (QRCode.scan_count desc, limit 5), `daily_views` (TruncDate). DB-side aggregation (Postgres), `TruncDate` cross-DB uyumlu (SQLite test dahil)
+- **PUBLIC_BASE_URL setting** — `apps.core` mantığıyla `base.py` içinde env'den okunur, default `http://localhost:3000`. Production'da `https://menu.example.com`
+
+**Tarih:** 2026-09-26
+
+**Bağlam:** V1 demo akışının üç parçası tek sprint'te: (1) restoran sahibi QR oluşturur + indirir + masa etiketine basar, (2) ürün/kategori görselini yükleyebilir, (3) müşteri sayfa açınca analytics olay kaydedilir ve admin dashboard metrik olarak gösterir. Tüm üç parça aynı tenant scope'ta, aynı audit pattern'inde.
+
+**Alternatifler:**
+- **Custom QR encoder** — kendi Reed-Solomon implementasyonu: overkill, qrcode lib stable + audited
+- **S3/R2 storage** — Sprint 5 planı V1'in local MEDIA_ROOT ile başlayacağını netledi (D-011); cloud storage V2'ye
+- **ContentType generic FK for MenuViewEvent.qr_code** — D-016 audit pattern plain target_type/id kullanır, ama burada FK only 1 (QRCode), o yüzden plain FK migration'a tercih
+- **Recharts/Chart.js in overview** — V1 frontend planı basit SVG bar; backend aggregation yeterli, frontend render Sprint 5B'de
+- **Materialized view for daily aggregation** — V1 trafik 10-100 olay/gün bekliyoruz, GROUP BY yeterli; mat view V2'de
+
+**Seçim gerekçesi:**
+- `qrcode[pil]` lib minimal dependency, encoder side only — scan side telefon native
+- Tenant prefix in upload path (`uploads/{org_id}/`) filesystem-level görünürlük sağlar, metadata'ya bakmadan bile org sınırı görünür
+- IP/UA salt + truncate: GDPR/KVKK uyumlu; low-entropy brute-force'a dirençli
+- DRF scope-based throttle: test ortamında izole etmesek de prod'da 30/min yeterli koruma
+- TruncDate: SQLite test + Postgres prod aynı sorgu; date_trunc Postgres-spesifik olmaktan kaçınıyoruz
+- Soft-delete via `is_active=False` (qr.delete()): scan_count historical analytics'te kalmaya devam eder
+
+**Sonuçlar:**
+- `apps/qr/` — models.py, views.py (CRUD + DownloadView), serializers.py, urls.py, utils.py (build_target_url + generate_qr_png + sanitize_filename)
+- `apps/qr/migrations/0001_initial.py` — QRCode + indexes
+- `apps/media/` — views.py (upload + multipart streaming + mid-stream size re-check), urls.py
+- `apps/analytics/` — models.py (MenuViewEvent), hashing.py (sha256 + salt), views_public.py, views_admin.py (overview aggregation)
+- `apps/analytics/migrations/0001_initial.py + 0002_initial.py` — initial + qr_code FK
+- `config/settings/base.py` — PUBLIC_BASE_URL + ANALYTICS_SALT env + `public_events` throttle 30/min
+- `.env.example` — ANALYTICS_SALT + PUBLIC_BASE_URL belgelerine eklendi
+- `requirements.txt` — `qrcode[pil]==7.4.2` pinned
+- 33 yeni backend test (qr: 10, media: 9, analytics events: 5+1 skip, analytics overview: 7), toplam 105+ yeşil (85 + ~20)
+- `apps.qr.utils.sanitize_filename` media upload ile paylaşılır (cross-app import path-aq)
+- Throttle 30/min test'i skip pattern (Sprint 4A throttle cache pattern'i ile uyumlu); manual curl smoke ile doğrulanır
+
+---
+
 ## Karar Geçmişi (Güncel)
 
 | ID | Tarih | Karar | Durum |
