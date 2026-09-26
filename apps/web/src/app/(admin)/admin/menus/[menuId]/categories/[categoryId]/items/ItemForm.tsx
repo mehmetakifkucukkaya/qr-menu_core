@@ -109,8 +109,7 @@ export function ItemForm({
   const [dietaryTagIds, setDietaryTagIds] = useState<number[]>(
     item?.dietary_tag_ids ?? [],
   );
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageUrl, setImageUrl] = useState<string | null>(item?.image ?? null);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -171,6 +170,7 @@ export function ItemForm({
           sort_order: Number.isFinite(sortOrder) ? sortOrder : 0,
           allergen_ids: allergenIds,
           dietary_tag_ids: dietaryTagIds,
+          image: imageUrl ?? "",
           translations: translationsArray,
         };
         const updated = await updateItem(item.id, payload, { csrfToken });
@@ -193,6 +193,7 @@ export function ItemForm({
           sort_order: Number.isFinite(sortOrder) ? sortOrder : 0,
           allergen_ids: allergenIds,
           dietary_tag_ids: dietaryTagIds,
+          image: imageUrl ?? "",
           translations: translationsArray,
         };
         const created = await createItem(payload, { csrfToken });
@@ -285,15 +286,13 @@ export function ItemForm({
         <h2 className="font-heading text-base font-semibold text-text">Görsel</h2>
         <ImageUpload
           value={item?.image ?? null}
-          onChange={({ file, preview }) => {
-            setImageFile(file);
-            setImagePreview(preview);
-          }}
+          onUpload={(serverUrl) => setImageUrl(serverUrl)}
+          csrfToken={csrfToken}
           alt={item?.name ?? "Ürün görseli"}
         />
-        {imagePreview ? (
+        {imageUrl && imageUrl !== (item?.image ?? null) ? (
           <p className="text-xs italic text-muted">
-            Yeni görsel seçildi (V1: multipart upload Sprint 5&apos;te).
+            Yeni görsel yüklendi — kaydet butonuna basınca ürüne işlenir.
           </p>
         ) : null}
       </section>
