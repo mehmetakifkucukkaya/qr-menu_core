@@ -1,0 +1,136 @@
+/**
+ * TypeScript mirror of `apps/menu/services/get_full_menu_payload` in the
+ * Django backend (Sprint 3A). The backend is the source of truth — if a
+ * field shape changes there, mirror it here on the same commit so the
+ * contract stays unambiguous.
+ *
+ * Notable:
+ *  - Translated fields inside categories / items arrive already-resolved
+ *    as plain strings (the backend's `translation.resolve_*` helpers apply
+ *    locale fallback server-side). The companion `locale_used` field tells
+ *    us which locale actually served the text.
+ *  - Top-level `allergens[].name` and `dietary_tags[].name` are still
+ *    sent as `{ en, tr }` objects — pickTranslation() picks the right one.
+ *  - Items are nested inside their parent category; there is no flat
+ *    `items` array at the top level.
+ */
+
+export type LocaleCode = "tr" | "en";
+
+export interface Translation {
+  en?: string;
+  tr?: string;
+}
+
+export interface PublicMenuBusiness {
+  id: number;
+  name: string;
+  slug: string;
+  logo: string | null;
+  default_locale: LocaleCode;
+  currency: string;
+}
+
+export interface PublicMenuMenu {
+  id: number;
+  name: string;
+  slug: string;
+  default_locale: LocaleCode;
+  supported_locales: LocaleCode[];
+  currency: string;
+}
+
+export interface PublicMenuTheme {
+  primary_color?: string | null;
+  secondary_color?: string | null;
+  accent_color?: string | null;
+  background_color?: string | null;
+  text_color?: string | null;
+  font_family?: string | null;
+  layout_variant?: string | null;
+}
+
+export interface PublicMenuItem {
+  id: number;
+  sort_order: number;
+  name: string;
+  description: string;
+  locale_used: LocaleCode;
+  price: string; // decimal serialized as string (DRF default)
+  compare_at_price: string | null;
+  currency: string;
+  image: string | null;
+  is_featured: boolean;
+  is_popular: boolean;
+  is_new: boolean;
+  spice_level: number; // 0 = none
+  allergens: string[]; // allergen codes (e.g. "gluten")
+  dietary_tags: string[]; // dietary tag codes (e.g. "vegan")
+}
+
+export interface PublicMenuCategory {
+  id: number;
+  slug: string;
+  sort_order: number;
+  name: string;
+  description: string;
+  locale_used: LocaleCode;
+  image: string | null;
+  items: PublicMenuItem[];
+}
+
+export interface PublicMenuAllergen {
+  code: string;
+  name: Translation;
+  icon: string;
+}
+
+export interface PublicMenuDietaryTag {
+  code: string;
+  name: Translation;
+  icon: string;
+  color: string;
+}
+
+export interface PublicMenuCta {
+  call_phone?: string | null;
+  whatsapp?: string | null;
+  instagram?: string | null;
+}
+
+export interface PublicMenuPayload {
+  business: PublicMenuBusiness;
+  menu: PublicMenuMenu | null;
+  theme: PublicMenuTheme | null;
+  categories: PublicMenuCategory[];
+  allergens: PublicMenuAllergen[];
+  dietary_tags: PublicMenuDietaryTag[];
+  cta: PublicMenuCta;
+}
+
+export interface PublicMenuApiEnvelope {
+  data: PublicMenuPayload;
+  meta?: { request_id?: string };
+}
+
+export interface PublicMenuApiError {
+  error: { code: string; message: string };
+  meta?: { request_id?: string };
+}
+
+/**
+ * Resolve a Translation object to a single string. Used for the top-level
+ * `allergens[].name` and `dietary_tags[].name` (categories / items are
+ * already resolved by the backend).
+ */
+export function pickTranslation(
+  t: Translation | string | null | undefined,
+  locale: LocaleCode,
+): string {
+  if (!t) return "";
+  if (typeof t === "string") return t;
+  const primary = t[locale];
+  if (primary) return primary;
+  const fallback = locale === "tr" ? t.en : t.tr;
+  return fallback ?? Object.values(t).find((v) => !!v) ?? "";
+}
