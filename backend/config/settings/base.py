@@ -91,6 +91,8 @@ LOCAL_APPS = [
     "apps.analytics",
     # Sprint 7A — AI PDF menu import (D-021).
     "apps.pdf_import",
+    # Sprint 8A — Customer order flow (sipariş + mutfak ekranı; D-022).
+    "apps.orders",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
