@@ -887,3 +887,73 @@ Local'de birden fazla Postgres instance çakışmasın diye ana stack'te host po
 - DB backup otomasyonu (pg_dump cron) bilinçli olarak V2 — V1 demo'su tek bir müşteri, manual backup yeterli
 - JSON log format Better Stack'e forward'lanabilir (V2 — V1'de sadece stdout)
 - `X-Request-Id` middleware V1'de Django'nun kendi middleware'i; Caddy reverse proxy header'ı forward eder
+
+---
+
+## KARAR D-021 — AI PDF Menu Import Pattern (Sprint 7A)
+
+**Karar:**
+- **AI provider stratejisi:** OpenAI GPT-4o primary, Anthropic Claude 3.5 Sonnet fallback. OpenAI önce dener; herhangi bir exception'da (rate limit, timeout, content policy, network) Anthropic'e düşer. İkisi de başarısız olursa endpoint `502 ai.parse_failed` döner, kullanıcıya anlamlı hata gösterir
+- **Structured output:** OpenAI `response_format={"type": "json_schema"}` ile constrained — AI'ın serbest text dönmesini engeller. Anthropic'de aynı schema prompt'un içinde verilir, cevap JSON olmazsa `\`\`\`json ... \`\`\`` fence'leri temizlenir
+- **İki katmanlı model:** `MenuImportDraft` (PDF metadata + AI provider + status + parsed JSON) ve `MenuImportItem` (draft FK + sort_order + category_name + name + price + currency + allergens + dietary_tags + confidence + is_edited). Review/edit onaylanana kadar `Menu/Category/Item` modellerine dokunulmaz. Confirm atomik transaction'da bulk-save yapar
+- **Status machine:** `pending → parsing → parsed → {confirmed | discarded | failed}`. Terminal state'lerden çıkış yok; re-upload yeni draft açar. UI'da "draft hâlâ review bekliyor" gösterilir
+- **PDF guardrails:** MIME `application/pdf`, max 10 MB, mid-stream abort (Content-Length yalan söylerse erken kes). Storage `MEDIA_ROOT/pdf_imports/{org_id}/{uuid4}-{filename}.pdf` — organization-prefix'li path
+- **Tenant izolasyonu:** `IsOrganizationMember` + her endpoint'te ilk aktif membership'ten org çözümleme. Başka org'un draft/item'ı `404`. AuditEvent'ler de org-scoped
+- **Audit integration:** 3 yeni action — `ai_import_uploaded` (target_type=`menu_import_draft`), `ai_import_confirmed` (target_type=`menu`, payload'da `draft_id` + `item_count` + `ai_provider` + `ai_model`), `ai_import_discarded` (payload'da `status_before`)
+- **Confidence UX:** `confidence_avg` decimal(4,2) `MenuImportDraft`'ta, ayrıca her item'da `confidence` decimal(4,2). Frontend (7B) `confidence < 0.5` olan satırları kırmızı vurgular. Eşik 0.50 UI kararı; backend sadece skor verir
+- **Edit-before-confirm:** Admin `PATCH /items/{id}/` ile whitelist'teki alanları (`name`, `description`, `price`, `allergens`, `dietary_tags`, `category_name`) düzenleyebilir. `is_edited=True` set edilir. Sadece `status=parsed` olan draft'lar editable; confirmed/failed/discarded read-only
+- **Bulk save ordering:** `MenuCategory` oluşturulurken sıra, AI'ın item'ları emit etme sırasıdır (en küçük `MenuImportItem.id` proxy). Kategori adına alfabetik sort **yapılmaz** — SQLite'ın Türkçe collation'ı "Sıcak" ve "Soğuk"'u yanlış sıralar (Unicode 'ı' yüksek codepoint)
+- **SDK lazy-load:** OpenAI/Anthropic modülleri `services._get_openai()` / `_get_anthropic()` üzerinden ilk kullanımda import edilir. Test'ler bu helper'ları mock'lar; CI'da gerçek API key gerekmez
+- **Future V2 backlog:** PDF'ten image extraction (kategori/item fotoğrafı kopyalama, copyright riski nedeniyle V1'de yok), OCR fallback (pypdf pinlendi, henüz kullanılmıyor), multi-language parsing (V2 ileri), image-aware vision prompt (V2 ileri), per-org quota (V2 SaaS feature)
+
+**Tarih:** 2026-09-26
+
+**Bağlam:** V2 ilk sprint. Operatörün PDF menüsünü upload edip AI ile otomatik parse → review/edit → onay ile menü oluşturma süresini **5 dakikadan 30 saniyeye** düşürmek. V1'deki manuel 25-ürün seed_demo'nun otomatik versiyonu. OpenAI multi-modal vision (GPT-4o PDF'i görsel okuyor, text extraction değil) Claude'da da native document content block ile çalışır
+
+**Alternatifler:**
+- **Sadece OpenAI (fallback yok):** Rate limit / downtime durumunda demo kırılır. Çift provider = availability guarantee
+- **Anthropic primary, OpenAI fallback:** İkisi de güçlü; OpenAI'nin structured-output (`json_schema`) desteği Anthropic'den daha iyi, primary olarak tercih edildi
+- **Direct PDF text extraction + heuristic parsing (AI yok):** Layout varies (multi-column, image-only menus); AI vision zor kısımları çözüyor (handwritten, scanned). Heuristic yetersiz
+- **Llama / Mistral self-hosted:** Multi-modal vision için yeterli kalite yok (2026-09); API'ler operasyonel olarak daha basit. V2+ ileri self-hosted opsiyon olabilir
+- **Confirm flow = sync (tek transaction'da parse + bulk save):** 30+ saniye beklenir, request timeout riski. Mevcut pattern 2 adım: upload → parse (sync, hızlı) → confirm (sync, hızlı). Status polling ile UX hala doğal
+- **Save to draft DB model, but commit to menu via separate job:** Queue/Celery ekle complexity. V2 SaaS scale'de düşünülür; V1'de sync yeterli
+- **Inline edit menu modelinde (draft model yok):** Kullanıcı yanlışlıkla yanlış menüye yazabilir; rollback zor. Draft model = review buffer
+- **Category/image extraction from PDF:** Image extraction complexity + copyright riski; V1'de yok (V2 backlog)
+
+**Seçim gerekçesi:**
+- OpenAI primary + Anthropic fallback: structured output sınırı + rate-limit recovery. Her iki sağlayıcının API key'i env'de opsiyonel; biri varsa o çalışır, ikisi de yoksa demo'da mock response ile development mümkün (V2 backlog)
+- Draft + Item iki katman: review/edit atomik, partial success durumunda kurtarma mümkün, confirm ayrı bir step
+- Status machine explicit: terminal state'ler net, re-upload yeni draft açar — UX'te "hayalet" durum yok
+- Tenant + audit standart pattern: V1'deki `IsOrganizationMember` + `record_event` reuse, kod tutarlılığı
+- PDF guardrails (mime + size + mid-stream): kötü niyetli upload'lar (örn. Content-Length yalanı) sistemi kilitlemesin
+- Confidence decimal(4,2): skor 0.00-1.00 arası 2 ondalık hassasiyetle. UI 0.50 eşiği ile "düşük güven" rozeti
+- Edit whitelist (`EDITABLE_FIELDS`): kullanıcı draft'ın internal alanlarını (`status`, `ai_provider`, `parsed_data` vs.) değiştiremesin; explicit whitelist = daha güvenli parse
+- Bulk save sırası = AI emit sırası (en küçük id proxy): operatörün beklediği sıra korunur. Alfabetik sort Türkçe collation bug'ı yaratır
+- SDK lazy-load: AI key olmadan development ortamı çalışsın, test'lerde mock'la; production'da her iki SDK import graph'ta hazır
+
+**Sonuçlar:**
+- `backend/apps/pdf_import/` — yeni Django app (models, schemas, services, views, urls, admin, migrations, tests)
+- `backend/apps/pdf_import/models.py` — `MenuImportDraft`, `MenuImportItem`
+- `backend/apps/pdf_import/schemas.py` — `MENU_PARSE_SCHEMA` JSON schema, `SYSTEM_PROMPT`, `EDITABLE_FIELDS`
+- `backend/apps/pdf_import/services.py` — `parse_menu_pdf()`, `_parse_with_openai()`, `_parse_with_anthropic()`, `confirm_draft()`. Lazy SDK import pattern
+- `backend/apps/pdf_import/views.py` — 6 endpoint (upload, drafts list/detail, item update, confirm, discard)
+- `backend/apps/pdf_import/urls.py` + `backend/config/urls.py` mount — `/api/v1/admin/pdf-import/`
+- `backend/apps/audit/models.py` — `ACTION_CHOICES` +3 (ai_import_uploaded, ai_import_confirmed, ai_import_discarded), `TARGET_CHOICES` +1 (menu_import_draft). Migration `0002_alter_auditevent_action_alter_auditevent_target_type.py`
+- `backend/config/settings/base.py` — `apps.pdf_import` INSTALLED_APPS, AI settings (OPENAI_API_KEY, OPENAI_DEFAULT_MODEL, ANTHROPIC_API_KEY, ANTHROPIC_DEFAULT_MODEL), PDF guardrails (PDF_IMPORT_MAX_SIZE_BYTES=10MB, PDF_IMPORT_MAX_PAGES=20)
+- `backend/requirements.txt` — openai==1.54.0, anthropic==0.36.2, pypdf==5.1.0
+- `.env.example` + `.env.production.example` — AI key env var blokları eklendi
+- `backend/apps/pdf_import/migrations/0001_initial.py` — yeni modeller + 3 index
+- Test: 171 yeşil (134 V1 + 37 yeni). PDF import tests: test_upload.py (7), test_parsing.py (7), test_confirm.py (9), test_views.py (14)
+- Test coverage: happy-path + MIME/size validation + tenant isolation + audit event + provider fallback + schema hataları + atomic rollback + edit/discard lifecycle + unknown draft 404 + cross-tenant 404
+- Mocked AI tests: `services._get_openai`/`_get_anthropic` patched, gerçek SDK call yok. CI'da API key gerekmez
+- Frontend (Sprint 7B): `/admin/pdf-import` list, `/admin/pdf-import/new` upload + drag-drop, inline edit table, confidence < 0.5 highlight, confirm modal
+- DECISIONS.md'de (bu karar) ve SPRINT_7_PLAN.md'de dokümante
+
+**Notlar:**
+- 7B frontend gelmeden operatör AI import'u kullanabilir mi? Django admin görüntüleme (`/admin/pdf_import/menuimportdraft/`) read-only çalışır — yükleme + onay için frontend şart. Demo akışı 7B sonrası uçtan uca
+- OpenAI Files API uploaded file'ı 30 gün tutar, biz her parse sonrası `client.files.delete()` ile sileriz. Maliyet etkisi sıfır
+- GPT-4o vision PDF'i text extraction değil, görsel olarak okur. Bu nedenle image-only menüler de parse olur (handwritten V2 backlog'unda)
+- Anthropic document content block base64 + media_type ile çalışır, max 100 sayfa ve 32 MB. Biz 10 MB / 20 sayfa koyduk (OP-16) — operatör için makul
+- `confidence` AI'ın kendi tahmini; ground truth yok. UI'da "düşük güven" rozeti operatörü uyarır, ama engellemez
+- V2 ileri: gerçek SaaS quota (parse başına maliyet takibi), image extraction (kategori/item fotoğrafı), multi-language menu (TR/EN aynı PDF'ten), handwritten OCR fallback
+- 7B frontend demo'su: Modern Cafe PDF'i yükle → AI parse → "Türk Kahvesi 45 TL, Çay 15 TL, Limonata 65 TL" + 2 kategori (Sıcak/Soğuk İçecekler) → confirm → menü `/m/modern-cafe` altında canlı
