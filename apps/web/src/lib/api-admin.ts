@@ -61,6 +61,14 @@ interface AdminFetchOptions {
   cookieHeader?: string;
   /** Optional extra headers. */
   headers?: Record<string, string>;
+  /**
+   * Set to true when the caller supplies a `FormData` (or `Blob`) as `body`.
+   * The fetch layer must NOT inject `Content-Type: application/json` and
+   * must NOT call `JSON.stringify` — the browser serializes multipart
+   * payloads with the right `boundary` itself. Only relevant on the
+   * browser side (RSC never sends FormData).
+   */
+  formData?: boolean;
 }
 
 function resolveBaseUrl(opts: { baseUrl?: string; internal?: boolean }): string {
@@ -94,6 +102,7 @@ export async function adminFetch<T>(
     internal,
     cookieHeader,
     headers: extraHeaders,
+    formData = false,
   } = options;
 
   const base = resolveBaseUrl({ baseUrl, internal });
@@ -103,7 +112,10 @@ export async function adminFetch<T>(
     Accept: "application/json",
     ...extraHeaders,
   };
-  if (body !== undefined) headers["Content-Type"] = "application/json";
+  // Only set Content-Type when the caller is sending a JSON body. For
+  // FormData / Blob payloads the browser must pick the multipart boundary
+  // itself — overriding Content-Type would break the request.
+  if (body !== undefined && !formData) headers["Content-Type"] = "application/json";
   if (csrfToken) headers["X-CSRFToken"] = csrfToken;
   if (cookieHeader) headers["Cookie"] = cookieHeader;
 
@@ -113,7 +125,12 @@ export async function adminFetch<T>(
       method,
       credentials: "include",
       headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      body:
+        body === undefined
+          ? undefined
+          : formData
+            ? (body as BodyInit) // FormData / Blob passed through verbatim
+            : JSON.stringify(body),
       // Admin payloads are dynamic — never cache.
       cache: "no-store",
     });
@@ -441,6 +458,8 @@ export interface CreateCategoryPayload {
   description?: string;
   sort_order?: number;
   is_active: boolean;
+  /** Absolute URL (e.g. returned by /api/v1/admin/media/upload). */
+  image?: string;
   translations?: MenuTranslation[];
 }
 
@@ -464,6 +483,8 @@ export interface UpdateCategoryPayload {
   description?: string;
   sort_order?: number;
   is_active?: boolean;
+  /** Absolute URL (e.g. returned by /api/v1/admin/media/upload). */
+  image?: string;
   translations?: MenuTranslation[];
 }
 
@@ -556,6 +577,8 @@ export interface CreateItemPayload {
   sort_order?: number;
   allergen_ids?: number[];
   dietary_tag_ids?: number[];
+  /** Absolute URL (e.g. returned by /api/v1/admin/media/upload). */
+  image?: string;
   translations?: MenuTranslation[];
 }
 
@@ -588,6 +611,8 @@ export interface UpdateItemPayload {
   sort_order?: number;
   allergen_ids?: number[];
   dietary_tag_ids?: number[];
+  /** Absolute URL (e.g. returned by /api/v1/admin/media/upload). */
+  image?: string;
   translations?: MenuTranslation[];
 }
 
@@ -657,4 +682,57 @@ export async function fetchAdminSummary(
   options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
 ): Promise<AdminSummary> {
   return adminFetch<AdminSummary>("/api/v1/admin/summary/", { ...options });
+}
+
+// ---------------------------------------------------------------------------
+// Media upload (Sprint 5A backend — consumed in 5B frontend)
+// ---------------------------------------------------------------------------
+
+/**
+ * Response payload of `POST /api/v1/admin/media/upload`. The backend
+ * stores the file under MEDIA_ROOT/uploads/{organization_id}/ and
+ * returns the publicly-fetchable URL so the admin form can drop it
+ * straight into MenuItem.image / Organization.logo / etc.
+ *
+ * NOTE: `organization_id` is included in the envelope so the parent
+ * form can confirm the upload was scoped to the correct tenant in
+ * tenant-isolation smoke tests.
+ */
+export interface MediaUploadResponse {
+  url: string;
+  filename: string;
+  size: number;
+  content_type: string;
+  organization_id: number;
+}
+
+/**
+ * POST /api/v1/admin/media/upload — multipart file upload.
+ *
+ * Sends a single `file` field as `multipart/form-data`. Validation
+ * (mime / size / extension) happens server-side; this wrapper just
+ * surfaces the resulting 4xx as `AdminApiError` with the appropriate
+ * `code` (`media.invalid_type`, `media.too_large`, `media.missing_file`,
+ * `media.no_organization`, …).
+ *
+ * The browser owns the multipart boundary — we deliberately do NOT set
+ * `Content-Type: multipart/form-data` ourselves (see adminFetch's
+ * `formData: true` branch).
+ */
+export async function uploadMedia(
+  file: File,
+  options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader" | "csrfToken"> = {},
+): Promise<MediaUploadResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return adminFetch<MediaUploadResponse>(
+    "/api/v1/admin/media/upload",
+    {
+      method: "POST",
+      csrfToken: options.csrfToken,
+      body: formData,
+      formData: true,
+      ...options,
+    },
+  );
 }
