@@ -27,8 +27,14 @@ import type {
   CsrfResponse,
   CurrentUser,
   DietaryTag,
+  MenuImportDraftDetail,
+  MenuImportDraftSummary,
+  MenuImportItem,
+  MenuImportItemPatch,
   MenuTranslation,
   Organization,
+  PdfConfirmResponse,
+  PdfUploadResponse,
   ThemeConfig,
 } from "@/types/admin";
 
@@ -984,5 +990,151 @@ export async function fetchAnalyticsOverview(
   return adminFetch<AnalyticsOverview>(
     `/api/v1/admin/analytics/overview?days=${safeDays}`,
     { ...options },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// PDF menu import (Sprint 7B — backend shipped in 7A / D-021)
+// ---------------------------------------------------------------------------
+
+/**
+ * `GET /api/v1/admin/pdf-import/drafts/` — recent drafts (last 20, newest
+ * first). Items are NOT included; the list response carries a server-side
+ * `item_count` annotation per row so the table can show counts without a
+ * follow-up detail fetch.
+ *
+ * The endpoint returns a wrapped envelope (`{ data: [...] }`), so
+ * `adminFetch` unwraps it for us. We still defensively accept the raw
+ * array shape in case the backend is upgraded in a future sprint.
+ */
+export async function fetchImportDrafts(
+  options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
+): Promise<MenuImportDraftSummary[]> {
+  const payload = await adminFetch<MenuImportDraftSummary[] | { data: MenuImportDraftSummary[] }>(
+    "/api/v1/admin/pdf-import/drafts/",
+    { ...options },
+  );
+  if (Array.isArray(payload)) return payload;
+  return (payload as { data: MenuImportDraftSummary[] }).data ?? [];
+}
+
+/**
+ * `GET /api/v1/admin/pdf-import/drafts/{id}/` — single draft with full
+ * item rows + bytes + error payload (set when the AI parse failed).
+ */
+export async function fetchImportDraft(
+  id: number,
+  options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
+): Promise<MenuImportDraftDetail> {
+  return adminFetch<MenuImportDraftDetail>(
+    `/api/v1/admin/pdf-import/drafts/${id}/`,
+    { ...options },
+  );
+}
+
+/**
+ * `POST /api/v1/admin/pdf-import/upload/` — multipart PDF upload.
+ *
+ * Sends a single `file` field as `multipart/form-data`. Validation
+ * (mime / size) happens server-side; this wrapper just surfaces the
+ * resulting 4xx as `AdminApiError` with the appropriate `code`
+ * (`pdf.required`, `pdf.invalid_mime`, `pdf.too_large`,
+ * `pdf.no_organization`, `ai.parse_failed`).
+ *
+ * Browser-only — server components never send multipart uploads. CSRF
+ * is required by Django because the backend uses
+ * `SessionAuthentication`.
+ */
+export async function uploadPdfImport(
+  file: File,
+  options: Pick<AdminFetchOptions, "baseUrl" | "csrfToken"> = {},
+): Promise<PdfUploadResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return adminFetch<PdfUploadResponse>(
+    "/api/v1/admin/pdf-import/upload/",
+    {
+      method: "POST",
+      csrfToken: options.csrfToken,
+      body: formData,
+      formData: true,
+      ...options,
+    },
+  );
+}
+
+/**
+ * `PATCH /api/v1/admin/pdf-import/items/{id}/` — inline edit a single
+ * item. The backend sets `is_edited=true` automatically on the first
+ * successful PATCH; the response echoes the updated fields.
+ *
+ * Backend rejects PATCH on drafts whose status is not `parsed`
+ * (returns 400 `item.not_editable`).
+ */
+export async function updateImportItem(
+  id: number,
+  payload: MenuImportItemPatch,
+  options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader" | "csrfToken"> = {},
+): Promise<MenuImportItem> {
+  return adminFetch<MenuImportItem>(
+    `/api/v1/admin/pdf-import/items/${id}/`,
+    {
+      method: "PATCH",
+      csrfToken: options.csrfToken,
+      body: payload,
+      ...options,
+    },
+  );
+}
+
+/**
+ * `POST /api/v1/admin/pdf-import/drafts/{id}/confirm/` — bulk save a
+ * parsed draft into the canonical Menu / Category / Item models.
+ *
+ * The backend wraps the whole thing in an atomic transaction; partial
+ * failures roll back the menu creation. Returns the new menu id plus
+ * the category / item counts actually saved (useful for the success
+ * toast).
+ */
+export interface ConfirmImportPayload {
+  menu_name: string;
+  default_locale?: AdminLocaleCode;
+  is_active?: boolean;
+}
+
+export async function confirmImportDraft(
+  id: number,
+  payload: ConfirmImportPayload,
+  options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader" | "csrfToken"> = {},
+): Promise<PdfConfirmResponse> {
+  return adminFetch<PdfConfirmResponse>(
+    `/api/v1/admin/pdf-import/drafts/${id}/confirm/`,
+    {
+      method: "POST",
+      csrfToken: options.csrfToken,
+      body: payload,
+      ...options,
+    },
+  );
+}
+
+/**
+ * `DELETE /api/v1/admin/pdf-import/drafts/{id}/discard/` — mark the
+ * draft as discarded. Reversible only by re-uploading the PDF.
+ *
+ * Returns 204 on success. Backend rejects discard when the draft is in
+ * a terminal state (`confirmed` / `discarded`).
+ */
+export async function discardImportDraft(
+  id: number,
+  options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader" | "csrfToken"> = {},
+): Promise<void> {
+  await adminFetch<void>(
+    `/api/v1/admin/pdf-import/drafts/${id}/discard/`,
+    {
+      method: "DELETE",
+      csrfToken: options.csrfToken,
+      ...options,
+    },
   );
 }

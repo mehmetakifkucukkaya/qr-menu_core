@@ -322,3 +322,101 @@ export interface AdminSummary {
   recent_events: AuditEvent[];
   organization: SummaryOrganization | null;
 }
+
+// ---------------------------------------------------------------------------
+// PDF menu import (Sprint 7B — backend shipped in 7A / D-021)
+// ---------------------------------------------------------------------------
+
+/**
+ * Status machine of a `MenuImportDraft`. The list endpoint only returns
+ * the lifecycle states (`pending`, `parsing`, `parsed`, `confirmed`,
+ * `discarded`, `failed`); `failed` carries an inline `error` payload.
+ */
+export type MenuImportStatus =
+  | "pending"
+  | "parsing"
+  | "parsed"
+  | "confirmed"
+  | "discarded"
+  | "failed";
+
+/** Single parsed item inside a draft. All editable fields use this shape. */
+export interface MenuImportItem {
+  id: number;
+  sort_order: number;
+  category_name: string;
+  name: string;
+  description: string;
+  /** Decimal serialized as string (DRF default). */
+  price: string | null;
+  currency: string;
+  allergens: string[];
+  dietary_tags: string[];
+  raw_text: string;
+  /** Confidence score 0.00 – 1.00. Frontend highlights < 0.5 in red. */
+  confidence: number;
+  /** Set to true by the backend on the first successful PATCH. */
+  is_edited: boolean;
+}
+
+/**
+ * Summary row returned by `GET /api/v1/admin/pdf-import/drafts/`.
+ *
+ * Items are NOT included here — the detail endpoint exposes them. The
+ * list response also carries a server-computed `item_count` annotation
+ * (via `Count("items")`) so the list page can show "23 öğe" without a
+ * follow-up detail fetch per row.
+ */
+export interface MenuImportDraftSummary {
+  id: number;
+  status: MenuImportStatus;
+  ai_provider: string | null;
+  ai_model: string | null;
+  raw_pdf_filename: string;
+  confidence_avg: number | null;
+  item_count: number;
+  menu_id: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Full detail returned by `GET /api/v1/admin/pdf-import/drafts/{id}/`.
+ * Includes items + bytes + error payload (for failed drafts).
+ */
+export interface MenuImportDraftDetail extends MenuImportDraftSummary {
+  raw_pdf_size_bytes: number;
+  error: { code: string; message: string } | null;
+  items: MenuImportItem[];
+}
+
+/** Response shape of `POST /api/v1/admin/pdf-import/upload/`. */
+export interface PdfUploadResponse {
+  draft_id: number;
+  status: MenuImportStatus;
+  ai_provider: string | null;
+  ai_model: string | null;
+  item_count: number;
+  confidence_avg: number | null;
+}
+
+/** Response shape of `POST /api/v1/admin/pdf-import/drafts/{id}/confirm/`. */
+export interface PdfConfirmResponse {
+  menu_id: number;
+  category_count: number;
+  item_count: number;
+}
+
+/**
+ * Whitelisted editable fields on `PATCH /api/v1/admin/pdf-import/items/{id}/`.
+ * Mirrors `EDITABLE_FIELDS` in `backend/apps/pdf_import/schemas.py`.
+ */
+export interface MenuImportItemPatch {
+  name?: string;
+  description?: string;
+  /** Decimal serialized as string (e.g. "45.00"). Backend coerces. */
+  price?: string | null;
+  allergens?: string[];
+  dietary_tags?: string[];
+  category_name?: string;
+}
