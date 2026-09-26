@@ -7,6 +7,7 @@ import {
   UtensilsCrossed,
   Building2,
   Palette,
+  QrCode,
   LogOut,
   type LucideIcon,
 } from "lucide-react";
@@ -25,6 +26,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/admin/menus", label: "Menüler", icon: UtensilsCrossed },
   { href: "/admin/business", label: "İşletme", icon: Building2 },
   { href: "/admin/theme", label: "Tema", icon: Palette },
+  { href: "/admin/qr-codes", label: "QR Kodlar", icon: QrCode },
 ];
 
 interface AdminSidebarProps {

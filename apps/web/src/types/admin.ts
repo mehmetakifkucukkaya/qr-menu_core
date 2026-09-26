@@ -205,6 +205,42 @@ export interface AdminMenuItem {
 }
 
 // ---------------------------------------------------------------------------
+// QR codes (Sprint 5B frontend — backend shipped in 5A)
+// ---------------------------------------------------------------------------
+
+/** Tiny nested summary used by QR serializer for menu/branch/org. */
+export interface QRRelatedSummary {
+  id: number;
+  name: string;
+  slug: string;
+}
+
+/**
+ * Mirror of `apps.qr.serializers.QRCodeSerializer`.
+ *
+ * Read fields: `organization`, `branch`, `menu` (all nested summaries;
+ * `branch` may be `null` when the QR targets the org-wide menu).
+ * Write fields (only on POST): `organization_id`, `branch_id`, `menu_id`.
+ *
+ * `target_url` is server-computed on save — clients display it but never
+ * send it. `scan_count` is incremented by the analytics pipeline (D-017),
+ * not editable. Soft delete: `DELETE` flips `is_active` to `false`.
+ */
+export interface AdminQRCode {
+  id: number;
+  organization: QRRelatedSummary;
+  branch: QRRelatedSummary | null;
+  menu: QRRelatedSummary;
+  label: string;
+  target_url: string;
+  table_number: string;
+  scan_count: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// ---------------------------------------------------------------------------
 // Reference data (Allergens / Dietary tags)
 // ---------------------------------------------------------------------------
 

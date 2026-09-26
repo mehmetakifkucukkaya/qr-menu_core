@@ -19,9 +19,11 @@ import type {
   AdminMenuCategory,
   AdminMenuItem,
   AdminLocaleCode,
+  AdminQRCode,
   AdminSummary,
   Allergen,
   ApiEnvelope,
+  Branch,
   CsrfResponse,
   CurrentUser,
   DietaryTag,
@@ -735,4 +737,165 @@ export async function uploadMedia(
       ...options,
     },
   );
+}
+
+// ---------------------------------------------------------------------------
+// Branches (Sprint 5B)
+// ---------------------------------------------------------------------------
+
+/**
+ * GET /api/v1/admin/branches/ — paginated list of branches the current
+ * user can access (tenant-scoped via `Branch.objects.for_user(user)`).
+ *
+ * NOTE: Default DRF ModelViewSet list response — raw paginated payload,
+ * `{count, next, previous, results: Branch[]}` (no custom `_wrap`).
+ * `adminFetch` is envelope-tolerant and returns the raw payload, so we
+ * just pull `results` here.
+ *
+ * V1 lookup helper for the QR management UI (QR codes can be attached
+ * to one org branch or left org-wide).
+ */
+export async function fetchBranches(
+  options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
+): Promise<Branch[]> {
+  const data = await adminFetch<{ count: number; results: Branch[] }>(
+    "/api/v1/admin/branches/",
+    { ...options },
+  );
+  return data.results ?? [];
+}
+
+// ---------------------------------------------------------------------------
+// QR Codes (Sprint 5B frontend — backend shipped in 5A)
+// ---------------------------------------------------------------------------
+
+/**
+ * GET /api/v1/admin/qr-codes/ — list the current user's QR codes.
+ *
+ * Each row in V1 has:
+ *   - id                  — used in the detail/download URLs
+ *   - organization        — read-only nested summary
+ *   - branch              — read-only nested summary or null
+ *   - menu                — read-only nested summary
+ *   - label               — operator-facing name (e.g. "Kasa Önü")
+ *   - target_url          — public menu URL, computed server-side
+ *   - table_number        — optional, plain text
+ *   - scan_count          — incremented by the analytics pipeline
+ *   - is_active           — soft-delete flag (DELETE flips to false)
+ *
+ * Tenant scoping: handled server-side via `QRCode.objects.for_user(user)`,
+ * the client doesn't pass any filter — every call is implicitly tenant-safe.
+ */
+export async function fetchQRCodes(
+  options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
+): Promise<AdminQRCode[]> {
+  const data = await adminFetch<{ count: number; results: AdminQRCode[] }>(
+    "/api/v1/admin/qr-codes/",
+    { ...options },
+  );
+  return data.results ?? [];
+}
+
+/** GET /api/v1/admin/qr-codes/{id}/ — retrieve a single QR code. */
+export async function fetchQRCode(
+  id: number,
+  options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
+): Promise<AdminQRCode> {
+  return adminFetch<AdminQRCode>(`/api/v1/admin/qr-codes/${id}/`, { ...options });
+}
+
+/**
+ * Payload for `POST /api/v1/admin/qr-codes/`.
+ *
+ * - `organization_id` is required (the QR belongs to one tenant; for V1 we
+ *   accept it from the form but fall back to the user's current org if the
+ *   caller leaves it out).
+ * - `branch_id` is optional — leaving it absent (or passing `null`) makes
+ *   the QR target the org-wide menu.
+ * - `table_number` is optional free-text (max 20 chars server-side).
+ * - `is_active` defaults to `true` (active).
+ */
+export interface CreateQRPayload {
+  organization_id: number;
+  menu_id: number;
+  branch_id?: number | null;
+  label: string;
+  table_number?: string;
+  is_active?: boolean;
+}
+
+/** POST /api/v1/admin/qr-codes/ — create a new QR code. */
+export async function createQRCode(
+  payload: CreateQRPayload,
+  options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader" | "csrfToken"> = {},
+): Promise<AdminQRCode> {
+  return adminFetch<AdminQRCode>("/api/v1/admin/qr-codes/", {
+    method: "POST",
+    csrfToken: options.csrfToken,
+    body: payload,
+    ...options,
+  });
+}
+
+/**
+ * Payload for `PATCH /api/v1/admin/qr-codes/{id}/`.
+ *
+ * V1 only lets the operator edit `label`, `table_number`, and the
+ * `is_active` flag (target_url, scan_count, FKs are read-only server-side
+ * — changing the menu/branch would re-encode the PNG anyway, so the
+ * recommended path is "soft delete + create a new one").
+ */
+export interface UpdateQRPayload {
+  label?: string;
+  table_number?: string;
+  is_active?: boolean;
+}
+
+/** PATCH /api/v1/admin/qr-codes/{id}/ — partial update of label / active / table. */
+export async function updateQRCode(
+  id: number,
+  payload: UpdateQRPayload,
+  options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader" | "csrfToken"> = {},
+): Promise<AdminQRCode> {
+  return adminFetch<AdminQRCode>(`/api/v1/admin/qr-codes/${id}/`, {
+    method: "PATCH",
+    csrfToken: options.csrfToken,
+    body: payload,
+    ...options,
+  });
+}
+
+/**
+ * DELETE /api/v1/admin/qr-codes/{id}/ — soft delete (is_active=false).
+ *
+ * Returns 204; the row is preserved for analytics history. The backend
+ * rejects DELETE on already-inactive rows with 404 — we surface this as
+ * `AdminApiError("qr.not_found", …)` for callers.
+ */
+export async function deleteQRCode(
+  id: number,
+  options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader" | "csrfToken"> = {},
+): Promise<void> {
+  await adminFetch<void>(`/api/v1/admin/qr-codes/${id}/`, {
+    method: "DELETE",
+    csrfToken: options.csrfToken,
+    ...options,
+  });
+}
+
+/**
+ * Resolves the absolute URL of the QR PNG download endpoint. Browser
+ * fetches to this endpoint automatically include the `qr_sessionid`
+ * cookie thanks to `SameSite=Lax` + same-site (different ports on
+ * `localhost` are same-site per spec). For server-side fetches inside RSC
+ * we'd need to forward the cookie header (not currently needed — the
+ * preview page renders the URL into an `<img src>`).
+ */
+export function qrDownloadUrl(id: number): string {
+  const base = (
+    process.env.NEXT_PUBLIC_API_BASE_URL ||
+    process.env.INTERNAL_API_BASE_URL ||
+    "http://localhost:8000"
+  ).replace(/\/$/, "");
+  return `${base}/api/v1/admin/qr-codes/${id}/download`;
 }
