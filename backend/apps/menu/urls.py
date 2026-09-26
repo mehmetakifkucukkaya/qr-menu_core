@@ -1,4 +1,13 @@
-"""URL patterns for menu admin endpoints.
+"""URL patterns for the menu app — admin endpoints.
+
+The router and the reorder endpoints are exposed as the module-level
+``urlpatterns`` because ``config.urls`` mounts this module under
+``/api/v1/admin/``.
+
+Public (unauthenticated) routes live in ``apps.menu.urls_public`` and
+are mounted by ``config.urls`` under ``/api/v1/public/``.
+
+Admin endpoints (authenticated, tenant-isolated):
 
     GET/POST       /api/v1/admin/menus/
     GET/PATCH/DEL  /api/v1/admin/menus/{id}/
@@ -34,6 +43,14 @@ router.register(r"allergens", AllergenViewSet, basename="allergen")
 router.register(r"dietary-tags", DietaryTagViewSet, basename="dietary-tag")
 
 urlpatterns = router.urls + [
-    path("categories/reorder", CategoriesReorderView.as_view(), name="categories-reorder"),
-    path("menu-items/reorder", ItemsReorderView.as_view(), name="menu-items-reorder"),
+    path(
+        "categories/reorder",
+        CategoriesReorderView.as_view(),
+        name="categories-reorder",
+    ),
+    path(
+        "menu-items/reorder",
+        ItemsReorderView.as_view(),
+        name="menu-items-reorder",
+    ),
 ]

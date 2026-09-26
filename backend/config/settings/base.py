@@ -176,6 +176,16 @@ REST_FRAMEWORK = {
         "rest_framework.renderers.JSONRenderer",
         "rest_framework.renderers.BrowsableAPIRenderer",
     ],
+    # Sprint 3 — throttle anonymous traffic on the public menu endpoint.
+    # Per-IP rate (DRF keys AnonRateThrottle by REMOTE_ADDR). 60/min is a
+    # reasonable V1 default; Sprint 5 will revisit this when analytics +
+    # Cloudflare edge cache land.
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "60/min",
+    },
     # SessionAuth enforces CSRF on unsafe methods (POST/PUT/PATCH/DELETE).
     # This is the default but made explicit so future contributors don't relax it.
     "TEST_REQUEST_DEFAULT_FORMAT": "json",
