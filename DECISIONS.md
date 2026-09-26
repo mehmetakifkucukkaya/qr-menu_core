@@ -957,3 +957,73 @@ Local'de birden fazla Postgres instance çakışmasın diye ana stack'te host po
 - `confidence` AI'ın kendi tahmini; ground truth yok. UI'da "düşük güven" rozeti operatörü uyarır, ama engellemez
 - V2 ileri: gerçek SaaS quota (parse başına maliyet takibi), image extraction (kategori/item fotoğrafı), multi-language menu (TR/EN aynı PDF'ten), handwritten OCR fallback
 - 7B frontend demo'su: Modern Cafe PDF'i yükle → AI parse → "Türk Kahvesi 45 TL, Çay 15 TL, Limonata 65 TL" + 2 kategori (Sıcak/Soğuk İçecekler) → confirm → menü `/m/modern-cafe` altında canlı
+
+---
+
+## KARAR D-022 — Order + Kitchen Flow Pattern (Sprint 8A)
+
+**Karar:**
+- **Order model:** `organization` (PROTECT), `branch` (SET_NULL nullable), `menu` (SET_NULL nullable), `order_number` (max 30, unique=True, format `{slug2}-{YYYYMMDD}-{NNN}`), `table_number`, `customer_name`, `customer_phone`, `notes`, `status` (OrderStatus enum 6 değer), `total_amount` (DecimalField(10,2) OP-6 uyumlu), `currency`, 6 lifecycle timestamp (placed/confirmed/preparing/ready/delivered/cancelled), `metadata` JSON. Indexes: `(organization, -placed_at)` dashboard, `(organization, status)` kitchen
+- **OrderItem:** `order` FK (CASCADE), `menu_item` FK (SET_NULL nullable — item silinse bile order bozulmaz), `name` + `price` snapshot (DB'den kopyalanır; sonradan menü değişse bile order doğru render), `quantity`, `notes`
+- **Order number generator:** `{slug[:2].upper()}-{YYYYMMDD}-{NNN}` formatı. Counter **prefix-scoped (global)**, per-org DEĞİL — iki org aynı 2-harf öneki paylaşırsa DB unique constraint çakışır (test ile yakalandı). Per-day reset. Integrity race olursa retry (max 5)
+- **Total hesabı:** Server-side, client price YOK sayılır (güvenlik). `calculate_total_from_items` her line için `MenuItem.price`'ı DB'den okur, `is_active=False` ve `is_available=False` ValidationError ile reject
+- **Status state machine:** `STATUS_TRANSITIONS` dict — pending→{confirmed,cancelled}, confirmed→{preparing,cancelled}, preparing→{ready,cancelled}, ready→delivered, delivered + cancelled terminal. `transition_status()` validate + timestamp stamp + audit event emit. Yeni status'a göre ilgili timestamp set edilip `save(update_fields=...)` ile partial update; sonra `record_event(target_type='order', action='order_<new_status>', payload={'from','to'})`
+- **6 audit action + 'order' target_type:** `order_placed` (customer public POST), `order_confirmed`, `order_preparing`, `order_ready`, `order_delivered`, `order_cancelled`. Naming convention OrderStatus değerleriyle bire bir eşleşiyor — payload lookup trivial
+- **Endpoints (6):** public POST `/public/orders` (AllowAny + throttle 20/min `public_orders` scope, customer_name/phone trim, total + audit emit), public GET `/public/orders/{number}/status` (sadece status + 5 timestamp, internal field leak YOK — phone/notes/total dönmez), admin GET `/admin/orders/` (?status + ?date filter, son 100 order, item_count branch_name eklentisi), admin GET `/admin/orders/{id}` (full order + items snapshot), admin POST `/admin/orders/{id}/status` (transition validation + audit), admin GET `/admin/kitchen/tickets` (default pending+confirmed+preparing; ?status= override; ?status=all)
+- **Tenant isolation:** admin lookuplar organization ile filter. Cross-tenant cross-tenant 404 (existence leak yok). Kullanıcı membership yoksa 404. Platform admin bypass YOK (audit.summary ile aynı tutarlılık)
+- **Throttle:** public POST 20/min (AnonRateThrottle custom scope `public_orders`). Public GET status throttlesız değil ama default anon bucket (60/min) yeterli — 15s polling × 4 = 4 req/dk müşteri, 20 sipariş için OK
+- **Snapshot semantiği:** `OrderItem.name` + `OrderItem.price` write-time DB snapshot. Menü güncellense bile eski siparişler doğru renderlanır. Test: `test_order_creation_creates_order_items_with_snapshots`
+- **`metadata` JSON:** V2 ileri için reserve. Masa session ID, source QR code, özel talimatlar (per-item olmayan). V1'de boş dict default
+- **Future V2 backlog:** WebSocket real-time (V2), online ödeme (Sprint 9 — ödeme akışı), müşteri hesabı + sadakat (V2 ileri), masa QR scanner (V2 — table_number otomatik populate), ses bildirimleri (mutfak V2), POS entegrasyonu, multi-restaurant (V2 SaaS)
+
+**Tarih:** 2026-09-26
+
+**Bağlam:** V2 ikinci sprint. Müşteri public menüden sipariş verir → admin onaylar → mutfak hazırlar → müşteri "Hazır!" görür. POS entegrasyonu olmadan V1 seviyesinde. Hedef demo akışı uçtan uca: masada QR okut → sipariş ver → admin kabul et → mutfak ticket bas → hazır olunca müşteriye bildir → teslim edildi
+
+**Alternatifler:**
+- **Müşteri hesabı (login/password + login flow):** V1 için yavaş onboarding; hesap açmadan sipariş friction az. V2 ileri sadakat için gerekli olacak
+- **Server-side cart (cross-device sync):** Account gerektirir; V2 ileri. localStorage V1 yeterli
+- **Real-time WebSocket (channel layer / Daphne + Redis):** V1 polling 15s yeterli, WebSocket complexity V2'ye ertelendi. V2 SaaS scale için gerekli
+- **Payment integration (Stripe / iyzico):** Sprint 9'da. Önce sipariş akışı oturur, sonra ödeme
+- **Order number = UUID:** machine-readable ama operatör telefonla okuyamaz. MC-20260115-001 human-readable
+- **Snapshot yerine canlı FK price lookup:** menü değişince eski siparişler yanlış renderlanır; mali kayıt bozulur. Snapshot = audit-friendly
+- **Per-org counter:** 2 harf önek çakışması bug'ı yakalandı test'te (cafe-a/cafe-b → CA). Global prefix counter ile çözüldü
+
+**Seçim gerekçesi:**
+- Telefon+isim customer auth (V1), account V2 ileri: V1 demo akışını 90 saniyeye indirmek için friction sıfır. Account + sadakat V2'de karlılık + engagement artışı
+- Server-side total (client price ignored): güvenlik. Manipülasyon denemelerinde "price" field ignore edilir, DB fiyatı kazanır
+- 6-state FSM, terminal explicit: pending/confirmed/preparing/ready/delivered/cancelled — operatör mutfak ekranında sadece aktifleri görür, delivered/cancelled hidden (default filter)
+- Snapshot price+name: mevzuat/muhasebe için kritik; menü fiyat değişikliği eski siparişleri geriye dönük değiştirmemeli
+- Prefix-scoped global counter: format + uniqueness sağlıyor, aynı önekli iki org DB constraint çakışmasını test'te yakaladık
+- Audit action naming convention OrderStatus = OrderStatus değerleriyle bire bir — `order_<status>` event lookup trivial, payload'da from/to tek başına yeterli
+- Admin throttle yok: operatör kendi IP'sinden ardışık update yapabilir. Public endpoint throttle yeterli (DDS baseline)
+- Snapshot pattern için SET_NULL FK: menü item silinse bile order item satırı duruyor, name+price snapshot render yapıyor
+
+**Sonuçlar:**
+- `backend/apps/orders/` — yeni Django app (models, serializers, services, views, urls_public, urls_orders, urls_kitchen, admin, migrations, tests)
+- `backend/apps/orders/models.py` — `Order` + `OrderItem`, `OrderStatus` enum (TextChoices)
+- `backend/apps/orders/services.py` — `generate_order_number` (prefix-global), `calculate_total_from_items` (server-side, DB price), `create_order` (atomic + IntegrityError retry), `transition_status` (FSM + timestamp + audit). `STATUS_TRANSITIONS` dict
+- `backend/apps/orders/views.py` — 6 endpoint (2 public, 4 admin), `_resolve_organization`, `_wrap`, `PublicOrderCreateThrottle` (20/min)
+- `backend/apps/orders/serializers.py` — `OrderItemSerializer`, `OrderSerializer`, `PublicOrderCreateSerializer` + `PublicOrderLineSerializer`
+- `backend/apps/orders/urls_public.py` — POST + GET status
+- `backend/apps/orders/urls_orders.py` — admin list/detail/status
+- `backend/apps/orders/urls_kitchen.py` — tickets feed (separate prefix kararlılığı için)
+- `backend/apps/orders/admin.py` — Django admin registration, readonly_fields timestamp koruması
+- `backend/apps/orders/migrations/0001_initial.py` — Order + OrderItem, 2 index
+- `backend/apps/audit/models.py` — `ACTION_CHOICES` +6 (order_placed, order_confirmed, order_preparing, order_ready, order_delivered, order_cancelled), `TARGET_CHOICES` +1 ('order'). Migration `0003`
+- `backend/config/settings/base.py` — `apps.orders` INSTALLED_APPS, `DEFAULT_THROTTLE_RATES['public_orders']='20/min'`
+- `backend/config/urls.py` — mount `/admin/orders/`, `/admin/kitchen/`, `/public/orders`
+- Test: 229 yeşil (171 + 58 yeni). Orders tests: test_order_creation (13), test_status_transitions (12), test_views (20), test_security (13)
+- Test coverage: happy-path snapshot + tenant isolation + cross-tenant 404 + audit event + state machine illegal edges + terminal no-op + DB unique constraint + negative decimal reject + throttle rate registration
+- DECISIONS.md'de (bu karar) ve SPRINT_8_PLAN.md'de dokümante
+
+**Notlar:**
+- 8A sonunda 8B başlayacak: public cart drawer + checkout modal + confirmation page polling + admin orders list/detail/status update UI + sidebar Orders link
+- 8B sonunda 8C mutfak ekranı: full-screen-style grid + 10s polling + status butonları + pulse animation (pending + confirmed + preparing)
+- Order number format `{slug[:2].upper()}-{YYYYMMDD}-{NNN}` (test pattern: cafe-a → "CA-20260926-001"). Prefix-global counter nedeniyle cafe-a + cafe-b aynı gün "CA-20260926-001" + "CA-20260926-002" üretiyor — operatör için bu çoklu-restaurant V2'ye kadar sorun değil
+- 8A sonrası 8B için cart store (Zustand + localStorage persist) + CartDrawer + CheckoutForm + confirmation polling başlayacak
+- 8A sonrası 8C için kitchen display full-screen + audio alert V2 backlog (V1 visual only)
+- Online ödeme Sprint 9'da — order flow V1'de ödemesiz, hesap + sadakat V2'de
+- V1 demo scenarios (Modern Cafe ile): (1) QR okut → müşteri sipariş verir, (2) admin onaylar, (3) mutfak hazırlar, (4) admin "ready" der, (5) müşteri confirmation page'de "Hazır!" görür (15s polling), (6) admin teslim eder, sipariş kapanır
+
+| D-022 | 2026-09-26 | Order + Kitchen Flow Pattern (Order/OrderItem + 6-state FSM + server-side total + audit integration + tenant isolation + 20/min public throttle + snapshot pricing) | aktif |
