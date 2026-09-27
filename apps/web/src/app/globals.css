@@ -29,3 +29,35 @@
     min-height: 44px;
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * Kitchen display (Sprint 8C)
+ *
+ * Subtle pulse on pending/confirmed tickets. The accent color (`#E07856`)
+ * is the Modern Cafe warm tone — gives operators a peripheral cue that
+ * a new / in-flight order exists without being loud enough to distract.
+ *
+ * Tuned for a tablet kiosk view (typically 1–2 m from the screen). The
+ * shadow stays soft (`0.15` alpha) and the cycle is slow (2 s) so it
+ * registers as ambient, not blinking.
+ * ------------------------------------------------------------------------- */
+@keyframes kitchen-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(224, 120, 86, 0);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(224, 120, 86, 0.15);
+  }
+}
+
+.kitchen-ticket-pending {
+  animation: kitchen-pulse 2s ease-in-out infinite;
+  /* Honour the user's reduced-motion preference. */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kitchen-ticket-pending {
+    animation: none;
+  }
+}

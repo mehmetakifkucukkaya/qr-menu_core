@@ -1253,3 +1253,78 @@ export async function updateOrderStatus(
     },
   );
 }
+
+// ---------------------------------------------------------------------------
+// Kitchen display (Sprint 8C)
+// ---------------------------------------------------------------------------
+
+/**
+ * Single line item embedded inside a kitchen ticket. The backend serializes
+ * the same shape used by `AdminOrderDetail` minus the `menu_item` FK (which
+ * the kitchen doesn't need to see).
+ */
+export interface KitchenTicketItem {
+  id: number;
+  name: string;
+  price: string;
+  quantity: number;
+  notes: string;
+}
+
+/**
+ * Response payload of `GET /api/v1/admin/kitchen/tickets`. The backend
+ * flattens each order into a single "ticket" object — items, table, branch
+ * and a server-computed `time_since_placed_seconds` are all inlined so the
+ * grid can render without a follow-up detail fetch.
+ *
+ * Status mirrors `AdminOrderStatus` but in practice the kitchen endpoint
+ * only returns the three active states (`pending` / `confirmed` /
+ * `preparing`) plus whatever the caller asked for via `?status=`.
+ */
+export interface KitchenTicket {
+  id: number;
+  order_number: string;
+  status: AdminOrderStatus;
+  table_number: string;
+  branch_name: string | null;
+  customer_name: string;
+  customer_phone: string;
+  /** Seconds since `placed_at`, calculated server-side at request time. */
+  time_since_placed_seconds: number;
+  items: KitchenTicketItem[];
+  placed_at: string;
+}
+
+/** Status enum specifically used by the kitchen display — only the three
+ *  "in-flight" states are user-facing; `ready` is briefly visible until the
+ *  customer picks up, then the operator marks `delivered`. */
+export type KitchenStatusFilter = "pending" | "confirmed" | "preparing" | "all";
+
+/**
+ * GET /api/v1/admin/kitchen/tickets — kitchen display feed.
+ *
+ * `statuses` defaults to `["pending", "confirmed", "preparing"]` to mirror
+ * the backend default (delivered / cancelled tickets are hidden). Pass
+ * `["all"]` to fetch every status — useful when the operator wants to see
+ * the just-completed tickets before they leave the board.
+ *
+ * The endpoint returns a wrapped `{ data: [...] }` envelope, which
+ * `adminFetch` unwraps automatically. We still defensively accept the raw
+ * array shape for forward compatibility.
+ */
+export async function fetchKitchenTickets(
+  statuses?: KitchenStatusFilter[] | string[],
+  options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
+): Promise<KitchenTicket[]> {
+  const params = new URLSearchParams();
+  if (statuses && statuses.length > 0) {
+    params.set("status", statuses.join(","));
+  }
+  const query = params.toString();
+  const payload = await adminFetch<KitchenTicket[] | { data: KitchenTicket[] }>(
+    `/api/v1/admin/kitchen/tickets/${query ? `?${query}` : ""}`,
+    { ...options },
+  );
+  if (Array.isArray(payload)) return payload;
+  return (payload as { data: KitchenTicket[] }).data ?? [];
+}
