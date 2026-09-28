@@ -97,6 +97,8 @@ LOCAL_APPS = [
     "apps.translate",
     # Sprint 10A — Customer accounts + magic link auth + loyalty ledger (D-025).
     "apps.account",
+    # Sprint 11A — Online payment (Stripe primary + iyzico adapter) (D-026).
+    "apps.payment",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -265,6 +267,42 @@ AUTH_COOKIE_NAME = os.environ.get(
     "AUTH_COOKIE_NAME", "_auth_customer_id"
 )
 AUTH_COOKIE_SECURE = _env_bool("AUTH_COOKIE_SECURE", default=False)
+
+# ---------------------------------------------------------------------------
+# Sprint 11A — Online payment (D-026: Stripe primary, iyzico adapter)
+# ---------------------------------------------------------------------------
+# Stripe credentials. In dev (test mode), the publishable + secret keys are
+# the ``sk_test_*`` / ``pk_test_*`` pair from the Stripe Dashboard. In
+# production these become ``sk_live_*`` / ``pk_live_*`` and the webhook
+# secret is configured in the Dashboard > Developers > Webhooks section.
+STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
+STRIPE_PUBLIC_KEY = os.environ.get("STRIPE_PUBLIC_KEY", "")
+STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+
+# Fernet key used to encrypt at-rest ``api_key`` / ``webhook_secret``
+# columns on ``apps.payment.PaymentSettings``. Generate with:
+#   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# If empty, the payment app logs a one-shot warning and generates an
+# ephemeral key — fine for ``pytest`` runs and the V1 demo, never for prod.
+PAYMENT_FERNET_KEY = os.environ.get("PAYMENT_FERNET_KEY", "")
+
+# Default provider name and test-mode flag used by ``apps.payment.providers
+# .registry.get_provider_for_org`` when no ``PaymentSettings`` row exists
+# yet for the tenant. Test mode is the V1 demo default so a fresh
+# tenant's first payment attempt goes through ``sk_test_*`` instead of
+# failing with a 401.
+PAYMENT_DEFAULT_PROVIDER = os.environ.get(
+    "PAYMENT_DEFAULT_PROVIDER", "stripe"
+)
+PAYMENT_DEFAULT_TEST_MODE = _env_bool(
+    "PAYMENT_DEFAULT_TEST_MODE", default=True
+)
+
+# Public hostname advertised to Stripe for ``success_url`` / ``cancel_url``
+# when the PaymentIntent is created. Production overrides this via env.
+PAYMENT_WEBHOOK_BASE_URL = os.environ.get(
+    "PAYMENT_WEBHOOK_BASE_URL", "http://localhost:8000"
+)
 
 # ---------------------------------------------------------------------------
 # DRF

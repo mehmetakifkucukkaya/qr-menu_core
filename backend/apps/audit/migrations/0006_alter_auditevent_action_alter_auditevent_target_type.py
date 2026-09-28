@@ -1,0 +1,74 @@
+# Sprint 11A — Online payment audit events (D-026).
+#
+# Adds 5 new ACTION_CHOICES for Stripe webhook + admin refund flows
+# and 1 new TARGET_CHOICES for ``payment`` (the OrderPayment row).
+
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ('audit', '0005_alter_auditevent_action_alter_auditevent_target_type'),
+    ]
+
+    operations = [
+        migrations.AlterField(
+            model_name='auditevent',
+            name='action',
+            field=models.CharField(choices=[
+                ('created', 'Created'),
+                ('updated', 'Updated'),
+                ('deleted', 'Deleted'),
+                ('price_changed', 'Price changed'),
+                ('published', 'Published'),
+                ('unpublished', 'Unpublished'),
+                ('deactivated', 'Deactivated'),
+                ('reactivated', 'Reactivated'),
+                ('reordered', 'Reordered'),
+                ('ai_import_uploaded', 'AI import: PDF uploaded'),
+                ('ai_import_confirmed', 'AI import: draft confirmed'),
+                ('ai_import_discarded', 'AI import: draft discarded'),
+                ('order_placed', 'Order: placed (customer submission)'),
+                ('order_confirmed', 'Order: confirmed by admin'),
+                ('order_preparing', 'Order: preparing (kitchen accepted)'),
+                ('order_ready', 'Order: ready (customer notified)'),
+                ('order_delivered', 'Order: delivered'),
+                ('order_cancelled', 'Order: cancelled'),
+                ('ai_translation_generated', 'AI translation: generated'),
+                ('ai_description_generated', 'AI description: generated'),
+                ('customer_registered', 'Customer: registered (first magic link)'),
+                ('customer_login', 'Customer: logged in (magic link verified)'),
+                ('loyalty_earned', 'Loyalty: points earned'),
+                ('loyalty_redeemed', 'Loyalty: points redeemed'),
+                ('loyalty_adjusted', 'Loyalty: manual admin adjust'),
+                # Sprint 11A — Online payment (D-026).
+                ('order_paid', 'Order: payment captured (webhook)'),
+                ('order_refunded', 'Order: payment refunded'),
+                ('payment_provider_test', 'Payment: provider test ping'),
+                ('payment_webhook_received', 'Payment: webhook event received'),
+                ('payment_reconciled', 'Payment: reconciliation triggered'),
+            ], max_length=30),
+        ),
+        migrations.AlterField(
+            model_name='auditevent',
+            name='target_type',
+            field=models.CharField(choices=[
+                ('menu', 'Menu'),
+                ('category', 'Category'),
+                ('item', 'Item'),
+                ('branch', 'Branch'),
+                ('theme', 'Theme'),
+                ('organization', 'Organization'),
+                ('menu_import_draft', 'Menu Import Draft'),
+                ('order', 'Order'),
+                ('translation_memory', 'Translation Memory'),
+                ('ai_product_description', 'AI Product Description'),
+                ('customer', 'Customer'),
+                ('loyalty_settings', 'Loyalty Settings'),
+                ('loyalty_transaction', 'Loyalty Transaction'),
+                # Sprint 11A — Online payment (D-026).
+                ('payment', 'Payment'),
+            ], max_length=30),
+        ),
+    ]

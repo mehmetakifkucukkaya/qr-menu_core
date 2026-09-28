@@ -59,6 +59,10 @@ urlpatterns = [
     # can mount each prefix cleanly.
     path("api/v1/account/", include("apps.account.urls")),
     path("api/v1/account/admin/", include("apps.account.urls_admin")),
+    # Sprint 11A — Online payment (D-026). Public under /api/v1/payment/,
+    # admin under /api/v1/payment/admin/. Webhook at
+    # /api/v1/payment/webhooks/<provider>/.
+    path("api/v1/payment/", include("apps.payment.urls")),
 ]
 
 if settings.DEBUG:

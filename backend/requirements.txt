@@ -38,3 +38,9 @@ anthropic==0.36.2
 # reads the PDF visually; we still pin a version so the dependency graph
 # stays explicit for ops planning.
 pypdf==5.1.0
+
+# --- Online payment (Sprint 11A — D-026) ---
+# Stripe Python SDK: PaymentIntent + Webhook signature verify + Refund.
+stripe==11.3.0
+# Fernet symmetric encryption for payment api_key at-rest (D-026 security).
+cryptography==43.0.3
