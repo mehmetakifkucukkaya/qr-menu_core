@@ -72,6 +72,18 @@ class Order(TimeStampedModel):
         null=True,
         blank=True,
     )
+    customer = models.ForeignKey(
+        "account.Customer",
+        on_delete=models.SET_NULL,
+        related_name="orders",
+        null=True,
+        blank=True,
+        help_text=(
+            "Optional end-customer account link (Sprint 10A — D-025). "
+            "Null = guest checkout; ``customer_name`` + ``customer_phone`` "
+            "remain the snapshot for kitchen display."
+        ),
+    )
 
     order_number = models.CharField(
         max_length=30,
