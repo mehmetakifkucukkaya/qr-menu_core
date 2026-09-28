@@ -229,6 +229,44 @@ AI_DESCRIPTION_BULK_MAX_ITEMS = int(
 )
 
 # ---------------------------------------------------------------------------
+# Sprint 10A — Customer accounts + magic-link auth + loyalty ledger (D-025)
+# ---------------------------------------------------------------------------
+# Magic-link TTL (minutes). The token is single-use; expiry is the only
+# window during which it can be consumed.
+MAGIC_LINK_TTL_MINUTES = int(
+    os.environ.get("MAGIC_LINK_TTL_MINUTES", "15")
+)
+
+# Magic-link rate-limit: 5 requests per hour per IP. The throttle key
+# is ``AnonRateThrottle`` keyed on REMOTE_ADDR, so the ``5/hour`` value
+# flows through the standard DRF bucket — see ``DEFAULT_THROTTLE_RATES``
+# below.
+MAGIC_LINK_RATE_LIMIT_PER_HOUR = int(
+    os.environ.get("MAGIC_LINK_RATE_LIMIT_PER_HOUR", "5")
+)
+
+# Default loyalty state for new tenants. We default OFF so a freshly
+# provisioned tenant doesn't suddenly start awarding puan to its
+# already-completed historical orders (the earn path is gated by the
+# admin manually toggling this on).
+LOYALTY_DEFAULT_ENABLED = _env_bool("LOYALTY_DEFAULT_ENABLED", default=False)
+
+# Default sender for outbound transactional email (magic links, future
+# notifications). Production overrides this via env.
+DEFAULT_FROM_EMAIL = os.environ.get(
+    "DEFAULT_FROM_EMAIL", "noreply@qrmenu.local"
+)
+
+# End-customer session cookie. Distinct from ``SESSION_COOKIE_NAME`` so
+# the platform admin session and the customer session can coexist on
+# the same browser without one invalidating the other (V1 keeps admin
+# auth entirely server-side; the cookie value is the customer.pk).
+AUTH_COOKIE_NAME = os.environ.get(
+    "AUTH_COOKIE_NAME", "_auth_customer_id"
+)
+AUTH_COOKIE_SECURE = _env_bool("AUTH_COOKIE_SECURE", default=False)
+
+# ---------------------------------------------------------------------------
 # DRF
 # ---------------------------------------------------------------------------
 REST_FRAMEWORK = {
@@ -260,6 +298,11 @@ REST_FRAMEWORK = {
         # tight for the 15s confirmation polling — status uses the
         # default AnonRateThrottle ("anon" scope, 60/min) for now.
         "public_orders": "20/min",
+        # Sprint 10A — D-025. Magic-link request throttle: 5/hour per
+        # IP. The request endpoint always returns 200 (enumeration safe)
+        # so the throttle is the only signal that the user hit the
+        # rate cap.
+        "magic_link_request": "5/hour",
     },
     # SessionAuth enforces CSRF on unsafe methods (POST/PUT/PATCH/DELETE).
     # This is the default but made explicit so future contributors don't relax it.
