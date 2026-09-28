@@ -21,6 +21,11 @@ import type {
   AdminLocaleCode,
   AdminQRCode,
   AdminSummary,
+  AIDescribeBulkResponse,
+  AIDescribeItemResponse,
+  AITranslateMenuEntityResponse,
+  AITranslateStatsResponse,
+  AITranslateTextResponse,
   Allergen,
   ApiEnvelope,
   Branch,
@@ -1327,4 +1332,134 @@ export async function fetchKitchenTickets(
   );
   if (Array.isArray(payload)) return payload;
   return (payload as { data: KitchenTicket[] }).data ?? [];
+}
+
+// ---------------------------------------------------------------------------
+// AI Translate + Describe (Sprint 9B frontend — backend shipped in 9A)
+// ---------------------------------------------------------------------------
+
+/**
+ * POST /api/v1/admin/translate/ — translate a single ad-hoc string.
+ *
+ * Used by the inline `AI Çevir` button inside `TranslationTabs`: the
+ * operator picks a source locale (TR row) and a target locale (EN row)
+ * and gets back the translated name + description to apply.
+ */
+export async function translateText(
+  payload: {
+    text: string;
+    source_locale: AdminLocaleCode;
+    target_locale: AdminLocaleCode;
+  },
+  csrfToken: string,
+  options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
+): Promise<AITranslateTextResponse> {
+  return adminFetch<AITranslateTextResponse>("/api/v1/admin/translate/", {
+    method: "POST",
+    csrfToken,
+    body: payload,
+    ...options,
+  });
+}
+
+/**
+ * POST /api/v1/admin/translate/menu-item/{id}/ — translate one item into
+ * N target locales at once. The backend returns one row per target
+ * locale with `cached` / `provider` / `model` metadata.
+ */
+export async function translateMenuItem(
+  itemId: number,
+  payload: {
+    source_locale?: AdminLocaleCode;
+    target_locales: AdminLocaleCode[];
+  },
+  csrfToken: string,
+  options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
+): Promise<AITranslateMenuEntityResponse> {
+  return adminFetch<AITranslateMenuEntityResponse>(
+    `/api/v1/admin/translate/menu-item/${itemId}/`,
+    {
+      method: "POST",
+      csrfToken,
+      body: payload,
+      ...options,
+    },
+  );
+}
+
+/**
+ * POST /api/v1/admin/translate/menu-category/{id}/ — translate one
+ * category into N target locales at once.
+ */
+export async function translateMenuCategory(
+  categoryId: number,
+  payload: {
+    source_locale?: AdminLocaleCode;
+    target_locales: AdminLocaleCode[];
+  },
+  csrfToken: string,
+  options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
+): Promise<AITranslateMenuEntityResponse> {
+  return adminFetch<AITranslateMenuEntityResponse>(
+    `/api/v1/admin/translate/menu-category/${categoryId}/`,
+    {
+      method: "POST",
+      csrfToken,
+      body: payload,
+      ...options,
+    },
+  );
+}
+
+/**
+ * POST /api/v1/admin/describe/menu-item/{id}/ — generate / return the AI
+ * description for a single item + locale. `force=true` overwrites an
+ * already-edited record (D-023 regen guard).
+ */
+export async function describeMenuItem(
+  itemId: number,
+  payload: { locale: AdminLocaleCode; force?: boolean },
+  csrfToken: string,
+  options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
+): Promise<AIDescribeItemResponse> {
+  return adminFetch<AIDescribeItemResponse>(
+    `/api/v1/admin/describe/menu-item/${itemId}/`,
+    {
+      method: "POST",
+      csrfToken,
+      body: payload,
+      ...options,
+    },
+  );
+}
+
+/**
+ * POST /api/v1/admin/describe/bulk/ — fill empty descriptions across
+ * N items. `item_ids` is optional — empty list = "all items in org
+ * missing a description for this locale".
+ */
+export async function describeBulk(
+  payload: { locale: AdminLocaleCode; item_ids?: number[] },
+  csrfToken: string,
+  options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
+): Promise<AIDescribeBulkResponse> {
+  return adminFetch<AIDescribeBulkResponse>("/api/v1/admin/describe/bulk/", {
+    method: "POST",
+    csrfToken,
+    body: payload,
+    ...options,
+  });
+}
+
+/**
+ * GET /api/v1/admin/translate/stats/ — lightweight cache + description
+ * activity stats for the dashboard banner. Server-side callers pass
+ * `internal: true` so the request hops straight to `backend`.
+ */
+export async function fetchTranslateStats(
+  options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
+): Promise<AITranslateStatsResponse> {
+  return adminFetch<AITranslateStatsResponse>("/api/v1/admin/translate/stats/", {
+    ...options,
+  });
 }
