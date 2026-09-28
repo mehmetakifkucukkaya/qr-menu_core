@@ -55,6 +55,11 @@ class AuditEvent(models.Model):
         ("order_ready", "Order: ready (customer notified)"),
         ("order_delivered", "Order: delivered"),
         ("order_cancelled", "Order: cancelled"),
+        # Sprint 9A — AI translation + description (D-021 reuse). One
+        # event per generation so the audit feed can later surface
+        # "AI activity" alongside admin human edits.
+        ("ai_translation_generated", "AI translation: generated"),
+        ("ai_description_generated", "AI description: generated"),
     ]
 
     # ---- target type -----------------------------------------------------
@@ -71,6 +76,11 @@ class AuditEvent(models.Model):
         # customer-side ``order_placed`` and admin-side status
         # transition events. ``target_id`` = Order.pk.
         ("order", "Order"),
+        # Sprint 9A — AI translation + description targets. Translations
+        # point at ``TranslationMemory.pk``; descriptions point at
+        # ``MenuItem.pk`` (with action=ai_description_generated).
+        ("translation_memory", "Translation Memory"),
+        ("ai_product_description", "AI Product Description"),
     ]
 
     actor = models.ForeignKey(
