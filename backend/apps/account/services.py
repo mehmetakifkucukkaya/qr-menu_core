@@ -252,18 +252,21 @@ def award_points_for_order(order) -> Optional[LoyaltyTransaction]:
         return None
 
     try:
-        txn = LoyaltyTransaction.objects.create(
-            customer=order.customer,
-            organization=order.organization,
-            type=LoyaltyTransaction.EARN,
-            points=points,
-            order=order,
-            note=f"Sipariş {order.order_number}",
-        )
+        with transaction.atomic():
+            txn = LoyaltyTransaction.objects.create(
+                customer=order.customer,
+                organization=order.organization,
+                type=LoyaltyTransaction.EARN,
+                points=points,
+                order=order,
+                note=f"Sipariş {order.order_number}",
+            )
     except IntegrityError:
         # Idempotency guard. A concurrent re-deliver or a retry from
         # the state machine hit the unique constraint — the earn row
-        # already exists; nothing to do.
+        # already exists; nothing to do. The ``atomic()`` wrapper
+        # rolls back the offending row's savepoint so the rest of
+        # the test / request keeps a clean transaction state.
         return None
 
     _audit_loyalty_earned(order, txn)
