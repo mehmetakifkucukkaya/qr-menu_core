@@ -95,6 +95,8 @@ LOCAL_APPS = [
     "apps.orders",
     # Sprint 9A — AI translate + product description (D-021 reuse).
     "apps.translate",
+    # Sprint 10A — Customer accounts + magic link auth + loyalty ledger (D-025).
+    "apps.account",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
