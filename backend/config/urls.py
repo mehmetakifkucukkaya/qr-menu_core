@@ -30,6 +30,23 @@ urlpatterns = [
     # kitchen display. See apps/orders/urls_admin.py for prefix layout.
     path("api/v1/admin/orders/", include("apps.orders.urls_orders")),
     path("api/v1/admin/kitchen/", include("apps.orders.urls_kitchen")),
+    # Sprint 9A — AI translate + describe (D-021 reuse). Two prefixes,
+    # one app — see apps/translate/urls.py for the two URLConf objects.
+    # Import both lists and stitch them in: ``include((module, ns))``
+    # forces us to a single ``urlpatterns`` per module, but we want a
+    # second prefix — so we mount each prefix separately via an inline
+    # ``path("", include(...))``.
+    path(
+        "api/v1/admin/translate/",
+        include(("apps.translate.urls", "translate"), namespace="translate"),
+    ),
+    path(
+        "api/v1/admin/describe/",
+        include(
+            ("apps.translate.urls_describe", "describe"),
+            namespace="describe",
+        ),
+    ),
     # Sprint 3 — public unauthenticated read endpoints (throttled).
     path("api/v1/public/", include("apps.menu.urls_public")),
     # Sprint 5A — public events endpoint (throttled, IP/UA hash).

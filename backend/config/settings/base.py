@@ -93,6 +93,8 @@ LOCAL_APPS = [
     "apps.pdf_import",
     # Sprint 8A — Customer order flow (sipariş + mutfak ekranı; D-022).
     "apps.orders",
+    # Sprint 9A — AI translate + product description (D-021 reuse).
+    "apps.translate",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -208,6 +210,21 @@ ANTHROPIC_DEFAULT_MODEL = os.environ.get(
 # file exceeds either cap.
 PDF_IMPORT_MAX_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
 PDF_IMPORT_MAX_PAGES = 20
+
+# ---------------------------------------------------------------------------
+# Sprint 9A — AI translate + product description (D-021 reuse)
+# ---------------------------------------------------------------------------
+# Hard cap on the source text length accepted by ``POST /api/v1/admin/
+# translate/``. 2000 chars covers typical menu names + descriptions
+# (the longest realistic Turkish menu item description is <500 chars).
+# Bulk endpoints cap item counts via ``AI_DESCRIPTION_BULK_MAX_ITEMS``
+# so a single request can't fan out to hundreds of AI calls.
+AI_TRANSLATION_MAX_CHARS = int(
+    os.environ.get("AI_TRANSLATION_MAX_CHARS", "2000")
+)
+AI_DESCRIPTION_BULK_MAX_ITEMS = int(
+    os.environ.get("AI_DESCRIPTION_BULK_MAX_ITEMS", "50")
+)
 
 # ---------------------------------------------------------------------------
 # DRF
