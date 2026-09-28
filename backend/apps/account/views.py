@@ -145,8 +145,14 @@ def _set_customer_cookie(response: HttpResponse, customer: Customer) -> None:
 
 
 def _clear_customer_cookie(response: HttpResponse) -> None:
+    # ``delete_cookie`` only accepts a small set of kwargs (key, path,
+    # domain, samesite). Secure flag isn't a delete-time concept — we
+    # rely on the user's browser to discard the cookie. We pass
+    # ``samesite`` so the deletion matches the issuance site policy.
     response.delete_cookie(
-        **_cookie_settings(),
+        key=settings.AUTH_COOKIE_NAME,
+        path="/",
+        samesite="Lax",
     )
 
 
