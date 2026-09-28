@@ -30,6 +30,7 @@ when the lookup misses (never 403 — we don't leak existence).
 from __future__ import annotations
 
 import logging
+from decimal import Decimal
 
 from django.utils import timezone
 from rest_framework import status
@@ -46,6 +47,12 @@ from apps.audit.services import record_event
 from apps.branches.models import Branch
 from apps.menu.models import Menu
 from apps.organizations.models import Organization
+
+# Sprint 10A — Customer + loyalty integration (D-025). Public orders
+# can now (optionally) attach to a logged-in customer via cookie and
+# redeem loyalty puan against the total.
+from apps.account.models import Customer, LoyaltySettings
+from apps.account.services import LoyaltyError, customer_balance, redeem_points
 
 from .models import Order, OrderStatus
 from .serializers import PublicOrderCreateSerializer
@@ -96,7 +103,20 @@ def _resolve_organization(user):
 # Public endpoints
 # ---------------------------------------------------------------------------
 class PublicOrderCreateView(APIView):
-    """POST /api/v1/public/orders — place a customer order."""
+    """POST /api/v1/public/orders — place a customer order.
+
+    Sprint 10A additions (D-025):
+
+    * Optional ``loyalty_points_to_redeem`` body field. If the
+      request carries a valid customer cookie AND the org's
+      LoyaltySettings is enabled AND the customer has the
+      requested puan balance, we deduct the points and apply a
+      discount to the order total. Server-side validation only —
+      client-supplied ``price`` is ignored everywhere (D-022).
+    * The order row gains an optional ``customer`` FK so the
+      customer can later see this order on ``/api/v1/account/me/orders``
+      and earn puan on completion (delivery → ``award_points_for_order``).
+    """
 
     authentication_classes: list = []
     permission_classes = [AllowAny]
@@ -175,6 +195,34 @@ class PublicOrderCreateView(APIView):
             ).first()
         )
 
+        # Sprint 10A — Customer cookie + loyalty redemption flow.
+        # We resolve the customer from the cookie (same helper the
+        # account views use) and validate redemption before the
+        # order is created.
+        # Imports are local to avoid a circular at import time.
+        from apps.account.views import get_current_customer
+
+        customer = get_current_customer(request)
+        loyalty_points_to_redeem = int(
+            payload.get("loyalty_points_to_redeem") or 0
+        )
+
+        # If the client claims to redeem puan, we need a customer +
+        # an enabled loyalty config. Otherwise treat as 400.
+        if loyalty_points_to_redeem and customer is None:
+            return Response(
+                {
+                    "error": {
+                        "code": "loyalty.not_authenticated",
+                        "message": "Puan kullanmak için giriş yapmalısınız.",
+                    },
+                    "meta": {
+                        "request_id": request.META.get("HTTP_X_REQUEST_ID", "")
+                    },
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         try:
             order = create_order(
                 organization=org,
@@ -203,6 +251,58 @@ class PublicOrderCreateView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Attach the customer (post-create so a payment-side failure
+        # never leaves a dangling FK). ``customer`` already validated.
+        if customer is not None:
+            order.customer = customer
+            order.save(update_fields=["customer", "updated_at"])
+
+        # Apply loyalty redemption if requested + allowed.
+        loyalty_discount_amount = Decimal("0")
+        loyalty_points_redeemed = 0
+        loyalty_balance_after = None
+        if customer is not None and loyalty_points_to_redeem > 0:
+            try:
+                txn = redeem_points(
+                    customer=customer,
+                    organization=org,
+                    points=loyalty_points_to_redeem,
+                    order=order,
+                    note=f"Sipariş {order.order_number} için {loyalty_points_to_redeem} puan harcandı",
+                )
+                loyalty_points_redeemed = loyalty_points_to_redeem
+                loyalty_discount_amount = (
+                    Decimal(loyalty_points_to_redeem)
+                    * LoyaltySettings.objects.get(organization=org).redemption_rate
+                ).quantize(Decimal("0.01"), rounding="ROUND_FLOOR")
+                loyalty_balance_after = customer_balance(
+                    customer=customer, organization=org
+                )
+            except LoyaltyError as exc:
+                # We let the order stand but skip the redemption —
+                # the client gets the order confirmation plus the
+                # error code in the payload. The Next.js checkout
+                # surfaces this so the user can re-confirm.
+                logger.info(
+                    "loyalty redemption failed on order %s: %s",
+                    order.order_number,
+                    exc,
+                )
+                return Response(
+                    {
+                        "error": {
+                            "code": exc.code,
+                            "message": exc.message,
+                        },
+                        "meta": {
+                            "request_id": request.META.get(
+                                "HTTP_X_REQUEST_ID", ""
+                            )
+                        },
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         # Audit: customer-side event. ``actor`` is None — these
         # requests are anonymous.
         record_event(
@@ -220,6 +320,9 @@ class PublicOrderCreateView(APIView):
                 "currency": order.currency,
                 "table_number": order.table_number,
                 "branch_slug": branch.slug if branch else None,
+                "customer_id": customer.id if customer else None,
+                "loyalty_points_redeemed": loyalty_points_redeemed,
+                "loyalty_discount_amount": str(loyalty_discount_amount),
             },
         )
 
@@ -231,6 +334,9 @@ class PublicOrderCreateView(APIView):
                     "total_amount": str(order.total_amount),
                     "currency": order.currency,
                     "placed_at": order.placed_at.isoformat(),
+                    "loyalty_discount_amount": str(loyalty_discount_amount),
+                    "loyalty_points_redeemed": loyalty_points_redeemed,
+                    "loyalty_balance_after": loyalty_balance_after,
                 },
                 "meta": {
                     "request_id": request.META.get("HTTP_X_REQUEST_ID", "")

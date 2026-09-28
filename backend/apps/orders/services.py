@@ -280,6 +280,25 @@ def transition_status(order: Order, new_status: str, actor=None) -> Order:
                               "confirmed_at", "preparing_at",
                               "ready_at", "delivered_at", "cancelled_at"])
 
+    # Sprint 10A — loyalty award trigger (D-025). When an order
+    # transitions to "delivered" and the customer is linked, we
+    # append an EARN row to the loyalty ledger. Idempotent via
+    # the (order, type='earn') unique constraint; safe to call
+    # repeatedly if the state machine ever retries.
+    if (
+        new_status == OrderStatus.DELIVERED
+        and order.customer_id is not None
+    ):
+        from apps.account.services import award_points_for_order
+        try:
+            award_points_for_order(order)
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning(
+                "award_points_for_order failed for %s: %s",
+                order.order_number,
+                exc,
+            )
+
     action = f"order_{new_status}"
     record_event(
         organization=order.organization,
