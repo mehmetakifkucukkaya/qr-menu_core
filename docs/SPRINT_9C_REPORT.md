@@ -2,7 +2,7 @@
 
 **Tarih:** 2026-09-28
 **Sprint:** 9C (V2) — public SEO + çeviri tutarlılık
-**Durum:** ✅ Tamam — 5 commit, 2 yeni frontend dosya + 1 güncellenen sayfa, 1 güncellenen backend dosya + 1 yeni test dosyası, **279 yeşil (269 baseline + 10 yeni), 20 frontend unit test**
+**Durum:** ✅ Tamam — 7 commit, 2 yeni frontend dosya + 1 güncellenen sayfa, 1 güncellenen backend dosya + 1 yeni test dosyası, **279 yeşil (269 baseline + 10 yeni), 20 frontend unit test**
 
 **Önceki:** 9A backend ✅, 9B admin UI ✅, 8C mutfak ekranı ✅
 **Sonraki:** V2 backlog — online ödeme / müşteri hesabı / multi-tenant / VPS deploy
@@ -19,7 +19,7 @@ Public menü sayfasının (`/m/[businessSlug]`) SEO yüzeyini Google crawler uyu
 - **`X-Translation-Gaps` response header**: public menu endpoint'i gap_count > 0 ise header ekliyor, 0 ise absent (crawler-friendly clean signal). Gap semantiği: **non-default supported locale** eksik (default locale source field'da canonical — Sprint 9B TranslationGapPanel ile tutarlı).
 - **Test coverage**: 20 frontend (Node built-in test runner + strip-types), 10 backend (`pytest`). 269 baseline + 10 yeni = **279 yeşil**.
 
-Toplam: 5 commit, 2 yeni frontend dosya (`seo.ts`, `seo.test.ts`), 1 güncellenen sayfa, 1 güncellenen backend view, 1 yeni backend test, 1 yeni npm script.
+Toplam: 7 commit, 2 yeni frontend dosya (`seo.ts`, `seo.test.ts`), 1 güncellenen sayfa, 1 güncellenen backend view, 1 yeni backend test, 1 yeni npm script.
 
 ---
 
@@ -187,9 +187,11 @@ Pure helpers, server + client component'lerden çağrılabilir:
 fa381ba chore(backend): X-Translation-Gaps header on public menu response
 88b4e47 test(backend): translation_gaps test (gap count + header inclusion)
 cdc9430 test(frontend): seo helpers unit tests (alternates, jsonld parse)
+9e9654c fix(backend): X-Translation-Gaps excludes default locale from count
+f3f252f chore(docs): Sprint 9C report
 ```
 
-5 commit. Backend baseline (269) preserved; frontend helper tests don't touch existing files.
+7 commit. Backend baseline (269) preserved; frontend helper tests don't touch existing files.
 
 ---
 
@@ -213,7 +215,7 @@ Sprint 9C kapsamında bu sınırlama kabul edildi; hreflang + OG locale birincil
 1. **Node 22+ built-in TS strip-types + .ts extension import** — `seo.test.ts` içinden `./seo.ts` import etmek için `tsconfig.json`'a `allowImportingTsExtensions: true` eklemek gerekti (`noEmit: true` ile uyumlu). Bu sayede Node `--experimental-strip-types` flag'i ile TS dosyalarını olduğu gibi çalıştırabiliyoruz, ayrıca `tsx`/`ts-node` derleme adımı yok.
 2. **Pre-existing TS type bug — `locale_used: "model"`** — `apps/web/src/types/menu.ts` `locale_used: LocaleCode` diyor (`"tr" | "en"`), ama backend `translation.resolve_*` `"model"` / `"default"` / `"requested"` da döndürüyor. Test fixture'ında `as unknown as LocaleCode` cast ile workaround. Sprint 9C kapsamı dışı — V2 backlog'ta `locale_used` union type'ını düzeltmek için ayrı iş.
 3. **`JsonLdNode` type cast zorlukları** — `JsonLdNode` interface'inin `[key: string]: unknown` index signature'ı, narrower type'a cast'i (`as { offers: ... }`) reddediyor. `as unknown as { offers: ... }` ile çözüldü. Test okunabilirliği için `@type` filter'ı + `Record<string, unknown>` index access pattern kullanıldı.
-4. **Gap semantiği brief vs UI uyumu** — Brief'in pseudocode'u "supported_locales - translated_locales" diyor (default locale dahil). Ama default locale source field'da canonical — operator için "missing default translation" actionable değil. Sprint 9B TranslationGapPanel zaten default locale'i filter'lıyor. Helper, brief'in önerdiği gibi default'u dahil etseydi, yeni menü 25 item × 2 locale = 50 gap gösterirdi (default tr text source'da olduğu halde). Karar: default locale exclude edildi, semantik 9B UI ile tutarlı, rapor + DECISIONS notu düşülecek (root session yazacak).
+4. **Gap semantiği brief vs UI uyumu** — Brief'in pseudocode'u "supported_locales - translated_locales" diyor (default locale dahil). Ama default locale source field'da canonical — operator için "missing default translation" actionable değil. Sprint 9B TranslationGapPanel zaten default locale'i filter'lıyor. Helper, brief'in önerdiği gibi default'u dahil etseydi, yeni menü 25 item × 2 locale = 50 gap gösterirdi (default tr text source'da olduğu halde). Karar: default locale exclude edildi, semantik 9B UI ile tutarlı, `fix(backend)` commit'i olarak ayrıca yansıtıldı (9e9654c), rapor + DECISIONS notu düşülecek (root session yazacak).
 5. **`menu` model değişkeninin scope'u** — `PublicMenuView.get()` içinde `menu` değişkeni yoktu (sadece `payload`). Çözüm: `get_active_menu(org, branch=branch)` import + reuse, `get_full_menu_payload` ile aynı resolution mantığı.
 
 ---
