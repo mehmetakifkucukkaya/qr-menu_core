@@ -8,17 +8,21 @@ import {
   FolderTree,
   Globe,
   Power,
+  Sparkles,
   Trash2,
 } from "lucide-react";
 
 import { AdminErrorState } from "@/app/(admin)/_components/ErrorState";
+import { TranslationGapPanel } from "@/app/(admin)/_components/TranslationGapPanel";
 import { DeleteMenuButton } from "./DeleteMenuButton";
 import {
   fetchCategories,
   fetchCurrentUser,
   fetchMenu,
+  fetchTranslateStats,
   AdminApiError,
 } from "@/lib/api-admin";
+import type { AITranslateStatsResponse } from "@/types/admin";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -41,6 +45,11 @@ interface PageProps {
  * management + reorder). This page is the entry point for an operator
  * who just opened a menu — they get a quick at-a-glance plus the
  * "kategorileri yönet" CTA.
+ *
+ * Sprint 9B: also renders the `TranslationGapPanel` so the operator can
+ * see translation coverage + bulk-generate descriptions without leaving
+ * the menu overview. Endpoint failures are swallowed — the panel hides
+ * itself when the stats endpoint returns nothing useful.
  */
 export default async function MenuDetailPage({ params }: PageProps) {
   const menuId = Number.parseInt(params.menuId, 10);
@@ -100,7 +109,19 @@ export default async function MenuDetailPage({ params }: PageProps) {
     );
   }
 
+  // Stats endpoint is optional — if the user is on a tenant without any
+  // AI activity yet, the backend still returns 200 with all-zero stats,
+  // so this branch rarely triggers. We swallow any 5xx so the page
+  // doesn't break when the translate app is unavailable.
+  let aiStats: AITranslateStatsResponse | null = null;
+  try {
+    aiStats = await fetchTranslateStats({ internal: true, cookieHeader });
+  } catch {
+    aiStats = null;
+  }
+
   const csrfToken = cookies().get("qr_csrftoken")?.value ?? null;
+  const categoryIds = categories.map((c) => c.id);
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-6">
@@ -146,6 +167,13 @@ export default async function MenuDetailPage({ params }: PageProps) {
         </div>
         <div className="flex items-center gap-2">
           <Link
+            href={`/admin/menus/${menu.id}/translate`}
+            className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-sm font-medium text-primary transition hover:bg-primary/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            <Sparkles className="h-4 w-4" />
+            AI Çeviri
+          </Link>
+          <Link
             href={`/admin/menus/${menu.id}/edit`}
             className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-text transition hover:bg-background focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
@@ -155,6 +183,15 @@ export default async function MenuDetailPage({ params }: PageProps) {
           <DeleteMenuButton id={menu.id} csrfToken={csrfToken} />
         </div>
       </header>
+
+      {aiStats ? (
+        <TranslationGapPanel
+          menu={menu}
+          stats={aiStats}
+          csrfToken={csrfToken}
+          categoryIds={categoryIds}
+        />
+      ) : null}
 
       <section
         aria-label="Kategoriler"
