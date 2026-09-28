@@ -9,6 +9,11 @@ import { MenuViewClient } from "@/components/public/MenuViewClient";
 import { HeaderCartIcon } from "@/components/public/HeaderCartIcon";
 import { fetchPublicMenu, PublicMenuError } from "@/lib/api";
 import { humanizeSlug } from "@/lib/format";
+import {
+  buildAlternates,
+  buildJsonLdRestaurant,
+  buildOgMetadata,
+} from "@/lib/seo";
 import type { LocaleCode } from "@/types/menu";
 
 interface PageProps {
@@ -23,6 +28,12 @@ function resolveLocale(raw?: string): LocaleCode {
   return raw === "en" || raw === "tr" ? raw : DEFAULT_LOCALE;
 }
 
+/** Absolute origin used to build canonical / hreflang URLs.
+ *  Matches the root layout's metadataBase so URL resolution is consistent. */
+function resolveOrigin(): string {
+  return process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+}
+
 /**
  * Public menu page (server component).
  *
@@ -30,12 +41,25 @@ function resolveLocale(raw?: string): LocaleCode {
  * Docker internal network (`internal: true`), and streams the rendered
  * HTML. The browser never talks to the backend directly in V1.
  *
- * Composition (Sprint 3B-2 + Sprint 8B):
+ * Composition (Sprint 3B-2 + Sprint 8B + Sprint 9C SEO):
+ *   - `<head>` metadata: title, description, canonical, hreflang alternates
+ *     (every supported locale + x-default), OG locale + alternateLocale,
+ *     twitter card
+ *   - JSON-LD `<script type="application/ld+json">` with the Schema.org
+ *     graph (Restaurant + Menu + MenuSection + MenuItem) — see
+ *     `lib/seo.buildJsonLdRestaurant`
  *   - sticky header (logo + business name + LocaleSelector + HeaderCartIcon + CTAs)
  *   - BusinessHero (cover + logo + name + theme override)
  *   - MenuViewClient (CategoryNav + CategorySection + ItemDetailDrawer + CartFab + CartDrawer)
  *   - FloatingCtas (mobile only bottom bar)
  *   - footer
+ *
+ * Note on `<html lang>`: Next 14 App Router locks the `<html>` element to
+ * the root layout — per-route language switching requires either a
+ * i18n library (next-intl etc., not in V1) or a custom root layout per
+ * locale. hreflang tags are the primary SEO signal for language
+ * targeting, so this is acceptable for V1; tracked as a limitation in
+ * Sprint 9C report.
  */
 export default async function PublicMenuPage({ params, searchParams }: PageProps) {
   const locale = resolveLocale(searchParams.locale);
@@ -47,12 +71,30 @@ export default async function PublicMenuPage({ params, searchParams }: PageProps
       branch,
       internal: true,
     });
+    // JSON-LD Schema.org graph — Sprint 9C. Server-rendered inside the
+    // <body> (Next 14 App Router renders inline <script> tags in the
+    // body; crawlers accept either location).
+    const jsonLd = buildJsonLdRestaurant({
+      host: resolveOrigin(),
+      basePath: `/m/${params.businessSlug}`,
+      payload,
+      locale,
+    });
     return (
-      <MenuView
-        payload={payload}
-        locale={locale}
-        businessSlug={params.businessSlug}
-      />
+      <>
+        <script
+          type="application/ld+json"
+          // The payload is JSON.stringify'd from a hand-built object —
+          // no user input flows into the script body. dangerouslySetInnerHTML
+          // is required because React escapes `<` / `>` in <script> children.
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+        <MenuView
+          payload={payload}
+          locale={locale}
+          businessSlug={params.businessSlug}
+        />
+      </>
     );
   } catch (err) {
     if (err instanceof PublicMenuError) {
@@ -65,7 +107,10 @@ export default async function PublicMenuPage({ params, searchParams }: PageProps
   }
 }
 
-export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+  searchParams,
+}: PageProps): Promise<Metadata> {
   try {
     const payload = await fetchPublicMenu(params.businessSlug, {
       locale: DEFAULT_LOCALE,
@@ -73,16 +118,46 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     });
     const { business, menu } = payload;
     const ogImage = business.cover_image || "/demo-assets/og-image.jpg";
-    const description = `${business.name} — dijital menü${menu?.description ? `: ${menu.description}` : ""}`.slice(0, 200);
+    const description = `${business.name} — dijital menü${
+      menu?.description ? `: ${menu.description}` : ""
+    }`.slice(0, 200);
+
+    // Resolve the locales this page advertises. Prefer the menu's
+    // declared `supported_locales` (Sprint 4B schema) and fall back to
+    // the business default when the menu is null.
+    const supported = (
+      menu?.supported_locales && menu.supported_locales.length > 0
+        ? menu.supported_locales
+        : [business.default_locale]
+    ) as string[];
+    const currentLocale = resolveLocale(searchParams.locale);
+    const { canonical, languages } = buildAlternates({
+      host: resolveOrigin(),
+      basePath: `/m/${params.businessSlug}`,
+      locales: supported,
+      currentLocale,
+    });
+    const og = buildOgMetadata({
+      business,
+      menu,
+      ogImage,
+      locales: supported,
+      currentLocale,
+    });
+
     return {
       title: business.name,
       description,
+      alternates: {
+        canonical,
+        languages,
+      },
       openGraph: {
-        title: `${business.name} — Dijital Menü`,
-        description,
-        type: "website",
-        locale: "tr_TR",
-        images: [{ url: ogImage, width: 1200, height: 630, alt: `${business.name} dijital menü` }],
+        ...og,
+        // Reuse the languages map so Next.js renders
+        // `<link rel="alternate" hreflang="…" href="…" />` × N from
+        // metadata.alternates.languages (above) AND surface the OG
+        // variants via openGraph.alternateLocale (helper output).
       },
       twitter: {
         card: "summary_large_image",
