@@ -52,15 +52,7 @@ def _customer_login(client: APIClient, customer: Customer) -> None:
 
 
 # Patch the magic-link throttle in tests where many requests happen.
-@pytest.fixture
-def no_throttle(settings):
-    """Disable the magic-link throttle for this test only."""
-    rest = settings.REST_FRAMEWORK.copy()
-    rates = dict(rest.get("DEFAULT_THROTTLE_RATES", {}))
-    rates["magic_link_request"] = "1000/min"
-    rest["DEFAULT_THROTTLE_RATES"] = rates
-    settings.REST_FRAMEWORK = rest
-    return settings
+# ``no_throttle`` is provided by conftest.py.
 
 
 # ---------------------------------------------------------------------------
