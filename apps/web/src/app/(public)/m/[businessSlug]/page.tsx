@@ -319,6 +319,8 @@ function MenuView({
       ) : (
         <MenuViewClient
           businessSlug={businessSlug}
+          business={business}
+          menu={menu}
           categories={categories}
           allergens={allergens}
           dietaryTags={dietary_tags}
