@@ -1,6 +1,5 @@
 import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
-import { Users } from "lucide-react";
 
 import {
   fetchCurrentUser,
@@ -96,8 +95,3 @@ export default async function CustomerDetailPage({ params }: PageProps) {
     />
   );
 }
-
-// Note: the Users icon import above keeps the icon registry warm even
-// though we don't render it here — it gets re-exported by the sidebar
-// in the future Sprint 10C nav update.
-export const __detailPageIcon = Users;
