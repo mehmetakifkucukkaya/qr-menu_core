@@ -4,6 +4,14 @@ import type { Config } from "tailwindcss";
  * Tailwind config — Modern Cafe palette exposed as CSS variables so the
  * per-business theme can override tokens at runtime via inline style on the
  * BusinessHero wrapper. See docs/SPRINT_3_PLAN.md ("Theme Tokens").
+ *
+ * Sprint 12A additions:
+ *   • Box-shadow scale (xs/sm/md/lg/xl) plus legacy aliases
+ *   • Border-radius scale (xl/pill) — DEFAULT/sm/md/lg kept for back-compat
+ *   • Animation + keyframes (pulse-soft kitchen ambient, fade-in, slide-up
+ *     for bottom-sheet draw-downs in 12B+)
+ *   • `fontFamily.heading` / `fontFamily.body` re-pinned to the Google Fonts
+ *     pair (Playfair Display SC + Karla)
  */
 const config: Config = {
   content: [
@@ -36,10 +44,49 @@ const config: Config = {
         lg: "var(--radius)",
         md: "calc(var(--radius) * 0.75)",
         sm: "calc(var(--radius) * 0.5)",
+        // New radius scale (Sprint 12A).
+        xs: "var(--radius-xs)",
+        xl: "var(--radius-xl)",
+        pill: "var(--radius-pill)",
       },
       boxShadow: {
-        card: "0 4px 14px rgb(var(--color-text) / 0.08)",
-        floating: "0 8px 24px rgb(var(--color-text) / 0.16)",
+        // Legacy aliases — kept so existing `shadow-card` / `shadow-floating`
+        // usages continue to work without per-component rewrites.
+        card: "var(--shadow-card)",
+        floating: "var(--shadow-floating)",
+        // New layered scale (Sprint 12A).
+        xs: "var(--shadow-xs)",
+        sm: "var(--shadow-sm)",
+        md: "var(--shadow-md)",
+        lg: "var(--shadow-lg)",
+        xl: "var(--shadow-xl)",
+      },
+      // Animation tokens (Sprint 12A).
+      animation: {
+        "pulse-soft": "pulse-soft 2.5s ease-in-out infinite",
+        "fade-in": "fade-in var(--transition-base) var(--ease-out-cubic)",
+        "slide-up": "slide-up var(--transition-base) var(--ease-out-cubic)",
+        // Legacy kitchen pulse kept for the existing
+        // `.kitchen-ticket-pending` rule in globals.css.
+        "kitchen-pulse": "kitchen-pulse 2s ease-in-out infinite",
+      },
+      keyframes: {
+        "pulse-soft": {
+          "0%, 100%": { transform: "scale(1)", opacity: "1" },
+          "50%": { transform: "scale(1.04)", opacity: "0.92" },
+        },
+        "fade-in": {
+          from: { opacity: "0" },
+          to: { opacity: "1" },
+        },
+        "slide-up": {
+          from: { transform: "translateY(100%)" },
+          to: { transform: "translateY(0)" },
+        },
+        "kitchen-pulse": {
+          "0%, 100%": { boxShadow: "0 0 0 0 rgba(224, 120, 86, 0)" },
+          "50%": { boxShadow: "0 0 0 8px rgba(224, 120, 86, 0.15)" },
+        },
       },
     },
   },

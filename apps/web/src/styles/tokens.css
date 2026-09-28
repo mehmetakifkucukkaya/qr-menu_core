@@ -1,5 +1,5 @@
 /* ============================================================
- * Theme tokens — Modern Cafe default palette.
+ * Theme tokens — Modern Cafe default palette (D-014 baseline).
  *
  * All colors are stored as space-separated RGB triplets so Tailwind's
  * `rgb(var(--token) / <alpha-value>)` pattern works (see tailwind.config.ts).
@@ -7,9 +7,17 @@
  * Per-business themes override these values via inline style on the
  * BusinessHero wrapper (or anywhere higher in the tree). See
  * docs/SPRINT_3_PLAN.md → "Theme Tokens".
+ *
+ * Sprint 12A — added:
+ *   • dark-mode (`[data-theme="dark"]`) variable set
+ *   • radius scale (xs / sm / md / lg / xl / pill)
+ *   • shadow layers (xs / sm / md / lg / xl)
+ *   • transition / easing tokens
+ *   • Google Fonts pair (Playfair Display SC heading + Karla body)
  * ============================================================ */
 
-:root {
+:root,
+:root[data-theme="light"] {
   /* Modern Cafe palette (see FRONTEND_PLACEHOLDERS.md / Modern Cafe seed) */
   --color-primary: 139 90 60;          /* #8B5A3C warm brown */
   --color-primary-foreground: 255 255 255;
@@ -21,10 +29,67 @@
   --color-muted: 122 107 95;
   --color-border: 222 211 196;
 
-  /* Typography */
-  --font-heading: "Playfair Display", "Georgia", serif;
-  --font-body: "Inter", "system-ui", sans-serif;
+  /* Page-level surface tokens used by Glassmorphism + raw body bg. */
+  --color-bg-base: 245 239 230;        /* matches --color-background */
+  --color-bg-overlay: 255 255 255;     /* solid surface for blur target */
+  --color-shadow-color: 44 24 16;      /* =--color-text; shadow rgba seed */
 
-  /* Geometry */
+  /* Typography — Google Fonts pairing (Sprint 12A).
+   * Playfair Display SC brings editorial elegance to headings; Karla is
+   * the UI workhorse (300/400/500/600/700 covers all weights). */
+  --font-heading: "Playfair Display SC", "Playfair Display", Georgia, serif;
+  --font-body: "Karla", "Inter", system-ui, -apple-system, sans-serif;
+
+  /* Geometry — full radius scale. The DEFAULT keeps backwards-compat
+   * with components that reference `rounded-DEFAULT`. */
   --radius: 0.5rem;
+  --radius-xs: 0.375rem;     /* 6px — small chips, tags, kbd hints */
+  --radius-sm: 0.5rem;       /* 8px — inputs, small buttons           */
+  --radius-md: 0.75rem;      /* 12px — DEFAULT card / button surface  */
+  --radius-lg: 1.25rem;      /* 20px — large cards, modals, drawers   */
+  --radius-xl: 1.5rem;       /* 24px — hero panels, glass nav         */
+  --radius-pill: 9999px;     /* full — pills, toggle switches         */
+
+  /* Shadows — soft, layered. All key off --color-shadow-color so dark mode
+   * can re-seed the rgba base to a darker colour. */
+  --shadow-xs: 0 1px 2px rgb(var(--color-shadow-color) / 0.04);
+  --shadow-sm: 0 2px 4px rgb(var(--color-shadow-color) / 0.06);
+  --shadow-md: 0 6px 16px rgb(var(--color-shadow-color) / 0.08);
+  --shadow-lg: 0 12px 32px rgb(var(--color-shadow-color) / 0.12);
+  --shadow-xl: 0 20px 48px rgb(var(--color-shadow-color) / 0.16);
+  /* Backwards-compat aliases (used by existing `shadow-card` / `shadow-floating`
+   * utilities — keep them mapped to the new scale instead of removing). */
+  --shadow-card: var(--shadow-sm);
+  --shadow-floating: var(--shadow-md);
+
+  /* Motion — global transition tokens. Components should prefer these
+   * over hardcoded `duration-*` Tailwind values so dark/light swap and
+   * `prefers-reduced-motion` overrides stay centralised. */
+  --transition-fast: 150ms;
+  --transition-base: 200ms;
+  --transition-slow: 300ms;
+  --ease-out-cubic: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ----- Dark mode ----------------------------------------------------------
+ * Mirrors the light palette for high-contrast readability on the kitchen
+ * tablet and admin desktop. Per-business themes still win via inline
+ * overrides on the BusinessHero wrapper (D-014). The page bg drops to a
+ * deep slate-navy so cards (which keep --color-surface) read as floating
+ * panels. */
+:root[data-theme="dark"] {
+  --color-primary: 212 165 116;        /* #D4A574 — warm tan pops on dark  */
+  --color-primary-foreground: 15 23 42;
+  --color-secondary: 139 90 60;        /* #8B5A3C — softened brown        */
+  --color-accent: 224 120 86;          /* #E07856 terracotta — unchanged  */
+  --color-background: 15 23 42;        /* #0F172A slate-900 deep          */
+  --color-surface: 30 41 59;           /* #1E293B slate-800 cards         */
+  --color-text: 248 250 252;           /* #F8FAFC slate-50                */
+  --color-muted: 148 163 184;          /* #94A3B8 slate-400 — 4.5:1+      */
+  --color-border: 51 65 85;            /* #334155 slate-700               */
+
+  --color-bg-base: 15 23 42;
+  --color-bg-overlay: 30 41 59;
+  --color-shadow-color: 0 0 0;        /* pure black — heavier contrast   */
 }
