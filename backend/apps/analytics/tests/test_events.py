@@ -130,3 +130,112 @@ def test_event_tenant_isolation_via_orm(api_client, org_a, org_b, menu_a):
     # No cross-org leakage.
     assert all(e.organization_id == org_a.id for e in org_a_events)
     assert all(e.organization_id == org_b.id for e in org_b_events)
+
+
+# ---------------------------------------------------------------------------
+# Sprint A — QR scan_count atomic increment + cross-tenant guard (Faz 1.3)
+# ---------------------------------------------------------------------------
+
+
+def _make_qr(organization, menu, *, label="Kasa Önü", scan_count=0):
+    from apps.qr.models import QRCode
+
+    return QRCode.objects.create(
+        organization=organization,
+        menu=menu,
+        label=label,
+        scan_count=scan_count,
+    )
+
+
+def test_qr_open_increments_scan_count_atomic(api_client, org_a, menu_a):
+    """A single qr_open event bumps QRCode.scan_count by exactly 1."""
+    qr = _make_qr(org_a, menu_a, scan_count=4)
+    client = APIClient()
+    response = _post_event(
+        client,
+        event_type="qr_open",
+        qr_id=qr.id,
+    )
+    assert response.status_code == 204
+
+    qr.refresh_from_db()
+    assert qr.scan_count == 5
+
+
+def test_qr_open_atomic_under_repeated_requests(api_client, org_a, menu_a):
+    """10 sequential qr_open events → scan_count == 10 (F() expression
+    means each UPDATE sees the latest committed value)."""
+    qr = _make_qr(org_a, menu_a, scan_count=0)
+    client = APIClient()
+    for _ in range(10):
+        response = _post_event(
+            client,
+            event_type="qr_open",
+            qr_id=qr.id,
+        )
+        assert response.status_code == 204
+
+    qr.refresh_from_db()
+    assert qr.scan_count == 10
+    # Event row count matches — one event per request, no double-count.
+    assert MenuViewEvent.objects.filter(
+        organization=org_a,
+        qr_code_id=qr.id,
+        event_type="qr_open",
+    ).count() == 10
+
+
+def test_qr_open_cross_tenant_ignored(api_client, org_a, org_b, menu_a):
+    """A qr_open with a qr_id from another tenant is silently dropped:
+    no FK leak (qr_code_id nulled), no counter increment on the foreign QR."""
+    # QR belongs to org_b; the request claims to be org_a.
+    foreign_qr = _make_qr(org_b, menu_a, label="OrgB QR", scan_count=7)
+    client = APIClient()
+    response = _post_event(
+        client,
+        event_type="qr_open",
+        qr_id=foreign_qr.id,
+        organization_slug="cafe-a",  # honest org_a in the URL
+    )
+    assert response.status_code == 204  # public posture: silent ignore
+
+    # The foreign QR's counter is untouched.
+    foreign_qr.refresh_from_db()
+    assert foreign_qr.scan_count == 7
+
+    # No event row carries the foreign qr_id as FK (defence in depth —
+    # even if the request was a real user scan, the FK is nulled so
+    # admin analytics can't accidentally cross tenants via qr_code_id).
+    assert (
+        MenuViewEvent.objects.filter(
+            qr_code_id=foreign_qr.id, event_type="qr_open"
+        ).count()
+        == 0
+    )
+
+    # The event itself is still recorded for org_a (the user did scan
+    # something); the qr_code_id is nulled.
+    org_a_events = MenuViewEvent.objects.filter(
+        organization=org_a, event_type="qr_open"
+    )
+    assert org_a_events.count() == 1
+    assert org_a_events.first().qr_code_id is None
+
+
+def test_qr_open_unknown_qr_silently_ignored(api_client, org_a):
+    """A bogus qr_id → 204 + the event still records (the user did scan
+    something) but with ``qr_code_id`` nulled out (no FK to a phantom
+    QR). No counter side-effect because the QR doesn't exist."""
+    client = APIClient()
+    response = _post_event(
+        client,
+        event_type="qr_open",
+        qr_id=999_999,  # does not exist
+    )
+    assert response.status_code == 204
+    # The event itself is recorded (with qr_code_id nulled out); no
+    # MenuViewEvent row would mean we'd be hiding real scan activity.
+    events = MenuViewEvent.objects.filter(organization=org_a, event_type="qr_open")
+    assert events.count() == 1
+    assert events.first().qr_code_id is None

@@ -106,10 +106,14 @@ class PublicEventsView(APIView):
         # Done before MenuViewEvent.create() so a hostile payload that pairs
         # the real org slug with a foreign QR id never increments that QR's
         # counter (and never records an event that an honest client didn't
-        # cause).
+        # cause). When the guard rejects the qr_id we null it out so the
+        # MenuViewEvent row doesn't carry an FK to a foreign tenant's QR
+        # either (defence in depth — admin analytics filters by qr_code_id).
         qr_id = payload.get("qr_id") or None
         if event_type == "qr_open" and qr_id is not None:
-            self._increment_qr_counter(organization, qr_id)
+            if not self._increment_qr_counter(organization, qr_id):
+                # Cross-tenant or non-existent qr → drop the qr_id silently.
+                qr_id = None
 
         # Build the event row. We do this in a single create() so the
         # DB row is consistent even if an attacker floods the endpoint.
@@ -131,7 +135,7 @@ class PublicEventsView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @staticmethod
-    def _increment_qr_counter(organization: Organization, qr_id) -> None:
+    def _increment_qr_counter(organization: Organization, qr_id) -> bool:
         """Atomically bump ``QRCode.scan_count`` for a tenant-matching QR.
 
         Sprint A (Faz 1.3):
@@ -143,6 +147,10 @@ class PublicEventsView(APIView):
         * Atomic increment via ``F("scan_count") + 1`` so concurrent
           requests don't lose updates (we don't want to load + save, which
           is racy under SQLite + Postgres alike).
+
+        Returns True when the counter was bumped, False when the qr_id
+        was rejected (unknown or cross-tenant). The caller uses False to
+        decide whether to null out ``qr_code_id`` on the MenuViewEvent.
         """
         # QR codes live under an organization directly; the optional
         # branch is just a sub-scope, not a tenant boundary. We resolve
@@ -151,8 +159,9 @@ class PublicEventsView(APIView):
         try:
             qr = QRCode.objects.only("id", "organization_id").get(pk=qr_id)
         except (QRCode.DoesNotExist, ValueError, TypeError):
-            return
+            return False
         if qr.organization_id != organization.id:
-            return  # cross-tenant — silent ignore
+            return False  # cross-tenant — silent ignore
         # F() expression → DB-side increment under a single UPDATE row lock.
         QRCode.objects.filter(pk=qr.pk).update(scan_count=F("scan_count") + 1)
+        return True
