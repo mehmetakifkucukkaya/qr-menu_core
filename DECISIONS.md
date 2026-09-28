@@ -1416,3 +1416,64 @@ Local'de birden fazla Postgres instance çakışmasın diye ana stack'te host po
 | D-025 | 2026-09-28 | Müşteri Auth + Sadakat Puanı Pattern (Email Magic Link + HttpOnly session cookie + LoyaltySettings tenant OneToOne + LoyaltyTransaction ledger + unique idempotent award + server-side redemption validation + Order.customer FK nullable + audit 5 yeni action + 2 yeni target) | aktif |
 | D-026 | 2026-09-28 | Online Ödeme + Provider Abstraction Pattern (Stripe primary + iyzico V2 SaaS placeholder + Fernet encryption at rest + PaymentProvider ABC + 2-tier webhook idempotency + CSRF exempt + signature verify + Order.paid→confirmed FSM + Loyalty REVERSE integration + 11 endpoint + 23/40 yeşil test) | aktif |
 | D-027 | 2026-09-28 | UI/UX Design System + Modern Polish Pattern (token layer extension — radius/shadow/transition + Playfair SC + Karla pairing + dark mode CSS variable + ThemeProvider zustand persist + 4 UI primitive + focus-visible global + skip-to-content + prefers-reduced-motion reset + dependency-free shadcn-style API) | aktif |
+
+---
+
+## KARAR D-024 — V1 Satış Hazırlık Critical Fixes (Sprint A)
+
+**Karar:**
+- **Public payload expansion:** `OrganizationSummarySerializer` 12→18 alan (cover_image, description, address, google_maps_url, website, email, phone). Frontend `BusinessHero` logo + cover + contact strip renderlar. Eksik alanlar boş/placeholder'a düşer, broken image link yok.
+- **Currency fallback zinciri:** 4-step resolver `menu.currency → business.currency → first_item.currency → TRY` (TR market default). Pure function `lib/currency.ts`. V1 tek-tenant tek-item-currency pratik, ama zincir gelecekte multi-currency V2 SaaS için foundation.
+- **QR scan_count atomic increment:** DB-side `QRCode.objects.filter(pk=...).update(scan_count=F("scan_count") + 1)` — race condition safe. 10 parallel request = 10 (concurrent test ile doğrulandı).
+- **QR cross-tenant guard:** MenuViewEvent'te `qr_code_id` farklı tenant QR'ına aitse FK null'lanır (defence in depth). `qr_open` 204 + event recorded ile cross-tenant silent ignore.
+- **Image URL resolution helper:** `_resolve_image_url()` hem absolute URL hem Django `FieldFile` destekler. Media backend absolute URL'i ile pre-signed URL pattern gelecekte.
+- **Multi-tenant SAFE:** D-014 (theme override) + D-022 (tenant isolation) korunur. Logo/cover absolute URL döner, tenant context'i doğru organize eder.
+- **Out-of-scope:** Plan modeli (Faz 3 Sprint B), tenant feature flags (Faz 3.1 Sprint B), mevzuat alanları (Faz 4 Sprint D), MediaAsset (Faz 5 Sprint E), PDF export (Faz 4 Sprint D), top_qr_codes MenuViewEvent aggregate (D-017 V2 plan)
+
+**Tarih:** 2026-09-28
+
+**Bağlam:** Competitor audit (2026-09-28) V1 demo'da marka/görsel/para birimi hataları + QR counter bug'ı + public payload yetersizliği işaretledi. Satışa hazırlık Faz 1 + Faz 2.1 + Faz 2.3 ana akışı. **Önce sade ve sağlam QR Menü Basic/Pro satılabilir hale gelsin; sipariş, mutfak, sadakat, ödeme upsell olarak konumlansın** felsefesi.
+
+**Alternatifler:**
+- **Logo/cover için separate model:** OrganizationProfile model + logo_url/cover_url field. Multi-tenant yanlış baseline'a bağlanır; Organization zaten logo/cover_image field içeriyor (D-014 sprint 3-4)
+- **Currency frontend hardcode 'TRY':** Türkiye dışı tenantlar için yaklaşılabilir değil; zincir V2 SaaS multi-currency için gerekli
+- **QR scan_count application-side increment:** Race condition + concurrent request kayıp. DB-side atomic F() expression doğru
+- **Cross-tenant QR 'name error' pages:** UX bilgi sızıntısı (var-yok tespit). silent ignore + FK null V1 için default
+- **`image_url` field ayrıca admin form:** Organization form'a dokunmamak — serializer-level resolution D-014 separation of concerns
+- **Hardcoded payment config (test mode stripe):** Sprint 11A (D-026) tamamlandı, default test_mode True (D-026 güvenlik kararı)
+
+**Seçim gerekçesi:**
+- **Public payload expansion:** Demo'da müşteri işletme ile iletişim, harita linki, web sitesi görmek ister. Rakiplerin standard feature
+- **Currency 4-step fallback:** `menu.currency` per-business override V2 SaaS feature; `first_item.currency` V1 tek-item için robust; `TRY` fallback TR pazar varsayılanı
+- **DB F() expression atomic:** Concurrency + 10 concurrent request guarantee — D-022 server-side computation principle
+- **Cross-tenant FK null:** V1 silent ignore yeterli — V2 SaaS multi-tenant analytics cross-tenant aggregate için anonymous aggregation
+- **Image URL helper:** Backend'den absolute URL döner (request context ile) — frontend pre-signed URL query yok
+- **D-014 + D-022 compatibility:** Multi-tenant theme override + tenant isolation korunur, yeni alanlar per-tenant ayrı
+
+**Sonuçlar:**
+- `backend/apps/organizations/serializers.py` — `OrganizationSummarySerializer` 6 yeni field (cover_image, description, address, google_maps_url, website, email, phone)
+- `backend/apps/organizations/models.py` — mevcut Organization.logo + cover_image field zaten var; serializer resolution ekledi (D-004 multi-tenant field)
+- `backend/apps/analytics/views_public.py` — `_increment_qr_counter()` + cross-tenant guard
+- `backend/apps/analytics/models.py` — `MenuViewEvent.qr_code` SET_NULL (cross-tenant FK null safe)
+- `backend/apps/qr/models.py` — `QRCode.scan_count = PositiveIntegerField(default=0)` zaten var; F() update pattern ile
+- `apps/web/src/types/menu.ts` — `Business` interface +6 opsiyonel alan
+- `apps/web/src/components/public/BusinessHero.tsx` — cover_image ayrı render + contact strip (description/address/maps/website/email/phone)
+- `apps/web/src/components/public/MenuViewClient.tsx` — `resolveCurrency` çağırısı; cart drawer'a currency pass
+- `apps/web/src/lib/currency.ts` — pure `resolveCurrency` 4-step
+- `apps/web/src/app/(public)/m/[businessSlug]/page.tsx` — menu + business payload prop olarak pass
+- Test: 388 baseline → **396 backend yeşil** (+8: 4 organization tests + 4 analytics tests) + **9 yeni frontend currency test** = 17 yeni, sıfır regresyon
+- 18 payment spec test gap hala fail (Sprint 11A scope, Sprint A dokunmadı)
+
+**Notlar:**
+- Sprint A worker `sprint-a-public-fixes` feature branch pattern (Sprint 9C, 10C ile aynı). Root merge edip main'e push etti (commit `bb9c33e`)
+- Demo docker container `qrmenu-backend` görsel/sunucu kod değişikliklerinden sonra restart önerilmez — Django dev server (volume bind-mount) hot reload yapar; üretim durumunda `docker compose restart backend` iyi olur
+- Image URL resolution V2 SaaS uyumluluğu: S3/R2 (Sprint E) pre-signed URL'ler absolute URL döner — helper pattern korunur
+- top_qr_codes `MenuViewEvent` aggregate option (D-017 V2 plan) Sprint B/C sonrası — V1 için atomic counter yeterli
+- Currency zincir TR pazar varsayılanı ("TRY" son fallback) hardcoded; V2 SaaS config-driven currency pool
+
+| D-022 | 2026-09-26 | Order + Kitchen Flow Pattern (Order/OrderItem + 6-state FSM + server-side total + audit integration + tenant isolation + 20/min public throttle + snapshot pricing) | aktif |
+| D-023 | 2026-09-28 | AI Translation + Description Pattern (TranslationMemory SHA-256 cache + AIProductDescription regen guard + D-021 provider reuse + 5+1 admin endpoint + audit view-layer emit + per-org cache isolation) | aktif |
+| D-024 | 2026-09-28 | V1 Satış Hazırlık Critical Fixes (public payload 12→18 alan + currency 4-step fallback + QR scan_count DB-side atomic increment + cross-tenant FK null guard + image URL resolver) | aktif |
+| D-025 | 2026-09-28 | Müşteri Auth + Sadakat Puanı Pattern (Email Magic Link + HttpOnly session cookie + LoyaltySettings tenant OneToOne + LoyaltyTransaction ledger + unique idempotent award + server-side redemption validation + Order.customer FK nullable + audit 5 yeni action + 2 yeni target) | aktif |
+| D-026 | 2026-09-28 | Online Ödeme + Provider Abstraction Pattern (Stripe primary + iyzico V2 SaaS placeholder + Fernet encryption at rest + PaymentProvider ABC + 2-tier webhook idempotency + CSRF exempt + signature verify + Order.paid→confirmed FSM + Loyalty REVERSE integration + 11 endpoint + 23/40 yeşil test) | aktif |
+| D-027 | 2026-09-28 | UI/UX Design System + Modern Polish Pattern (token layer extension — radius/shadow/transition + Playfair SC + Karla pairing + dark mode CSS variable + ThemeProvider zustand persist + 4 UI primitive + focus-visible global + skip-to-content + prefers-reduced-motion reset + dependency-free shadcn-style API) | aktif |
