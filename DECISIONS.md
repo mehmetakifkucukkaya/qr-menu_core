@@ -1166,6 +1166,96 @@ Local'de birden fazla Postgres instance çakışmasın diye ana stack'te host po
 - AI image alt-text generation (Sprint 10+ aday) — V2 SaaS feature, JSON-LD `image` field için
 - V1 demo scenario: Modern Cafe `?locale=tr` ve `?locale=en` her ikisi de Google'da indekslenebilir; hreflang ile arama sorgu diline göre doğru URL döner; JSON-LD Google rich result test validate eder (online tool); `X-Translation-Gaps: 12` header Cloudflare analytics'te "translation coverage insight" raporu için kullanılabilir
 
+---
+
+## KARAR D-025 — Müşteri Auth + Sadakat Puanı Pattern (Sprint 10A)
+
+**Karar:**
+- **Auth stratejisi:** Email + Magic Link. SMS provider yok (maliyet sıfır). D-018 prod email backend zaten kurulu (Sprint 6A)
+- **Cookie session:** HttpOnly + SameSite=Lax + Secure (prod). `_auth_customer_id` cookie (sade int veya signer value), admin auth'tan ayrı (`request.user` vs `get_current_customer(request)` permission class)
+- **Customer model:** email unique + full_name + phone + is_active + last_login_at. password YOK. Email enumeration safe
+- **MagicLinkToken:** UUID4 hex (64 char) + 15 dk TTL + single-use (used_at timestamp), requested_ip GenericIPAddressField (abuse traceability). `is_valid` property encapsulate
+- **Rate limit:** 5 magic link request / saat / email. AnonRateThrottle `magic_link_request` scope. Bilinmeyen email için 200 dön (enumeration safe)
+- **Get-or-create pattern:** `request_magic_link(email, ip)` mevcut customer'ı get eder, yoksa yeni oluşturur (`is_active=True`, `full_name=''`). Email lower + normalize
+- **LoyaltySettings:** tenant OneToOne, `is_enabled` toggle (default **OFF** — admin opt-in). Decimal(10,4) `points_per_currency_unit` (default 1.00) + `redemption_rate` (default 0.10) + `min_points_to_redeem` (default 100) + `points_expiry_days` (nullable)
+- **LoyaltyTransaction ledger:** `type` enum (earn/redeem/expire/adjust/reverse), `points` signed integer, `order` FK nullable, `note`, `created_at`. Indexed by (customer, -created_at) + (org, type). **UniqueConstraint** `(order, type) WHERE type='earn'` — idempotent award (aynı sipariş 2 kez award edilemez, IntegrityError handler wraps transaction.atomic)
+- **Order entegrasyonu:** `Order.customer` FK SET_NULL nullable — misafir müşteri telefon+isim ile devam edebilir (Sprint 8A snapshot pattern korunur). Customer FK set ise `customer_name/customer_phone` otomatik fill (helper)
+- **Award trigger:** `apps.orders.services.transition_status` içinde `order.status == 'delivered'` olunca `services.award_points_for_order(order)` çağrılır. Trigger noktası = FSM atomic (D-022 ile aynı)
+- **Redemption security:** Server-side DB doğrulamalı (D-022 ile aynı). Client-supplied `loyalty_points_to_redeem` YOK sayılır, `customer_balance()` sorgulanır + `LoyaltySettings.min_points_to_redeem` check. Redemption order public POST'ta atomic transaction içinde
+- **Tenant isolation:** D-022 standard. Her endpoint `request.user.memberships.first().organization` veya `customer_balance(customer, organization)` explicit org scope. Cross-tenant 404 (existence leak yok)
+- **Audit:** 5 yeni action (`customer_login`, `customer_registered`, `loyalty_earned`, `loyalty_redeemed`, `loyalty_adjusted`) + 2 yeni target_type (`customer`, `loyalty_settings`). Customer login/register'da org yok — audit `organization` null kalabilir (system-initiated), D-022 ile uyumlu
+- **CSRF:** DRF SessionAuthentication + `csrf_exempt=False`. `_auth_customer_id` cookie set edilirken CSRF token YOK (cookie write-only — server-side set), ama `POST /auth/logout` ve `POST /auth/request-link` için CSRF zorunlu (DRF default)
+- **Email template:** `templates/account/magic_link_email.html` + `.txt` plain fallback. D-018 Django email backend + `DEFAULT_FROM_EMAIL` env var. Subject: "QR Menu — Giriş Yap". Body: token URL + 15 dk TTL
+- **Settings env var'ları:** `MAGIC_LINK_TTL_MINUTES=15`, `MAGIC_LINK_RATE_LIMIT_PER_HOUR=5`, `LOYALTY_DEFAULT_ENABLED=false`, `DEFAULT_FROM_EMAIL`, `AUTH_COOKIE_NAME=_auth_customer_id`, `AUTH_COOKIE_SECURE=false`
+- **Test pattern:** D-021 + D-023 ile aynı — `_get_openai()` analog yoktur (email/magic link standart Django), DRF throttle cache_clear autouse fixture (Sprint 9A conftest pattern reuse). 86 yeni test (22 auth + 18 loyalty + 31 views + 15 security). Mocked email `console` backend (D-018 prod haricinde)
+- **Out-of-scope:** SMS provider, sosyal login, 2FA, push notification, loyalty tier, referral, customer data delete/export (GDPR/KVKK tooling) — V2 SaaS
+
+**Tarih:** 2026-09-28
+
+**Bağlam:** V2 dördüncü sprint. Müşteri tarafında uçtan uca hesap + sadakat döngüsü. Mevcut misafir telefon+isim (Sprint 8A) korunur — customer FK nullable, geriye uyumlu migration `0002_order_customer.py`. D-022 Order + Kitchen Flow snapshot pattern korunur (customer_name/customer_phone hala denormalized, snapshot amaçlı). Customer login audit'de org yok çünkü customer henüz tenant-scoped değil; sipariş/loyalty transaction tenant-scoped olduğu için audit multi-tenant integrity korunur. D-018 production email backend mevcut (Sprint 6A) — magic link için SMTP reuse, yeni provider yok
+
+**Alternatifler:**
+- **SMS OTP (Twilio/MessageBird):** Türkiye için friction sıfır, ama provider credential + cost. V2 SaaS feature
+- **Email + password:** Klasik ama UX friction (şifre unutma, reset, 2FA), V1 demo için ağır
+- **Sosyal login (Google/Apple):** OAuth credential setup + domain verify complexity. V2 SaaS
+- **All-in-one Django User (extends email/phone):** Admin auth ile karışır (V1 admin auth zaten email+password). Ayrı Customer app daha temiz separation of concerns
+- **Session'ı DB-backed yapmak:** Stateless JSON cookie vs server-side session trade-off. Single int cookie basit yeterli (CSRF zorunlu olduğu için XSS riski az)
+- **Loyalty tier (Bronz/Gümüş/Altın):** Engagement loop güçlü ama V1 demo'da over-engineering. Basit 1 TL = N puan yeterli, tier V2 SaaS feature
+- **Order.customer null değil zorunlu:** Mevcut misafir müşteriyi dışlar, geriye uyumsuz migration. Null + nullable FK ile gradual onboarding
+- **Loyalty award her sipariş oluşturulduğunda (pending olunca):** İptal edilen siparişlerde puan geri alınmalı. Award `delivered` olunca — D-022 FSM atomic, single source of truth
+- **Idempotency `objects.create()` + IntegrityError handle:** YOKSA duplicate earn race condition. UniqueConstraint kullanıldı
+- **Customer login'de org audit:** Org yok (customer multi-org). Customer register audit'te organization=None (system-initiated pattern). Sipariş+loyalty org-scoped audit
+- **Magic link token URL placement `/auth/verify?token=...`:** Frontend server component fetch eder (10B), backend session cookie set eder, redirect /account. URL parameter security query string'de (SSL zorunlu değil çünkü token single-use 15dk TTL)
+- **`_auth_customer_id` plain int (signed):** Şifreleme gerekli değil (randomness'tan gelen token zaten customer_id için tek doğrulama). Token tek kullanımlık, cookie çalınsa bile tekrar kullanılamaz
+- **Loyalty expiry: V1'de yok (`points_expiry_days=null` default):** Müşteri loyalty accumulation basit, V2 SaaS feature rotation/expiry engine
+
+**Seçim gerekçesi:**
+- Email + Magic Link: Friction sıfır, maliyet sıfır, D-018 reuse. SMS provider yok
+- Separate `apps/account` app: Admin auth (`accounts` app) ile separation of concerns. İki ayrı auth flow
+- HttpOnly + SameSite=Lax cookie: XSS risk minimum. Cross-site auth drop (SameSite=Lax). Secure flag prod
+- 15 dk TTL + single-use: Phishing risk window az. Token çalınsa bile 15dk sonra expire + kullanımda invalidate
+- Enumeration safe response (200 always): Email enumeration saldırısı azalt. Bilinmeyen email için de 200 + email aslında yok (no-op send)
+- LoyaltySettings default OFF: Admin opt-in yapar. V1 demo'da default kapalı; manuel enable
+- Decimal points per currency: Float olsa rounding hataları olur. Decimal(10,4) ile hassasiyet
+- UniqueConstraint idempotency: Race condition safety (aynı delivered event iki kez gelirse ikincisi IntegrityError)
+- Award order delivered olunca: İptal edilen siparişlerde puan yok. FSM atomic (D-022)
+- Redemption server-side balance: Client-supplied points YOK sayılır. D-022 ile aynı prensip
+- Tenant-scoped loyalty (per-org currency rate): Her org kendi loyalty config'i. Aynı müşteri iki org'un loyalty'sini ayrı ayrı biriktirebilir (cross-tenant loyalty transfer V2 SaaS)
+- 86 yeni test (mocked everything): Real email/magic link session loop integration test. CI'da credential gerekmez
+
+**Sonuçlar:**
+- `backend/apps/account/` — yeni Django app (models, serializers, services, views, urls, admin, migrations, templates, tests)
+- `backend/apps/account/models.py` — `Customer` + `MagicLinkToken` + `LoyaltySettings` (tenant OneToOne) + `LoyaltyTransaction` (ledger, unique award idempotency)
+- `backend/apps/account/services.py` — `request_magic_link` + `verify_magic_link` + `award_points_for_order` + `redeem_points` + `customer_balance` + `_send_magic_link_email` (D-018)
+- `backend/apps/account/serializers.py` — 10 serializer (auth, profile, orders, loyalty, redeem, adjust)
+- `backend/apps/account/views.py` — 13 endpoint + permission class + `_set_session_cookie` + `_clear_session_cookie` helpers
+- `backend/apps/account/urls.py` — `urlpatterns` separate from admin mount
+- `backend/apps/account/templates/account/magic_link_email.{html,txt}` — D-018 email templates
+- `backend/apps/account/migrations/0001_initial.py` — 4 model + 4 index
+- `backend/apps/orders/models.py` — `Order.customer = FK(Customer, SET_NULL, null=True)` + migration `0002_order_customer.py`
+- `backend/apps/orders/services.py` — `transition_status` içinde `status == 'delivered'` olunca `award_points_for_order(order)` çağrısı (FSM atomic, audited)
+- `backend/apps/orders/views.py` — `PublicOrderCreateView` extend `loyalty_points_to_redeem` body field, atomic redemption
+- `backend/apps/audit/models.py` — `ACTION_CHOICES` +5, `TARGET_CHOICES` +2, migration `0005_alter_*` (backward-compatible AlterField)
+- `backend/config/settings/base.py` — `apps.account` INSTALLED_APPS, `MAGIC_LINK_TTL_MINUTES=15`, `MAGIC_LINK_RATE_LIMIT_PER_HOUR=5`, `LOYALTY_DEFAULT_ENABLED=false`, `AUTH_COOKIE_NAME`, `AUTH_COOKIE_SECURE`, `REST_FRAMEWORK['DEFAULT_THROTTLE_RATES']['magic_link_request']='5/hour'`
+- `backend/config/urls.py` — `path("api/v1/account/", include("apps.account.urls"))`
+- `.env.example` + `.env.production.example` — env var comments
+- Test: 279 baseline → **365 yeşil** (+86: 22 auth + 18 loyalty + 31 views + 15 security). Sıfır regression
+- Test coverage: magic link request/verify/expire/used/invalid + session cookie security (httponly, secure flag, samesite) + enumeration safe + rate limit + idempotent award (unique constraint) + server-side redemption validation (insufficient balance + min threshold) + tenant-scoped balance + double-redeem HTTP rejection + audit event organization-scoped
+- Conftest `cache_clear` autouse + `no_throttle` fixture (DRY cross-test helper)
+- DECISIONS.md (bu karar) ve `SPRINT_10_PLAN.md`'de dokümante
+- D-018 + D-021 + D-022 + D-023 + D-024 ile auth/email/audit/tenant pattern tutarlılığı korunur
+
+**Notlar:**
+- 10A sonunda 10B frontend başlayacak: `/account` server component shell, `/account/login` magic link request form, `/account/verify?token=...` server-side verification, `/account/me/orders` paginated, `/account/me/loyalty` balance + ledger. CheckoutForm loyalty integration. Header LoyaltyBadge
+- 10B sonunda 10C admin UI başlayacak: `/admin/loyalty` settings, `/admin/customers` list+search, `/admin/customers/{id}` detail, LoyaltyAdjustDialog. Sidebar Sadakat nav item
+- Magic link + session + loyalty ledger, multi-tenant SaaS test ederken gold standard — V2 SaaS scale için foundation
+- V2 ileri: SMS provider, sosyal login (Google/Apple), 2FA, push notification, loyalty tier (bronze/silver/gold %0/%2/%5 indirim), referral program (her invite = 100 puan), customer data export/delete (GDPR/KVKK tooling), multi-language magic link email, magic link lifecycle (reminder emails, expiration notice), points pool (admin kampanya ile N müşteriye X puan dağıtımı)
+- LoyaltySettings tenants per org isolated: bir tenant diğerinin puan oranını göremez. Multi-tenant multi-currency V2 SaaS (USD/EUR/TRY separate balances)
+- Audit `customer_login` her magic link request + verify attempt — abuse detection + email enumeration safe response ile beraber
+- Order `customer` FK nullable: misafir checkout (Sprint 8A) hala çalışır; authenticated customer FK set. Mevcut migration `0002_order_customer` geriye uyumlu (AddField nullable — sıfır veri kaybı)
+- 10A worker auth-expire oldu (3+ saat worker run, büyük sprint). Root devralıp tamamladı. Toplam 13 commit (12 worker + 1 cleanup), 86 yeni test
+
 | D-022 | 2026-09-26 | Order + Kitchen Flow Pattern (Order/OrderItem + 6-state FSM + server-side total + audit integration + tenant isolation + 20/min public throttle + snapshot pricing) | aktif |
 | D-023 | 2026-09-28 | AI Translation + Description Pattern (TranslationMemory SHA-256 cache + AIProductDescription regen guard + D-021 provider reuse + 5+1 admin endpoint + audit view-layer emit + per-org cache isolation) | aktif |
 | D-024 | 2026-09-28 | Public SEO + Multi-Locale Schema Pattern (canonical query-locale hreflang + schema.org Restaurant/Menu JSON-LD `@graph` + og:locale/alternateLocale mapping + X-Translation-Gaps backend header + default locale gap exclude + Node built-in test runner for pure helpers) | aktif |
+| D-025 | 2026-09-28 | Müşteri Auth + Sadakat Puanı Pattern (Email Magic Link + HttpOnly session cookie + LoyaltySettings tenant OneToOne + LoyaltyTransaction ledger + unique idempotent award + server-side redemption validation + Order.customer FK nullable + audit 5 yeni action + 2 yeni target) | aktif |
