@@ -15,6 +15,18 @@ interface CartDrawerProps {
   currency: string;
   /** Map of menuItemId → item (for image fallback + currency/price sanity). */
   catalogLookup?: Record<number, PublicMenuItem>;
+  /** Sprint 10B — current customer profile (cookie-backed). */
+  customerProfile?: {
+    id: number;
+    full_name: string;
+    phone: string;
+    email: string;
+  } | null;
+  /** Sprint 10B — loyalty summary for the customer at this business. */
+  customerLoyalty?: {
+    balance: number;
+    settings: import("@/types/account").PublicLoyaltySettings | null;
+  } | null;
 }
 
 /**
@@ -36,6 +48,8 @@ export function CartDrawer({
   businessSlug,
   currency,
   catalogLookup,
+  customerProfile,
+  customerLoyalty,
 }: CartDrawerProps) {
   const isOpen = useCartStore((s) => s.isOpen);
   const closeDrawer = useCartStore((s) => s.closeDrawer);
@@ -228,6 +242,8 @@ export function CartDrawer({
         onClose={() => setCheckoutOpen(false)}
         businessSlug={businessSlug}
         currency={cur}
+        customerProfile={customerProfile}
+        customerLoyalty={customerLoyalty}
       />
 
       <style>{`

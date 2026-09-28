@@ -21,6 +21,19 @@ interface MenuViewClientProps {
   allergens: PublicMenuAllergen[];
   dietaryTags: PublicMenuDietaryTag[];
   locale: LocaleCode;
+  /** Sprint 10B — current customer profile (cookie-backed). Null when
+   *  the request has no customer session. */
+  customerProfile?: {
+    id: number;
+    full_name: string;
+    phone: string;
+    email: string;
+  } | null;
+  /** Sprint 10B — customer loyalty summary at this business. */
+  customerLoyalty?: {
+    balance: number;
+    settings: import("@/types/account").PublicLoyaltySettings | null;
+  } | null;
 }
 
 /**
@@ -51,6 +64,8 @@ export function MenuViewClient({
   allergens,
   dietaryTags,
   locale,
+  customerProfile,
+  customerLoyalty,
 }: MenuViewClientProps) {
   const [activeItem, setActiveItem] = useState<PublicMenuItem | null>(null);
 
@@ -132,6 +147,8 @@ export function MenuViewClient({
         businessSlug={businessSlug}
         currency={currency}
         catalogLookup={catalogLookup}
+        customerProfile={customerProfile}
+        customerLoyalty={customerLoyalty}
       />
     </>
   );
