@@ -1,0 +1,11 @@
+QR Menü — Giriş Yap
+
+Merhaba,
+
+Hesabınıza giriş yapmak için aşağıdaki bağlantıya tıklayın:
+
+{{ verify_url }}
+
+Bu bağlantı {{ ttl_minutes }} dakika boyunca geçerlidir. Siz talep etmediyseniz bu mesajı görmezden gelebilirsiniz.
+
+QR Menü
