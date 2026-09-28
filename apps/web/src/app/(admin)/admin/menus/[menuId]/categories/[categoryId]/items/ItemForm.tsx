@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Save } from "lucide-react";
+import { Loader2, Save, Sparkles } from "lucide-react";
 
 import { FormField } from "@/app/(admin)/_components/FormField";
 import { TranslationTabs, translationsToArray } from "@/app/(admin)/_components/TranslationTabs";
 import { AllergenSelector } from "@/app/(admin)/_components/AllergenSelector";
 import { DietaryTagSelector } from "@/app/(admin)/_components/DietaryTagSelector";
 import { ImageUpload } from "@/app/(admin)/_components/ImageUpload";
+import { DescriptionGeneratorModal } from "@/app/(admin)/_components/DescriptionGeneratorModal";
 import {
   createItem,
   updateItem,
@@ -113,6 +114,29 @@ export function ItemForm({
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [descModalOpen, setDescModalOpen] = useState(false);
+
+  /**
+   * Apply the AI-generated description to the translations map at the
+   * given locale. We update both the default-locale `description` (which
+   * the form flattens into the PATCH payload) AND the per-locale entry
+   * so the operator can see the new text on the active tab after the
+   * modal closes.
+   */
+  const applyGeneratedDescription = (nextDescription: string) => {
+    const defaultLocale = menu.default_locale;
+    const current =
+      translations[defaultLocale] ?? { name: "", description: "" };
+    const updated = {
+      ...translations,
+      [defaultLocale]: {
+        ...current,
+        description: nextDescription,
+      },
+    };
+    setTranslations(updated);
+    setDescModalOpen(false);
+  };
 
   const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -222,9 +246,22 @@ export function ItemForm({
 
       {/* Names + descriptions */}
       <section aria-label="İsim ve açıklama" className="flex flex-col gap-2">
-        <h2 className="font-heading text-base font-semibold text-text">
-          İsim ve açıklama
-        </h2>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="font-heading text-base font-semibold text-text">
+            İsim ve açıklama
+          </h2>
+          {item ? (
+            <button
+              type="button"
+              onClick={() => setDescModalOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary transition hover:bg-primary/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              data-testid="item-form-description-trigger"
+            >
+              <Sparkles className="h-3.5 w-3.5" aria-hidden />
+              Açıklama Oluştur
+            </button>
+          ) : null}
+        </div>
         <TranslationTabs
           locales={menu.supported_locales}
           value={translations}
@@ -436,6 +473,18 @@ export function ItemForm({
           )}
         </button>
       </div>
+
+      {item ? (
+        <DescriptionGeneratorModal
+          open={descModalOpen}
+          itemId={item.id}
+          csrfToken={csrfToken}
+          locale={menu.default_locale}
+          isAlreadyEdited={Boolean(translations[menu.default_locale]?.description?.trim())}
+          onApply={applyGeneratedDescription}
+          onCancel={() => setDescModalOpen(false)}
+        />
+      ) : null}
     </form>
   );
 }
