@@ -4,11 +4,14 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import type {
   LocaleCode,
   PublicMenuAllergen,
+  PublicMenuBusiness,
   PublicMenuCategory,
   PublicMenuDietaryTag,
   PublicMenuItem,
+  PublicMenuMenu,
 } from "@/types/menu";
 import { trackEvent } from "@/lib/events";
+import { resolveCurrency } from "@/lib/currency";
 import { CategoryNav } from "./CategoryNav";
 import { CategorySection } from "./CategorySection";
 import { ItemDetailDrawer } from "./ItemDetailDrawer";
@@ -17,6 +20,12 @@ import { useCartStore } from "@/lib/cart-store";
 
 interface MenuViewClientProps {
   businessSlug: string;
+  /** Sprint A — full business payload so we can resolve currency from the
+   *  tenant default when neither menu nor items carry one. */
+  business: PublicMenuBusiness;
+  /** Sprint A — menu payload so currency respects the menu-level override
+   *  (when customer-facing menu-level currency rules land in V2). */
+  menu: PublicMenuMenu | null;
   categories: PublicMenuCategory[];
   allergens: PublicMenuAllergen[];
   dietaryTags: PublicMenuDietaryTag[];
@@ -57,9 +66,15 @@ interface MenuViewClientProps {
  * Sprint 8B:
  *   - Mounts `CartDrawer` and the floating cart button so the public
  *     menu page can place an order.
+ *
+ * Sprint A (Faz 1.2):
+ *   - Currency now flows through the 4-step resolver chain so the cart,
+ *     checkout, and order confirmation never drift apart.
  */
 export function MenuViewClient({
   businessSlug,
+  business,
+  menu,
   categories,
   allergens,
   dietaryTags,
@@ -102,21 +117,20 @@ export function MenuViewClient({
   // rendered with a stale placeholder image — we still want to show the
   // real image inside the drawer).
   const catalogLookup: Record<number, PublicMenuItem> = {};
+  const allItems: PublicMenuItem[] = [];
   for (const cat of categories) {
     for (const it of cat.items) {
       catalogLookup[it.id] = it;
+      allItems.push(it);
     }
   }
 
   const totalItems = useCartStore((s) => s.totalItems());
   const openDrawer = useCartStore((s) => s.openDrawer);
 
-  // Currency comes from the first category's first item (V1: one menu
-  // per business so currency is uniform across the page).
-  const currency =
-    categories[0]?.items[0]?.currency ?? categories[0]?.name
-      ? "TRY"
-      : "TRY";
+  // Currency resolution chain (Sprint A — Faz 1.2):
+  //   menu.currency → business.currency → first item.currency → "TRY"
+  const currency = resolveCurrency(menu, business, allItems);
 
   return (
     <>
