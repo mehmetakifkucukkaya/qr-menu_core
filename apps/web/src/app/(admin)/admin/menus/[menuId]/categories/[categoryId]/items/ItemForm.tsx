@@ -232,6 +232,11 @@ export function ItemForm({
           descriptionLabel="Açıklama"
           nameLabel="Ürün adı"
           descriptionHint="Müşterilerin ürün kartında göreceği kısa açıklama."
+          ai={
+            item
+              ? { entityType: "menu_item", entityId: item.id, csrfToken }
+              : null
+          }
         />
       </section>
 

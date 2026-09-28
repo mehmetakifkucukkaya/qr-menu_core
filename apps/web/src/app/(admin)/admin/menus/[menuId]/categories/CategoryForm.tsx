@@ -156,6 +156,11 @@ export function CategoryForm({
         descriptionLabel="Açıklama"
         nameLabel="Kategori adı"
         descriptionHint="Müşterilerin kategori listesinde göreceği açıklama (opsiyonel)."
+        ai={
+          category
+            ? { entityType: "menu_category", entityId: category.id, csrfToken }
+            : null
+        }
       />
 
       <FormField
