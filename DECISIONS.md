@@ -1100,5 +1100,72 @@ Local'de birden fazla Postgres instance çakışmasın diye ana stack'te host po
 - Description regen guard UX: buton "İlk kez oluştur / Yeniden üret" 2-state (Sprint 9B)
 - V2 backlog: per-org custom glossary (örn. "pide" → "Turkish flatbread with thin crust")
 
+---
+
+## KARAR D-024 — Public SEO + Multi-Locale Schema Pattern (Sprint 9C)
+
+**Karar:**
+- **Canonical URL strategy:** `?locale={code}` query-based (path prefix V2 SaaS). Next.js `alternates.canonical` + `alternates.languages` map her desteklenen locale için self URL. `x-default` hreflang = default_locale URL (search engine default content)
+- **OG locale mapping:** `tr` → `tr_TR`, `en` → `en_US`, `de` → `de_DE` — `ogLocaleFor()` dict constants. `og:locale:alternate` her desteklenen non-default locale için meta. Yeni locale ekle = 1 satır dict genişletme
+- **JSON-LD schema.org graph:** Tek `<script type="application/ld+json">` server-rendered (RSC) — `@graph` array: `Restaurant` (#restaurant) + `Menu` (#menu) + N `MenuSection` (#section-XXX) + M `MenuItem`. Tüm entity `@id` ile stable URL fragment olarak adreslenebilir. Default locale içeriği ile render (9C'nin TR locale örneği). Her dil için ayrı JSON-LD render gereksiz — schema.org multi-language'i `<link rel="alternate" hreflang>` ile handle eder
+- **`MenuItem` shape:** `{@type: "MenuItem", name, offers: {price, priceCurrency}, description, suitableForDiet}`. Price Decimal → JSON string serialize. `suitableForDiet` = dietary_tags translate (vegan/vegetarian/gluten-free vs inline code) V2 backlog'a not düşüldü
+- **`Restaurant` shape:** `{@type: "Restaurant", @id, name, url, servesCuisine, image, telephone, address}`. `address` PostalAddress V2 backlog (şu an Schema.org `address` field optional — `description`'da adres satırı inline). `telephone` optional (V2)
+- **`MenuSection` shape:** `{@type: "MenuSection", @id, name, description, hasMenuItem: MenuItem[]}`. Self-contained, MenuItem'lar parent section içine gömülü (değil ayrı entity olarak)
+- **`Menu` shape:** `{@type: "Menu", @id, name, inLanguage, hasMenuSection: MenuSection[]}`. `inLanguage` = current locale
+- **X-Translation-Gaps header (backend):** `apps.menu.views_public.PublicMenuView.get()` response'a `X-Translation-Gaps: <int>` header set eder. Default locale **exclude** — çünkü source field IS default locale text, gap kavramı yalnızca target_locales için anlamlı (9B TranslationGapPanel UX uyumu). Header absent = zero gaps. CDN cache-friendly (her request'te hesaplanır ama 50ms altı, prefetch_related ile N+1 yok — ortalama 25 item × 2 locale = 50 lookup)
+- **Gap computation:** `(supported_locales - {default_locale}) × items_count - actual_translations_count`. `supported_locales` menu'den, `default_locale` exclude
+- **`buildAlternates(basePath, locales, currentLocale)`** — Next.js metadata input olarak dönen helpers (`apps/web/src/lib/seo.ts`). `x-default` ekler. SELF-CANONICAL her locale için (her dil kendi URL'inin canonical'i)
+- **Locale resolution in URL:** `?locale=tr|en` query — public sayfa locale selector (Sprint 3B-2) zaten URL sync ediyor. Path-based locale (`/m/{slug}/tr`) V2 SaaS feature
+- **`<html lang>` per-route limitation:** Next 14 App Router root `app/layout.tsx`'te `<html lang="tr">` sabit. Per-route `<html lang>` override için custom `head.tsx` veya middleware cookie-based — V2 backlog. SEO crawler'lar locale'i `og:locale` + `hreflang` ile zaten öğreniyor
+- **Test strategy:** Frontend pure helpers için Node 22+ built-in test runner (`node --test --experimental-strip-types`) + `apps/web/src/lib/seo.test.ts` 20 test (alternates URL doğrulama, JSON-LD JSON.parse valid, OG metadata `alternateLocale` array, locale format mapping). Backend `apps/menu/tests/test_translation_gaps.py` 10 test (zero/partial/multiple/branch/404/default cases)
+- **Lighthouse SEO ≥ 95:** V1 preview runtime yok (Docker daemon unreliable); yapısal kontrol — hreflang + canonical + OG + JSON-LD + robots:index,follow mevcut. Manuel Lighthouse run Sprint 10 smoke'ta
+
+**Tarih:** 2026-09-28
+
+**Bağlam:** Sprint 9 final parçası. D-023'ün AI translation cache ile büyüyen `MenuItem.translations`'ı public sayfada SEO-friendly render etmek. Modern Cafe gibi gerçek demo müşterileri için Google'da "İstanbul cafe menü" aramasında görünürlük = organik trafik = V2 SaaS başarı metriği. JSON-LD `Restaurant` schema Google Search recipe rich result'unu tetikler (food query'de menü kartı). hreflang ile çok dilli SEO (Türkçe arama Türkçe menü, İngilizce arama İngilizce menü)
+
+**Alternatifler:**
+- **Path-based locale (`/m/{slug}/tr/`):** SEO tarafında en güçlü (her dil ayrı URL, sitemap ayrı section), ama Caddy reverse proxy routing + i18n middleware complexity. V2 SaaS feature
+- **Single JSON-LD tüm diller için combined `@graph`:** Schema.org spec'de var ama Google Search mixed-language render etmez (default locale öne çekilir). Tek dil JSON-LD + hreflang ile multi-language signal daha temiz
+- **Sunucu-side render `<head>` (Next 14 generateMetadata) yerine client-side injection:** SEO crawler client JS execute etmez, server-side render zorunlu. RSC default
+- **`X-Translation-Gaps` response header yerine inline banner:** Admin bilir, public müşteri bilmese de olur. Header = operator telemetry + CDN cache visibility (Cloudflare `cf-cache-status` x debug header ile combine edilebilir)
+- **Default locale gap count'a dahil:** Yanlış — source field default locale text'i, gap kavramı yalnızca target_locales için. 9B TranslationGapPanel exclude ediyor, backend uyum sağladı (`9e9654c fix(backend)`)
+- **Lighthouse automation CI:** Lighthouse CI Docker gerektirir. V1 Sprint 10 smoke'unda manuel run, V2 SaaS'de GitHub Action olarak otomasyon
+- **Schema.org `suitableForDiet` inline code (vegan/vegetarian) vs Schema.org `RestrictedDiet` enum:** Schema.org standardı string-based (vegan, vegetarian, kosher, halal, gluten-free). Dietary tags Schema.org enum ile map edilmeli — Sprint 9C sonrası TODO olarak kaldı (worker `as unknown as LocaleCode` workaround ile typesafe olamadı)
+- **`Schema.org Recipe` schema for dishes:** V1 menüsünde yemek yok, içecek + snack. `MenuItem` yeterli. Recipe schema V2 SaaS feature (yemek menüsü için)
+
+**Seçim gerekçesi:**
+- Query-based locale (`?locale=tr`) + `<link rel="alternate">` ile hreflang — path-based ile aynı SEO değeri (Google search console her iki modeli tanır), implementation complexity düşük
+- Tek JSON-LD `@graph` (multi-language değil) — schema.org standardı en temiz, Google Rich Result validator happy
+- `X-Translation-Gaps` header — operatör telemetry + CDN analytics için bonus sinyal, frontend'de bulk translate CTA tetikleyicisi
+- Default locale gap count exclude — 9B UI ile semantic uyum; operatör "0 ürünün İngilizce çevirisi eksik" görür, default zaten orada
+- Locale format constants dict — yeni locale ekle = 1 satır (`'de': 'de_DE'`), tüm sistem güncellenir
+- 20 frontend unit test + 10 backend test — pure helpers + view logic hızlı regression test
+- `<html lang>` per-route limitation accepted (Next 14 root-locked) — V2 backlog'a not; crawler'lar OG + hreflang ile doğru locale'i öğrenir
+
+**Sonuçlar:**
+- `apps/web/src/lib/seo.ts` — yeni pure helpers: `ogLocaleFor()` + `buildAlternates()` + `buildOgMetadata()` + `buildJsonLdRestaurant()` (~280 satır)
+- `apps/web/src/lib/seo.test.ts` — 20 Node built-in test (`allowImportingTsExtensions` tsconfig flag)
+- `apps/web/src/app/(public)/m/[businessSlug]/page.tsx` — `generateMetadata()` extend + inline `<script type="application/ld+json" dangerouslySetInnerHTML={...} />`
+- `apps/web/tsconfig.json` — `allowImportingTsExtensions: true`
+- `apps/web/package.json` — `"test:seo": "node --test --experimental-strip-types src/lib/seo.test.ts"`
+- `backend/apps/menu/views_public.py` — `_count_translation_gaps()` helper + `X-Translation-Gaps` header
+- `backend/apps/menu/tests/test_translation_gaps.py` — 10 test (zero/partial/combinatorial/branch/404/default-row cases)
+- `docs/SPRINT_9C_REPORT.md` — Sprint 9C kabul kriteri checklist + JSON-LD sample + commit listesi
+- Test baseline: 269 → **279 backend yeşil** + 20 frontend SEO test (yeni); sıfır regresyon
+- Build artifact: `ƒ /m/[businessSlug]  19.9 kB  107 kB` (JSON-LD inline script server-rendered)
+- DECISONS.md'de (bu karar) ve SPRINT_9_PLAN.md'de dokümante
+
+**Notlar:**
+- `<html lang>` Next 14 root-locked, per-route override middleware veya custom `head.tsx` gerek. V2 SaaS feature (multi-language landing pages)
+- Schema.org `suitableForDiet` inline code mapping (vegan/vegetarian/...) — Sprint 9C kapsamında dietary_tags translate edilmedi, V2 TODO (`as unknown as LocaleCode` workaround typesafe değil)
+- `Schema.org Recipe` rich result schema — yemek menüsü için V2 SaaS (V1 içecek + snack menü)
+- Lighthouse manuel run Sprint 10 smoke'ta — V1 Docker daemon unreliable, preview production yok
+- Per-org custom `telephone` + `address` — V2 SaaS (tenant settings ekle)
+- `servesCuisine` static field (Şu an "Kahve Menüsü" default) — V2 operatör customization
+- AI image alt-text generation (Sprint 10+ aday) — V2 SaaS feature, JSON-LD `image` field için
+- V1 demo scenario: Modern Cafe `?locale=tr` ve `?locale=en` her ikisi de Google'da indekslenebilir; hreflang ile arama sorgu diline göre doğru URL döner; JSON-LD Google rich result test validate eder (online tool); `X-Translation-Gaps: 12` header Cloudflare analytics'te "translation coverage insight" raporu için kullanılabilir
+
 | D-022 | 2026-09-26 | Order + Kitchen Flow Pattern (Order/OrderItem + 6-state FSM + server-side total + audit integration + tenant isolation + 20/min public throttle + snapshot pricing) | aktif |
 | D-023 | 2026-09-28 | AI Translation + Description Pattern (TranslationMemory SHA-256 cache + AIProductDescription regen guard + D-021 provider reuse + 5+1 admin endpoint + audit view-layer emit + per-org cache isolation) | aktif |
+| D-024 | 2026-09-28 | Public SEO + Multi-Locale Schema Pattern (canonical query-locale hreflang + schema.org Restaurant/Menu JSON-LD `@graph` + og:locale/alternateLocale mapping + X-Translation-Gaps backend header + default locale gap exclude + Node built-in test runner for pure helpers) | aktif |
