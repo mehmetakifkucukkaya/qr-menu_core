@@ -156,10 +156,15 @@ class PublicMenuView(APIView):
 def _count_translation_gaps(menu) -> int:
     """Return the number of (item, locale) pairs missing a translation.
 
-    A gap is defined as: ``menu.supported_locales`` (or the menu's
-    ``default_locale`` when no supported_locales are declared) minus the
-    set of ``MenuItemTranslation.locale`` rows actually present on the
-    item.
+    A gap is defined as: a **non-default** supported locale that has no
+    ``MenuItemTranslation`` row for the given item. The default locale's
+    text always lives on the model field itself (see
+    ``apps.menu.services.translation.resolve_item_translation``), so it
+    is intentionally excluded from the count — adding an explicit
+    translation row for the default locale is redundant and would
+    produce misleading gap numbers for operators (cf. the
+    ``TranslationGapPanel`` admin UI in Sprint 9B which filters out the
+    default locale from its target list for the same reason).
 
     Items are prefetched with their translations to keep this O(items)
     queries (no N+1). For a typical menu of ~25 items × 2-3 locales the
@@ -168,11 +173,12 @@ def _count_translation_gaps(menu) -> int:
     if menu is None:
         return 0
     supported_locales = set(menu.supported_locales or [menu.default_locale])
-    if not supported_locales:
+    target_locales = supported_locales - {menu.default_locale}
+    if not target_locales:
         return 0
     items = menu.items.prefetch_related("translations").all()
     gap_count = 0
     for item in items:
         translated_locales = {t.locale for t in item.translations.all()}
-        gap_count += len(supported_locales - translated_locales)
+        gap_count += len(target_locales - translated_locales)
     return gap_count
