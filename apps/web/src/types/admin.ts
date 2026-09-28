@@ -420,3 +420,113 @@ export interface MenuImportItemPatch {
   dietary_tags?: string[];
   category_name?: string;
 }
+
+// ---------------------------------------------------------------------------
+// AI Translate + Describe (Sprint 9B frontend — backend shipped in 9A)
+// ---------------------------------------------------------------------------
+
+/**
+ * Response payload of `POST /api/v1/admin/translate/`.
+ * Returns a single translated string with cache + provider metadata so the
+ * admin UI can show "Cached ✓" / "OpenAI (gpt-4o)" hints inline.
+ */
+export interface AITranslateTextResponse {
+  translated: string;
+  provider: string;
+  model: string;
+  confidence: string | null;
+  cached: boolean;
+  source_locale: AdminLocaleCode;
+  target_locale: AdminLocaleCode;
+}
+
+/**
+ * Single row in the `translations` array of the multi-locale menu
+ * item / category translate endpoint response.
+ */
+export interface AITranslateEntityRow {
+  locale: AdminLocaleCode;
+  translated_name: string;
+  translated_description: string;
+  cached: boolean;
+  provider: string;
+  model: string;
+}
+
+/**
+ * Response payload of
+ * `POST /api/v1/admin/translate/menu-item/{id}/` and the category twin.
+ */
+export interface AITranslateMenuEntityResponse {
+  item_id?: number;
+  category_id?: number;
+  translations: AITranslateEntityRow[];
+  ai_provider: string;
+}
+
+/**
+ * Response payload of `POST /api/v1/admin/describe/menu-item/{id}/`.
+ * `regenerated` distinguishes "fresh AI text" from "the operator already
+ * edited this row, so we returned the cached value untouched" (D-023).
+ */
+export interface AIDescribeItemResponse {
+  item_id: number;
+  locale: AdminLocaleCode;
+  description: string;
+  regenerated: boolean;
+  is_edited: boolean;
+  provider: string;
+  model: string;
+  confidence: string | null;
+}
+
+/**
+ * Single row in the bulk-describe response. `generated=false` + `skipped=true`
+ * means the row was already filled (operator-edited or fresh AI cache).
+ * `skipped=true` with `description=null` is the "provider failed" path.
+ */
+export interface AIDescribeBulkRow {
+  item_id: number;
+  description: string | null;
+  generated: boolean;
+  skipped: boolean;
+  provider?: string;
+  model?: string;
+  reason?: string;
+  error?: string;
+}
+
+/**
+ * Response payload of `POST /api/v1/admin/describe/bulk/`. The backend
+ * wraps the list under `{ filter: { item_ids, total_requested } }` — we
+ * surface both the `filter` object and a derived `count` for convenience.
+ */
+export interface AIDescribeBulkResponse {
+  results: AIDescribeBulkRow[];
+  total_generated: number;
+  total_skipped: number;
+  locale: AdminLocaleCode;
+  filter: { item_ids: number[] | null; total_requested: number };
+}
+
+/**
+ * Response payload of `GET /api/v1/admin/translate/stats/` (Sprint 9A bonus
+ * endpoint, consumed by the Sprint 9B `TranslationGapPanel`).
+ *
+ * Note: the actual backend exposes `per_target_locale` / `per_provider` /
+ * `supported_locales` rather than the spec's `cache_hit_rate` /
+ * `coverage_pct` — we mirror the live contract so the panel renders the
+ * right numbers out of the box.
+ */
+export interface AITranslateStatsResponse {
+  translation_memory: {
+    total: number;
+    per_target_locale: Partial<Record<AdminLocaleCode, number>>;
+    per_provider: Record<string, number>;
+  };
+  descriptions: {
+    total: number;
+    edited: number;
+  };
+  supported_locales: AdminLocaleCode[];
+}
