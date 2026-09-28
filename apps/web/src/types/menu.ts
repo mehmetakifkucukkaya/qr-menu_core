@@ -26,9 +26,23 @@ export interface PublicMenuBusiness {
   id: number;
   name: string;
   slug: string;
+  /** Absolute URL or null. Sprint A: resolved server-side via
+   *  OrganizationSummarySerializer so admin uploads surface directly. */
   logo: string | null;
+  /** Absolute URL or null. Sprint A: same resolver as logo. */
   cover_image?: string | null;
+  /** Short marketing blurb shown under the business name (hero / footer). */
   description?: string;
+  /** Physical address line (free text). Sprint A (Faz 2.1). */
+  address?: string;
+  /** Google Maps deep link. Sprint A (Faz 2.1). */
+  google_maps_url?: string;
+  /** External website (e.g. https://moderncafe.com). Sprint A (Faz 2.1). */
+  website?: string;
+  /** Public contact email. Sprint A (Faz 2.1). */
+  email?: string;
+  /** Public contact phone (international format). Sprint A (Faz 2.1). */
+  phone?: string;
   default_locale: LocaleCode;
   currency: string;
 }
