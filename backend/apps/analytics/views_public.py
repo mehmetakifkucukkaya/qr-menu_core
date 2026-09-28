@@ -26,11 +26,21 @@ Design notes:
   SHA-256 (D-016 / D-017). Plain values never reach the DB.
 * **Truncate ``path``** to 500 chars so a hostile client can't blow up
   row width.
+
+Sprint A (Faz 1.3) — ``qr_open`` side-effects:
+
+* ``QRCode.scan_count`` is atomically incremented via ``F("scan_count") +
+  1`` so concurrent requests don't lose updates under the row lock.
+* Cross-tenant guard — if the ``qr_id`` belongs to a different
+  organization than the one in the URL slug, the event is silently
+  dropped (same posture as a bad slug). Prevents a malicious actor
+  from inflating another tenant's QR counters by replaying their IDs.
 """
 
 from __future__ import annotations
 
 from django.db import transaction
+from django.db.models import F
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
@@ -39,6 +49,7 @@ from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 
 from apps.organizations.models import Organization
+from apps.qr.models import QRCode
 
 from .hashing import client_ip, hash_value, user_agent
 from .models import MenuViewEvent
@@ -91,6 +102,15 @@ class PublicEventsView(APIView):
         path = (payload.get("path") or "/")[:PATH_MAX]
         locale = (payload.get("locale") or organization.default_locale or "tr")[:5]
 
+        # Sprint A — cross-tenant guard + atomic counter for qr_open events.
+        # Done before MenuViewEvent.create() so a hostile payload that pairs
+        # the real org slug with a foreign QR id never increments that QR's
+        # counter (and never records an event that an honest client didn't
+        # cause).
+        qr_id = payload.get("qr_id") or None
+        if event_type == "qr_open" and qr_id is not None:
+            self._increment_qr_counter(organization, qr_id)
+
         # Build the event row. We do this in a single create() so the
         # DB row is consistent even if an attacker floods the endpoint.
         with transaction.atomic():
@@ -98,7 +118,7 @@ class PublicEventsView(APIView):
                 organization=organization,
                 branch_id=payload.get("branch_id") or None,
                 menu_id=payload.get("menu_id") or None,
-                qr_code_id=payload.get("qr_id") or None,
+                qr_code_id=qr_id,
                 event_type=event_type,
                 locale=locale,
                 path=path,
@@ -109,3 +129,30 @@ class PublicEventsView(APIView):
 
         # 204 — no envelope, no body.
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @staticmethod
+    def _increment_qr_counter(organization: Organization, qr_id) -> None:
+        """Atomically bump ``QRCode.scan_count`` for a tenant-matching QR.
+
+        Sprint A (Faz 1.3):
+
+        * Cross-tenant guard — silently ignore ``qr_id`` that belongs to a
+          different organization. Same posture as an unknown business
+          slug: 204 + no side effect, so the public endpoint can't be
+          used as a counter-amplification probe against another tenant.
+        * Atomic increment via ``F("scan_count") + 1`` so concurrent
+          requests don't lose updates (we don't want to load + save, which
+          is racy under SQLite + Postgres alike).
+        """
+        # QR codes live under an organization directly; the optional
+        # branch is just a sub-scope, not a tenant boundary. We resolve
+        # the QR without .select_related() to keep the query minimal —
+        # the cross-tenant check only needs the FK.
+        try:
+            qr = QRCode.objects.only("id", "organization_id").get(pk=qr_id)
+        except (QRCode.DoesNotExist, ValueError, TypeError):
+            return
+        if qr.organization_id != organization.id:
+            return  # cross-tenant — silent ignore
+        # F() expression → DB-side increment under a single UPDATE row lock.
+        QRCode.objects.filter(pk=qr.pk).update(scan_count=F("scan_count") + 1)
