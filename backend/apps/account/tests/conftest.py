@@ -60,6 +60,22 @@ def auth_user_a(django_user_model):
     return get_user_model().objects.get(email="owner-a@example.com")
 
 
+@pytest.fixture
+def no_throttle(settings):
+    """Disable the magic-link throttle for this test only.
+
+    The throttle bucket resets via ``_clear_throttle_cache`` autouse,
+    but tests that issue many magic-link requests in a row still need
+    the per-IP cap raised.
+    """
+    rest = settings.REST_FRAMEWORK.copy()
+    rates = dict(rest.get("DEFAULT_THROTTLE_RATES", {}))
+    rates["magic_link_request"] = "1000/min"
+    rest["DEFAULT_THROTTLE_RATES"] = rates
+    settings.REST_FRAMEWORK = rest
+    return settings
+
+
 # ---------------------------------------------------------------------------
 # Order fixtures (mirror of apps/orders/tests/conftest.py — keep tests
 # self-contained).
