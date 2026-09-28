@@ -4,10 +4,42 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ---------------------------------------------------------------------------
+ * Base layer — modern polish reset (Sprint 12A).
+ *
+ * Focus rings: a single global `:focus-visible` rule keeps every interactive
+ * element accessible without per-component repetition. The outline uses the
+ * brand primary so it stays consistent across light/dark themes (D-014).
+ *
+ * Scrollbar: a thin, themed scrollbar on the html element for webkit + firefox.
+ * Keeps long admin tables / menus easy to scan without paying for a heavy
+ * custom chrome.
+ * ------------------------------------------------------------------------- */
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
     -webkit-tap-highlight-color: transparent;
+    /* Firefox — use the thin scrollbar variant. */
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--color-muted) / 0.5) transparent;
+  }
+
+  /* Webkit + Chromium — match the same minimal look. */
+  html::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  html::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  html::-webkit-scrollbar-thumb {
+    background-color: rgb(var(--color-muted) / 0.45);
+    border-radius: var(--radius-pill);
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  html::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(var(--color-muted) / 0.7);
   }
 
   body {
@@ -20,6 +52,47 @@
   h4 {
     @apply font-heading;
   }
+
+  /* Single source of truth for keyboard focus rings. Components that need
+   * custom focus styles (e.g. the icon-only ThemeToggle pill) can still
+   * override with `focus-visible:ring-2 focus-visible:ring-offset-2`. */
+  *:focus-visible {
+    outline: 2px solid rgb(var(--color-primary));
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* Skip-to-content link — only visible when keyboard-focused. The link
+   * itself lives in the root layout (placed before `<main id="main-content">`).
+   * We anchor a global style here so it doesn't drift as components are
+   * reorganised. */
+  .skip-to-content {
+    position: fixed;
+    top: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+    padding: 0.625rem 1rem;
+    border-radius: var(--radius-pill);
+    background: rgb(var(--color-primary));
+    color: rgb(var(--color-primary-foreground));
+    font-size: 0.875rem;
+    font-weight: 600;
+    box-shadow: var(--shadow-md);
+  }
+  .skip-to-content:not(:focus) {
+    /* Equivalent to Tailwind's sr-only, but defined here so the focus
+     * reveal works regardless of which utility set is in play. */
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
 }
 
 @layer utilities {
@@ -28,10 +101,21 @@
     min-width: 44px;
     min-height: 44px;
   }
+
+  /* Glassmorphism surface — used by the admin nav, modals, and the
+   * `<Card variant="glass">` primitive. The blur + saturate combo is the
+   * standard SaaS pattern (Linear / Vercel / Notion). Backdrop-filter is
+   * feature-detected; the solid overlay colour already provides contrast
+   * even where the filter is dropped. */
+  .surface-overlay {
+    background: rgb(var(--color-bg-overlay) / 0.7);
+    backdrop-filter: blur(12px) saturate(180%);
+    -webkit-backdrop-filter: blur(12px) saturate(180%);
+  }
 }
 
 /* ---------------------------------------------------------------------------
- * Kitchen display (Sprint 8C)
+ * Kitchen display (Sprint 8C, refreshed in Sprint 12A)
  *
  * Subtle pulse on pending/confirmed tickets. The accent color (`#E07856`)
  * is the Modern Cafe warm tone — gives operators a peripheral cue that
@@ -53,10 +137,26 @@
 
 .kitchen-ticket-pending {
   animation: kitchen-pulse 2s ease-in-out infinite;
-  /* Honour the user's reduced-motion preference. */
 }
 
+/* ---------------------------------------------------------------------------
+ * prefers-reduced-motion — Sprint 12A global guard.
+ *
+ * Honour the OS-level "reduce motion" preference across the board. We collapse
+ * both the Tailwind-declared animations (pulse-soft / fade-in / slide-up) and
+ * the legacy kitchen pulse into a 0.01ms window. Animations remain on the
+ * class list (no JS teardown) so the look stays identical — just instantaneous.
+ * ------------------------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
   .kitchen-ticket-pending {
     animation: none;
   }
