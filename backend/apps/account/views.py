@@ -535,10 +535,14 @@ class AdminCustomerListView(APIView):
             )
 
         # Step 1: customers with history at this org.
+        # Direct Order query — don't go through ``_customer_orders_qs``
+        # which presupposes a Customer instance.
+        from apps.orders.models import Order
+
         customer_ids = set(
-            _customer_orders_qs(None).filter(organization=org).values_list(
-                "customer_id", flat=True
-            )
+            Order.objects.filter(organization=org)
+            .exclude(customer__isnull=True)
+            .values_list("customer_id", flat=True)
         )
         customer_ids |= set(
             LoyaltyTransaction.objects.filter(
