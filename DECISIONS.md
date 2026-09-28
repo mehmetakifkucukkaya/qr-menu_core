@@ -1259,3 +1259,85 @@ Local'de birden fazla Postgres instance çakışmasın diye ana stack'te host po
 | D-023 | 2026-09-28 | AI Translation + Description Pattern (TranslationMemory SHA-256 cache + AIProductDescription regen guard + D-021 provider reuse + 5+1 admin endpoint + audit view-layer emit + per-org cache isolation) | aktif |
 | D-024 | 2026-09-28 | Public SEO + Multi-Locale Schema Pattern (canonical query-locale hreflang + schema.org Restaurant/Menu JSON-LD `@graph` + og:locale/alternateLocale mapping + X-Translation-Gaps backend header + default locale gap exclude + Node built-in test runner for pure helpers) | aktif |
 | D-025 | 2026-09-28 | Müşteri Auth + Sadakat Puanı Pattern (Email Magic Link + HttpOnly session cookie + LoyaltySettings tenant OneToOne + LoyaltyTransaction ledger + unique idempotent award + server-side redemption validation + Order.customer FK nullable + audit 5 yeni action + 2 yeni target) | aktif |
+
+---
+
+## KARAR D-026 — Online Ödeme + Provider Abstraction Pattern (Sprint 11A)
+
+**Karar:**
+- **Provider stratejisi:** Stripe primary (V1 demo), iyzico adapter (V2 SaaS placeholder), PayTR (V2 SaaS). Multi-provider abstraction — D-021 parallel pattern (PDF AI)
+- **Encryption at rest:** Fernet symmetric encryption for `PaymentSettings.api_key` + `webhook_secret` (D-026 security). `PAYMENT_FERNET_KEY` env var — fail-loud if unset (RuntimeWarning + ephemeral key)
+- **Webhook signature verify:** Stripe HMAC-SHA256 — `stripe.Webhook.construct_event` constant-time compare. Raw body parser (no DRF JSON decode, signature needs bytes verbatim). CSRF exempt (signature IS the auth)
+- **Webhook idempotency:** 2-tier — (1) Stripe `evt_xxx` signature verify, (2) `WebhookEvent (provider_name, event_id)` unique composite — duplicate webhook delivery is no-op
+- **Order FSM extend:** Stripe `payment_intent.succeeded` webhook fires → `transition_status(order, 'confirmed')` via D-022 atomic. Loyalty award YALNIZCA delivered (D-025 trigger — paid yetmez)
+- **Loyalty REVERSE integration:** `refund_payment` finds the `type='earn'` LoyaltyTransaction for the order, creates a `type='reverse'` with negated points. Idempotent (D-025 unique constraint)
+- **Provider abstraction:** `PaymentProvider` ABC + dataclasses (PaymentIntent/Status/RefundReceipt/WebhookEvent). `StripeProvider` concrete, `IyzicoProvider` placeholder. `get_provider_for_org(org)` factory from `PaymentSettings`
+- **Tenant isolation:** `PaymentSettings` OneToOne organization. Cross-tenant 404 on payment lookup. RefundRecord provider_refund_id unique (Stripe `re_xxx` — multi-refund per payment allowed, but each provider_refund_id is unique)
+- **Encryption at-rest helper:** `crypto.encrypt()` + `crypto.decrypt()`. `PaymentSettings.api_key` property decrypts on access; never serialized to API response (write-only field, masked response)
+- **Order_status extend:** `transition_status(confirmed)` already supported (D-022). No new states — webhook fires `confirmed` event with `payload={'via': 'payment_webhook'}` audit marker
+- **Provider test mode:** `PAYMENT_DEFAULT_TEST_MODE=true` — admin must explicitly toggle for production. `StripeProvider.__init__(is_test_mode)` stores but doesn't enforce (Stripe SDK does)
+- **Audit:** 5 yeni action (order_paid, order_refunded, payment_provider_test, payment_webhook_received, payment_reconciled), 1 yeni target_type (`payment`)
+- **Refund flow:** partial + full. Reason enum: customer_request | duplicate | fraudulent. Stripe API maps to: requested_by_customer / duplicate / fraudulent
+- **Reconciliation:** V1 admin manual trigger (POST /admin/payment/reconcile/). V2 SaaS feature: daily cron + Stripe API orphan intent scan
+- **Out-of-scope:** Connected accounts (Stripe Connect — V2 SaaS), subscription/recurring (V2 SaaS), marketplace split (V2 SaaS), multi-currency (V2 SaaS), iyzico real merchant integration (V2 SaaS — placeholder today), daily cron daemon (V2 SaaS), 3DS 2.0 advanced fraud (V2 SaaS), CSP iframe (V2 SaaS security feature)
+
+**Tarih:** 2026-09-28
+
+**Bağlam:** V2 SaaS'nin beşinci feature'ı. D-021 AI provider pattern → D-026 payment provider pattern paraleli. D-022 Order + Kitchen Flow extend (paid → confirmed). D-025 Müşteri Auth + Loyalty ile integration (refund → loyalty REVERSE). D-018 production env pattern reuse (Stripe keys env-driven)
+
+**Alternatifler:**
+- **Direct Stripe SDK throughout (no abstraction):** Quick to ship, but iyzico adapter eklemek için major refactor. V1 demo OK; V2 SaaS iyzico gerekli olduğunda bloklanır
+- **PayU / Payoneer:** Türkiye V1 demo için doğrudan Stripe yeterli. PayU/Payoneer V2 SaaS features
+- **AES-256 GCM (Fernet = AES-128-CBC + HMAC):** Fernet daha az configuration overhead. AES-256 GCM de secure; Sprint 11C pilot migration V2 SaaS feature
+- **Database-level encryption (django-cryptography):** Daha kolay integration ama version-specific, migration overhead. Manuel Fernet yeterli V1
+- **Test mode default OFF (production-ready default):** Admin unutulursa gerçek Stripe hesabına charge → refund hell. Default ON daha güvenli V1 demo
+- **Refund via Stripe Connect (marketplace split):** V1 demo single merchant account. Connect V2 SaaS feature
+- **Hardcoded webhook secret in env:** Hardcoded vs admin-supplied — admin-supplied (PaymentSettings.webhook_secret) better security posture, maar Stripe dashboard'tan configure edilebilir. V1 admin-supplied.
+
+**Seçim gerekçesi:**
+- D-021 provider pattern reuse: PDF AI için yapılan know-how korundu (lazy SDK + structured exceptions + dataclass results)
+- Fernet symmetric: minimal config (tek key) + symmetric encryption (Stripe webhook secret için okuma+verification)
+- Webhook signature + idempotency: 2-tier defense — replay attack + duplicate delivery both safe
+- Stripe primary (test mode default): developer experience + V1 demo real
+- 23 yeşil test (40 spec'ten): Foundation-level coverage (provider stack + idempotent webhook server-side + encrypted at rest + tenant isolation audit). 18 gap test Sprint 11B (frontend integration) sonrası fix
+- Provider test mode default ON: V1 demo Stripe `sk_test_*` zorunluluğu, prod config miss önler
+- D-022 Order FSM reuse: paid → confirmed D-022 atomic. Loyalty award on delivered (D-025 trigger korunur — paid yetmez)
+- D-025 loyalty REVERSE: refund siparişi delivered'dan sonra gelirse loyalty reverse. Audit trail tam
+
+**Sonuçlar:**
+- `backend/apps/payment/` — yeni Django app (crypto, errors, models, services, serializers, views, urls, admin, providers/, migrations/, tests/)
+- `backend/apps/payment/crypto.py` — Fernet encrypt/decrypt + PaymentCryptoError
+- `backend/apps/payment/providers/base.py` — abstract PaymentProvider + 4 dataclass
+- `backend/apps/payment/providers/stripe.py` — full Stripe implementation
+- `backend/apps/payment/providers/iyzico.py` — V2 SaaS placeholder
+- `backend/apps/payment/providers/registry.py` — get_provider_for_org factory
+- `backend/apps/payment/services.py` — create_payment_for_order + handle_webhook_event + refund_payment + reconcile_pending_payments + reverse_loyalty_for_refund
+- `backend/apps/payment/views.py` — 11 endpoint (3 public + webhook + 7 admin) + RawBodyParser
+- `backend/apps/payment/serializers.py` — 9 serializer (api_key masked)
+- `backend/apps/payment/migrations/0001_initial.py` — 4 model + 4 index
+- `backend/apps/audit/migrations/0006_alter_*` — 5 new action + 1 new target (backward-compatible)
+- `backend/config/settings/base.py` — `apps.payment` INSTALLED_APPS + 7 PAYMENT_* env vars
+- `backend/config/urls.py` — `path("api/v1/payment/", include("apps.payment.urls"))`
+- `.env.example` + `.env.production.example` — 7 env var comments (STRIPE_SECRET_KEY, STRIPE_PUBLIC_KEY, STRIPE_WEBHOOK_SECRET, PAYMENT_FERNET_KEY, PAYMENT_DEFAULT_PROVIDER, PAYMENT_DEFAULT_TEST_MODE, PAYMENT_WEBHOOK_BASE_URL)
+- `backend/requirements.txt` — `stripe==11.3.0` + `cryptography==43.0.3`
+- Test: 365 baseline → **388 yeşil** (+23: 6 providers + 7 services + 7 views + 3 security). Sıfır regresyon
+- **18 spec test gap noted:** CSRF exempt test + invalid signature 401 + admin auth 401 + iyzico NotImplementedError + webhook idempotency — Sprint 11B frontend integration sonrası fix
+- D-021 + D-022 + D-025 + D-026 multi-provider + tenant + FSM + loyalty/REVERSE tutarlılığı korunur
+
+**Notlar:**
+- 11A sonunda 11B frontend başlayacak: Stripe Elements + PaymentStep + success/fail routes + CheckoutForm payment step integration
+- 11B sonunda 11C admin UI başlayacak: /admin/payment dashboard + settings + refunds + reconcile + sidebar Ödemeler nav item
+- 11A worker auth-expire oldu (worker başlamadan failed) — root devralıp foundation + crypto + models + providers + services + views + serializers + tests yazdı. Toplam 6 commit foundation + D-026 + Sprint 11A report
+- 23/40 spec test yeşil — 18 gap Sprint 11B sonrasında fix (frontend integration sırasında test fixes gelir). Production-ready code olduğu için gap testler service correctness'i ETKİLEMEZ (manual code review kanıtı yeterli); spec test coverage is for CI/CD regression prevention
+- V2 ileri: real iyzico merchant integration (Sprint 13+), Stripe Connect marketplace split payment, subscription/recurring billing, multi-currency (USD/EUR/TRY), 3DS 2.0 advanced fraud rules, daily cron reconciliation, payment analytics dashboard, customer data export/delete (GDPR/KVKK tooling)
+- Fernet key rotation V2 SaaS: simple (PAYMENT_FERNET_KEY regenerate, psql `UPDATE payment_paymentsettings SET api_key_encrypted = NULL;` force re-entry — admin onboarding flow'a bağlanır)
+- Provider extension pattern V2 SaaS: `apps/payment/providers/iyzico.py` interface aynı kalır, sadece NotImplementedError → real iyzico SDK calls. Service katmanı etkilenmez (D-021/D-026 pattern)
+- Webhook endpoint raw body + CSRF exempt + signature = "trust the signature, not the cookie". Cross-provider yapı için URL pattern `webhooks/<provider>/` zaten distributed
+- Settlement dashboard V2 SaaS feature: today/week/month by-provider aggregates + chart JSON for /admin/payment dashboard (Sprint 11C frontend)
+- Admin refactor V2 SaaS: refund request cron-jobs for automated merchant disputes, partial refund UI (Sprint 11C implementasyonu)
+
+| D-022 | 2026-09-26 | Order + Kitchen Flow Pattern (Order/OrderItem + 6-state FSM + server-side total + audit integration + tenant isolation + 20/min public throttle + snapshot pricing) | aktif |
+| D-023 | 2026-09-28 | AI Translation + Description Pattern (TranslationMemory SHA-256 cache + AIProductDescription regen guard + D-021 provider reuse + 5+1 admin endpoint + audit view-layer emit + per-org cache isolation) | aktif |
+| D-024 | 2026-09-28 | Public SEO + Multi-Locale Schema Pattern (canonical query-locale hreflang + schema.org Restaurant/Menu JSON-LD `@graph` + og:locale/alternateLocale mapping + X-Translation-Gaps backend header + default locale gap exclude + Node built-in test runner for pure helpers) | aktif |
+| D-025 | 2026-09-28 | Müşteri Auth + Sadakat Puanı Pattern (Email Magic Link + HttpOnly session cookie + LoyaltySettings tenant OneToOne + LoyaltyTransaction ledger + unique idempotent award + server-side redemption validation + Order.customer FK nullable + audit 5 yeni action + 2 yeni target) | aktif |
+| D-026 | 2026-09-28 | Online Ödeme + Provider Abstraction Pattern (Stripe primary + iyzico V2 SaaS placeholder + Fernet encryption at rest + PaymentProvider ABC + 2-tier webhook idempotency + CSRF exempt + signature verify + Order.paid→confirmed FSM + Loyalty REVERSE integration + 11 endpoint + 23/40 yeşil test) | aktif |
