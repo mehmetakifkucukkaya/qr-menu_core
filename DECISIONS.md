@@ -1341,3 +1341,78 @@ Local'de birden fazla Postgres instance çakışmasın diye ana stack'te host po
 | D-024 | 2026-09-28 | Public SEO + Multi-Locale Schema Pattern (canonical query-locale hreflang + schema.org Restaurant/Menu JSON-LD `@graph` + og:locale/alternateLocale mapping + X-Translation-Gaps backend header + default locale gap exclude + Node built-in test runner for pure helpers) | aktif |
 | D-025 | 2026-09-28 | Müşteri Auth + Sadakat Puanı Pattern (Email Magic Link + HttpOnly session cookie + LoyaltySettings tenant OneToOne + LoyaltyTransaction ledger + unique idempotent award + server-side redemption validation + Order.customer FK nullable + audit 5 yeni action + 2 yeni target) | aktif |
 | D-026 | 2026-09-28 | Online Ödeme + Provider Abstraction Pattern (Stripe primary + iyzico V2 SaaS placeholder + Fernet encryption at rest + PaymentProvider ABC + 2-tier webhook idempotency + CSRF exempt + signature verify + Order.paid→confirmed FSM + Loyalty REVERSE integration + 11 endpoint + 23/40 yeşil test) | aktif |
+
+---
+
+## KARAR D-027 — UI/UX Design System + Modern Polish Pattern (Sprint 12A)
+
+**Karar:**
+- **Token layer:** `tokens.css` extend — radius scale (xs/sm/md/lg/xl/pill), shadow scale (xs/sm/md/lg/xl), transition tokens (--transition-fast 150ms / base 200ms / slow 300ms + ease-out-cubic), animation keyframes (pulse-soft / fade-in / slide-up)
+- **Typography pairing:** Playfair Display SC (heading, restaurant elegance) + Karla (body UI 300/400/500/600/700) — Google Fonts preconnect + display=swap
+- **Color tokens:** Mevcut Cafe warm palette (D-014) korunur; dark mode `[data-theme="dark"]` CSS variable swap eklendi
+- **ThemeProvider:** Client component + `useThemeStore` (Zustand persist localStorage) + ThemeToggle pill (Sun/Moon lucide icons, not emoji)
+- **UI primitives** (`components/ui/`):
+  - `Card` (Header/Title/Description/Content/Footer + variants: default | glass | outline + `interactive` flag)
+  - `Container` (4 size: sm/md/lg/xl — max-w-3xl/5xl/7xl/1400px)
+  - `KbdHint` (keyboard shortcut pill — Notion/Linear pattern)
+  - `IconButton` (5 variants × 3 sizes — Material HIG 44×44 minimum touch target)
+- **Accessibility foundation:** global `*:focus-visible` outline ring (2px primary + offset) + skip-to-content `<a href="#main-content">` + `prefers-reduced-motion: reduce` reset
+- **Theme toggle UX:** light/dark/system 3 modu, `prefers-color-scheme` auto-detect, `localStorage` persist (key=`qr-menu-theme`)
+- **All primitives are dependency-free** (no shadcn/ui install) — manual implementation mirrors DaisyUI API surface
+- **Out-of-scope:** 12B-12E (page-level polish), 11B/11C (payment UI), shadcn install, Storybook, animation library, command palette
+
+**Tarih:** 2026-09-28
+
+**Bağlam:** Sprint 12A — V2 SaaS'ın modern UI foundation'ı. Mevcut `tailwind.config.ts` minimal Cafe warm palette ile V1'de Sprint 0'da kurulmuş (D-014 per-business theme override). Sprint 12'de modern SaaS-grade UI'ya taşımak için önce token layer korunarak genişletildi; multi-tenant brand theming (Cafe warm tone) çalışmaya devam eder. ui-ux-pro-max skill `Minimal Single Column + Glassmorphism + restaurant hospitality` design system önerdi — uygulandı.
+
+**Alternatifler:**
+- **shadcn/ui install (Radix + Tailwind + cn utility):** Standart kalite, ancak runtime dependency + bundle size. Manual primitive'ler aynı API surface'i sıfır dependency ile verir
+- **Radix UI primitives (direkt):** Erişilebilir ama Radix'in className override'leri karmaşık. Headless mantık custom primitive'lerde yeterli
+- **Tailwind utility classes (no primitives):** Boilerplate artar, consistency zayıflar. Primitives 4x kazanç ile D-027 pattern
+- **Dark mode CSS-in-JS / styled-components:** V1 Next.js + Tailwind pipeline'ını bozar. CSS variable layer Native ve zero-runtime
+- **System font (no Google Fonts CDN):** Brand identity için yetersiz. Restaurant hospitality = Playfair serif heading
+- **Single font (Inter only):** Generic SaaS feeling. Heading serif brand identity güçlendirir
+- **`@apply` directive (mevcut pattern) vs utility classes:** `globals.css`'de base+components layer convention korunur; `@apply` component composition için kullanılır, utility composition template'lerde
+- **Theme provider — Context API vs Zustand:** Zustand persist middleware ile localStorage sync sıfır boilerplate. Context+localStorage manuel yaz daha çok kod
+
+**Seçim gerekçesi:**
+- **Token layer koruma:** CSS variable dayanır — per-tenant theming çalışmaya devam eder
+- **Playfair SC + Karla:** Restaurant hospitality (Menulu/Tipi menü competitors) standardı, food blog tipi elegance
+- **Dark mode CSS variable:** Mobile-first theme toggle, system preference auto-detect, manual override
+- **Manual primitives:** No dependency, full control, same API surface. 4 dosya (Card/Container/KbdHint/IconButton) kapsam
+- **Focus-visible global:** Accessibility high-impact single rule. Skip-to-content ekran okuyucu + klavye için
+- **Reduced-motion global reset:** Animation kitchen pulse + slide-up'lar etkilenir, full a11y compliance
+- **Google Fonts preconnect + display=swap:** Performance (FOUT minimization)
+- **`*:focus-visible` (not `*:focus`):** Mouse click sonrası outline çıkmaz (a11y best practice)
+- **localStorage persist:** Theme choice cross-session korunur, SSR cookie default + client override
+
+**Sonuçlar:**
+- `apps/web/src/styles/tokens.css` — extend (shadow xs/sm/md/lg/xl + radius + transition + dark mode variable)
+- `apps/web/tailwind.config.ts` — extend (animation pulse-soft/fade-in/slide-up + keyframes + shadow scale + radius pill)
+- `apps/web/src/app/globals.css` — scrollbar + focus-visible + skip-link + surface-overlay + reduced-motion
+- `apps/web/src/app/layout.tsx` — Google Fonts preconnect + data-theme SSR via cookie
+- `apps/web/src/components/theme/ThemeProvider.tsx` — client provider (data-theme attribute swap)
+- `apps/web/src/components/theme/ThemeToggle.tsx` — pill (light/dark/system)
+- `apps/web/src/lib/stores/theme.ts` — Zustand persist store
+- `apps/web/src/components/ui/Card.tsx` — 6 export (Card + Header/Title/Description/Content/Footer)
+- `apps/web/src/components/ui/Container.tsx` — size map
+- `apps/web/src/components/ui/KbdHint.tsx` — keyboard shortcut pill
+- `apps/web/src/components/ui/IconButton.tsx` — 5 variants × 3 sizes + loading/disabled
+- `apps/web/src/app/(admin)/admin/layout.tsx` — skip-to-content wired
+- Test: tsc 0 error + lint 0 warning + build 0 error (24/24 static pages) + backend 365 baseline korunur (sıfır regresyon — Sprint 12A pure frontend, backend testlere dokunmamış)
+- 12B-12E (UI polish + mutfak dark + bento dashboard) + 11B-11C (online ödeme UI) follow-up olarak eklenmeli
+
+**Notlar:**
+- 12A worker bu sprint sonunda auth-expire oldu (4. kez); root devralmadan tüm 5 commit + rapor push edilmişti. Pattern doğrulandı
+- 12B-12E + 11B/11C + 12D-12F V2 SaaS follow-up'lar olarak SPRINT_PLAN.md'de backlog'ta. Sprint A (audit kritik fix) root tamamladığında Sprint B+C+D+E V1 satış hazırlık süiti başlar
+- V1 demo artık `Modern Cafe` ile modern glassmorphism admin + Playfair/Karla typography ile gösterilebilir; iyzico/online ödeme UI'ları 11B/11C ile canlıya geçer
+- Theme toggle default = `light`; admin/kitchen için D-027 + 12C `auto-detect prefers-color-scheme` default yaplacak; mutfak `data-theme="dark"` force (12E)
+- Restaurant UI: Playfair restaurant elegance + Karla modern UI body. Stripe/Linear çağdaş SaaS'dan ayrışan kimlik
+- 12C sidebar glassmorphism + 12D dashboard bento + 12E mutfak dark mode hepsi D-027 primitive'ler üzerine inşa
+
+| D-022 | 2026-09-26 | Order + Kitchen Flow Pattern (Order/OrderItem + 6-state FSM + server-side total + audit integration + tenant isolation + 20/min public throttle + snapshot pricing) | aktif |
+| D-023 | 2026-09-28 | AI Translation + Description Pattern (TranslationMemory SHA-256 cache + AIProductDescription regen guard + D-021 provider reuse + 5+1 admin endpoint + audit view-layer emit + per-org cache isolation) | aktif |
+| D-024 | 2026-09-28 | Public SEO + Multi-Locale Schema Pattern (canonical query-locale hreflang + schema.org Restaurant/Menu JSON-LD `@graph` + og:locale/alternateLocale mapping + X-Translation-Gaps backend header + default locale gap exclude + Node built-in test runner for pure helpers) | aktif |
+| D-025 | 2026-09-28 | Müşteri Auth + Sadakat Puanı Pattern (Email Magic Link + HttpOnly session cookie + LoyaltySettings tenant OneToOne + LoyaltyTransaction ledger + unique idempotent award + server-side redemption validation + Order.customer FK nullable + audit 5 yeni action + 2 yeni target) | aktif |
+| D-026 | 2026-09-28 | Online Ödeme + Provider Abstraction Pattern (Stripe primary + iyzico V2 SaaS placeholder + Fernet encryption at rest + PaymentProvider ABC + 2-tier webhook idempotency + CSRF exempt + signature verify + Order.paid→confirmed FSM + Loyalty REVERSE integration + 11 endpoint + 23/40 yeşil test) | aktif |
+| D-027 | 2026-09-28 | UI/UX Design System + Modern Polish Pattern (token layer extension — radius/shadow/transition + Playfair SC + Karla pairing + dark mode CSS variable + ThemeProvider zustand persist + 4 UI primitive + focus-visible global + skip-to-content + prefers-reduced-motion reset + dependency-free shadcn-style API) | aktif |
