@@ -6,12 +6,26 @@ import { X, Receipt, CheckCircle2 } from "lucide-react";
 import { useCartStore } from "@/lib/cart-store";
 import { createOrder, OrdersApiError } from "@/lib/api-orders";
 import { formatPrice } from "@/lib/format";
+import { LoyaltyRedemptionCheckbox } from "@/app/(public)/account/_components/LoyaltyRedemptionCheckbox";
+import type { PublicLoyaltySettings } from "@/types/account";
 
 interface CheckoutFormProps {
   open: boolean;
   onClose: () => void;
   businessSlug: string;
   currency: string;
+  /** Sprint 10B — pre-fetched customer profile (null when guest). */
+  customerProfile?: {
+    id: number;
+    full_name: string;
+    phone: string;
+    email: string;
+  } | null;
+  /** Sprint 10B — pre-fetched loyalty summary (null = no balance / disabled). */
+  customerLoyalty?: {
+    balance: number;
+    settings: PublicLoyaltySettings | null;
+  } | null;
 }
 
 /**
@@ -36,6 +50,8 @@ export function CheckoutForm({
   onClose,
   businessSlug,
   currency,
+  customerProfile,
+  customerLoyalty,
 }: CheckoutFormProps) {
   const router = useRouter();
   const items = useCartStore((s) => s.items);
@@ -47,11 +63,18 @@ export function CheckoutForm({
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [notes, setNotes] = useState("");
+  /** Sprint 10B — selected loyalty redemption (0 = none). */
+  const [loyaltyRedeem, setLoyaltyRedeem] = useState({
+    enabled: false,
+    points: 0,
+    discountAmount: "0.00",
+  });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const nameRef = useRef<HTMLInputElement | null>(null);
 
   // Pre-fill table number from ?table= once, when the modal first opens.
+  // Also pre-fill name + phone from the customer profile (Sprint 10B).
   useEffect(() => {
     if (!open) return;
     if (typeof window !== "undefined" && !tableNumber) {
@@ -59,8 +82,16 @@ export function CheckoutForm({
       const fromQuery = params.get("table");
       if (fromQuery) setTableNumber(fromQuery);
     }
+    if (customerProfile) {
+      // Only set on first open (avoid clobbering the user's typing).
+      setName((cur) => (cur ? cur : customerProfile.full_name ?? ""));
+      setPhone((cur) => (cur ? cur : customerProfile.phone ?? ""));
+    }
+    // Reset loyalty toggle when (re-)opening so a previous session's
+    // selection doesn't silently apply to a new draft.
+    setLoyaltyRedeem({ enabled: false, points: 0, discountAmount: "0.00" });
     queueMicrotask(() => nameRef.current?.focus());
-  }, [open, tableNumber, setTableNumber]);
+  }, [open, tableNumber, setTableNumber, customerProfile]);
 
   // Escape closes (unless a submit is in flight).
   useEffect(() => {
@@ -81,7 +112,11 @@ export function CheckoutForm({
     setError(null);
 
     try {
-      const payload = {
+      const loyaltyPoints =
+        loyaltyRedeem.enabled && loyaltyRedeem.points > 0
+          ? loyaltyRedeem.points
+          : undefined;
+      const payload: Parameters<typeof createOrder>[0] = {
         organization_slug: businessSlug,
         table_number: tableNumber || undefined,
         customer_name: name.trim(),
@@ -92,6 +127,7 @@ export function CheckoutForm({
           quantity: i.quantity,
           notes: i.notes?.trim() || undefined,
         })),
+        ...(loyaltyPoints ? { loyalty_points_to_redeem: loyaltyPoints } : {}),
       };
 
       const result = await createOrder(payload);
@@ -192,11 +228,48 @@ export function CheckoutForm({
                 {formatPrice(totalAmount.toFixed(2), cur)}
               </span>
             </div>
+            {loyaltyRedeem.enabled && Number.parseFloat(loyaltyRedeem.discountAmount) > 0 ? (
+              <div className="mt-2 flex items-baseline justify-between rounded-md bg-emerald-50 px-2 py-1.5 text-xs text-emerald-800">
+                <span className="font-semibold">
+                  Sadakat indirimi ({loyaltyRedeem.points} puan)
+                </span>
+                <span className="tabular-nums">
+                  −{formatPrice(loyaltyRedeem.discountAmount, cur)}
+                </span>
+              </div>
+            ) : null}
             <p className="mt-1 text-[10px] italic text-muted">
               Toplam tutar işletme tarafından onaylanır; nihai tutar
               sipariş onayında görüntülenir.
             </p>
           </section>
+
+          {/* Sprint 10B — Loyalty redemption island. Hidden when
+              either the customer isn't logged in or loyalty is not
+              configured / below threshold (the checkbox renders its
+              own muted state internally). */}
+          {customerLoyalty?.settings && customerProfile ? (
+            <div className="mb-4">
+              <LoyaltyRedemptionCheckbox
+                balance={customerLoyalty.balance}
+                settings={customerLoyalty.settings}
+                currency={cur}
+                onChange={setLoyaltyRedeem}
+              />
+            </div>
+          ) : null}
+
+          {/* Sprint 10B — authenticated customer badge */}
+          {customerProfile ? (
+            <div className="mb-4 flex items-center justify-between gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+              <span className="font-medium">
+                {customerProfile.email}
+              </span>
+              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
+                Üye
+              </span>
+            </div>
+          ) : null}
 
           {/* Fields */}
           <div className="space-y-3">

@@ -33,6 +33,10 @@ export interface CreateOrderPayload {
     quantity: number;
     notes?: string;
   }>;
+  /** Sprint 10B (D-025): optional loyalty redemption. Ignored for
+   *  guests (no cookie). For logged-in customers, server-side
+   *  validation enforces the balance + minimum threshold. */
+  loyalty_points_to_redeem?: number;
 }
 
 export interface CreateOrderResponse {
@@ -41,6 +45,12 @@ export interface CreateOrderResponse {
   total_amount: string;
   currency: string;
   placed_at: string;
+  /** Sprint 10B: string-formatted decimal in order currency, "0.00" when no redemption. */
+  loyalty_discount_amount: string;
+  /** Sprint 10B: number of points consumed (0 if no redemption). */
+  loyalty_points_redeemed: number;
+  /** Sprint 10B: balance after the redemption; null when not logged in. */
+  loyalty_balance_after: number | null;
 }
 
 export interface OrderStatusResponse {

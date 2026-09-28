@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 
 import { BusinessHero } from "@/components/public/BusinessHero";
 import { LocaleSelector } from "@/components/public/LocaleSelector";
@@ -7,7 +8,13 @@ import { FloatingCtas } from "@/components/public/FloatingCtas";
 import { EmptyState } from "@/components/public/EmptyState";
 import { MenuViewClient } from "@/components/public/MenuViewClient";
 import { HeaderCartIcon } from "@/components/public/HeaderCartIcon";
+import { AccountHeaderChip } from "@/components/public/AccountHeaderChip";
 import { fetchPublicMenu, PublicMenuError } from "@/lib/api";
+import {
+  fetchCustomerLoyalty,
+  fetchCustomerProfileOrNull,
+  fetchPublicLoyaltySettings,
+} from "@/lib/api-account";
 import { humanizeSlug } from "@/lib/format";
 import {
   buildAlternates,
@@ -71,6 +78,42 @@ export default async function PublicMenuPage({ params, searchParams }: PageProps
       branch,
       internal: true,
     });
+
+    // Sprint 10B — fetch customer profile + loyalty server-side so the
+    // header chip + checkout can adapt to the cookie state without an
+    // extra round-trip. All failures here are swallowed — the public
+    // menu page never breaks on a missing cookie / unconfigured
+    // loyalty.
+    const cookieHeader = cookies()
+      .getAll()
+      .map((c) => `${c.name}=${c.value}`)
+      .join("; ");
+    const [customerProfile, publicLoyaltySettings] = await Promise.all([
+      fetchCustomerProfileOrNull({ internal: true, cookieHeader }).catch(
+        () => null,
+      ),
+      fetchPublicLoyaltySettings(params.businessSlug, { internal: true }).catch(
+        () => null,
+      ),
+    ]);
+    const customerLoyalty = customerProfile
+      ? await fetchCustomerLoyalty(params.businessSlug, {
+          internal: true,
+          cookieHeader,
+        }).catch(() => null)
+      : null;
+    const headerInitial = customerProfile
+      ? {
+          id: customerProfile.id,
+          email: customerProfile.email,
+          full_name: customerProfile.full_name,
+        }
+      : null;
+    const headerLoyaltyBalance =
+      customerLoyalty?.balance && customerLoyalty.organization
+        ? customerLoyalty.balance
+        : 0;
+
     // JSON-LD Schema.org graph — Sprint 9C. Server-rendered inside the
     // <body> (Next 14 App Router renders inline <script> tags in the
     // body; crawlers accept either location).
@@ -93,6 +136,17 @@ export default async function PublicMenuPage({ params, searchParams }: PageProps
           payload={payload}
           locale={locale}
           businessSlug={params.businessSlug}
+          customerProfile={customerProfile}
+          customerLoyalty={
+            customerLoyalty
+              ? {
+                  balance: customerLoyalty.balance,
+                  settings: publicLoyaltySettings,
+                }
+              : null
+          }
+          headerInitial={headerInitial}
+          headerLoyaltyBalance={headerLoyaltyBalance}
         />
       </>
     );
@@ -178,10 +232,30 @@ function MenuView({
   payload,
   locale,
   businessSlug,
+  customerProfile,
+  customerLoyalty,
+  headerInitial,
+  headerLoyaltyBalance,
 }: {
   payload: Awaited<ReturnType<typeof fetchPublicMenu>>;
   locale: LocaleCode;
   businessSlug: string;
+  customerProfile: {
+    id: number;
+    email: string;
+    full_name: string;
+    phone: string;
+  } | null;
+  customerLoyalty: {
+    balance: number;
+    settings: import("@/types/account").PublicLoyaltySettings | null;
+  } | null;
+  headerInitial: {
+    id: number;
+    email: string;
+    full_name: string;
+  } | null;
+  headerLoyaltyBalance: number;
 }) {
   const { business, menu, theme, categories, cta, allergens, dietary_tags } =
     payload;
@@ -191,7 +265,8 @@ function MenuView({
 
   return (
     <main className="min-h-screen bg-background">
-      {/* Sticky top bar: logo + name + locale selector + cart icon + inline CTAs (sm+). */}
+      {/* Sticky top bar: logo + name + locale selector + account chip
+          + cart icon + inline CTAs (sm+). */}
       <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70">
         <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 py-2.5">
           <div className="flex min-w-0 items-center gap-2">
@@ -220,6 +295,10 @@ function MenuView({
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <LocaleSelector current={locale} />
+            <AccountHeaderChip
+              initialProfile={headerInitial}
+              initialLoyaltyBalance={headerLoyaltyBalance}
+            />
             <HeaderCartIcon />
           </div>
         </div>
@@ -244,6 +323,8 @@ function MenuView({
           allergens={allergens}
           dietaryTags={dietary_tags}
           locale={locale}
+          customerProfile={customerProfile}
+          customerLoyalty={customerLoyalty}
         />
       )}
 
