@@ -81,6 +81,10 @@ class PublicOrderCreateSerializer(serializers.Serializer):
 
     Auth/org resolution happens in the view (which needs the raw slugs),
     so the serializer doesn't enforce organization membership.
+
+    Sprint 10A (D-025): optional ``loyalty_points_to_redeem`` field.
+    The view applies server-side validation (balance + min threshold
+    + loyalty enabled) before letting the order through.
     """
 
     organization_slug = serializers.SlugField(max_length=60)
@@ -96,6 +100,9 @@ class PublicOrderCreateSerializer(serializers.Serializer):
         max_length=500, required=False, allow_blank=True, default=""
     )
     items = PublicOrderLineSerializer(many=True, allow_empty=False)
+    loyalty_points_to_redeem = serializers.IntegerField(
+        required=False, default=0, min_value=0, max_value=10_000_000,
+    )
 
     def validate_customer_name(self, value: str) -> str:
         v = (value or "").strip()
