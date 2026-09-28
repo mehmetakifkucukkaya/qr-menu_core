@@ -1023,7 +1023,82 @@ Local'de birden fazla Postgres instance çakışmasın diye ana stack'te host po
 - Order number format `{slug[:2].upper()}-{YYYYMMDD}-{NNN}` (test pattern: cafe-a → "CA-20260926-001"). Prefix-global counter nedeniyle cafe-a + cafe-b aynı gün "CA-20260926-001" + "CA-20260926-002" üretiyor — operatör için bu çoklu-restaurant V2'ye kadar sorun değil
 - 8A sonrası 8B için cart store (Zustand + localStorage persist) + CartDrawer + CheckoutForm + confirmation polling başlayacak
 - 8A sonrası 8C için kitchen display full-screen + audio alert V2 backlog (V1 visual only)
-- Online ödeme Sprint 9'da — order flow V1'de ödemesiz, hesap + sadakat V2'de
+- Online ödeme Sprint 9 sonrası planlanıyor — order flow V1'de ödemesiz, hesap + sadakat V2'de
 - V1 demo scenarios (Modern Cafe ile): (1) QR okut → müşteri sipariş verir, (2) admin onaylar, (3) mutfak hazırlar, (4) admin "ready" der, (5) müşteri confirmation page'de "Hazır!" görür (15s polling), (6) admin teslim eder, sipariş kapanır
 
+---
+
+## KARAR D-023 — AI Translation + Description Pattern (Sprint 9A)
+
+**Karar:**
+- **İki paralel model:** `TranslationMemory` (org-scoped SHA-256 cache, `(org, src_hash, tgt_locale)` unique) ve `AIProductDescription` (per-menu-item, per-locale, `is_edited` regen guard)
+- **Provider stratejisi:** D-021'i birebir devral — OpenAI GPT-4o primary, Anthropic Claude 3.5 Sonnet fallback. SDK lazy-load (`_get_openai()` / `_get_anthropic()`). Strict JSON schema (`response_format={"type": "json_schema"}`)
+- **Locale-specific prompts:** `TRANSLATION_PROMPTS[(src, tgt)]` dict — TR→EN restaurant ton, EN→TR food terminology. Şu an 2 çift (TR↔EN). DE/AR V2 backlog
+- **Service-layer signatures:**
+  - `translate_text(text, source_locale, target_locale, organization) → {translated, provider, model, confidence, cached}` — cache hit → API call yapmaz
+  - `describe_product(menu_item, locale, organization, *, force=False) → {description, ...}` — `is_edited=True` kayıt + `force=False` → mevcut text korunur (regen guard)
+  - `describe_bulk(menu_items, locale, organization, *, item_ids=None) → {results, total_generated, total_skipped}` — boş description + filter yalnız verilen `item_ids`'i çalıştırır
+- **Endpoint'ler (admin, 5 + 1 bonus):**
+  - `POST /api/v1/admin/translate/` — tek metin, öni̇zleme + cache test
+  - `POST /api/v1/admin/translate/menu-item/{id}/` — bulk translate `target_locales[]`
+  - `POST /api/v1/admin/translate/menu-category/{id}/` — kategori başlık + açıklama
+  - `POST /api/v1/admin/describe/menu-item/{id}/` — tek item description generation
+  - `POST /api/v1/admin/describe/bulk/` — N item, `?item_ids=` filter
+  - `GET  /api/v1/admin/translate/stats/` — bonus: cache hit rate + description coverage (9B dashboard banner için)
+- **Validation:** text max `AI_TRANSLATION_MAX_CHARS=2000` (default), bos/aynı-locale/unsupported locale → 400. Item kategorisi yoksa 422. Provider fail → 502 `ai.provider_unavailable`
+- **Cache strategy:** Write-through — translation API call dönünce `TranslationMemory` kaydı oluşur. SHA-256 hash whitespace normalize edilmiş text üzerinden. Cache tenant-isolated (org FK filter queries'te). Confidence Decimal(4,2)
+- **Regen guard:** `describe_product()` `is_edited=True` kayıt görürse + `force=False` → mevcut text'i döner. Admin'in manuel yazdığı açıklama AI tarafından ezilmez. `force=True` explicit regen
+- **Audit integration:** 2 yeni action (`ai_translation_generated`, `ai_description_generated`) + 2 yeni target_type (`translation_memory`, `ai_product_description`). Audit event **view katmanında** emit (service değil) — duplicate önlemek için. Multi-locale bulk translate'te N event (target_id=menu_item.id veya category.id)
+- **Tenant isolation:** D-022 ile aynı pattern — `IsAuthenticated + IsOrganizationMember`, `_resolve_organization(request)`, cross-tenant 404 (existence leak yok). Cache org-scoped (aynı src text iki org'da iki ayrı hit)
+- **Test pattern:** D-021 ile aynı — `_get_openai()` / `_get_anthropic()` monkeypatch'lenir, gerçek API key yok. `apps/translate/tests/conftest.py`'te DRF throttle cache clear autouse fixture (Sprint 3 menu conftest pattern)
+- **Side effect:** `apps.translate` INSTALLED_APPS'a eklendi. Audit `ACTION_CHOICES` +2, `TARGET_CHOICES` +2 (migration 0004 AlterField — geriye uyumlu, eski event'ler etkilenmez). Mevcut pdf_import + orders endpoint'lerine dokunulmadı
+
+**Tarih:** 2026-09-28
+
+**Bağlam:** V2 üçüncü sprint. Operatör menü içeriğini AI ile hızlıca çok dilli + SEO-friendly açıklamalı hale getirmesi. Multi-language onboarding (TR + EN aynı anda) için manuel edit döngüsünü (Sprint 4B TranslationTabs) çeviri için 30+ dakikadan 30 saniyeye indirmek. Description generation özellikle 1-2 cümlelik menü kartlarını "italyan mutfağı, ana yemek, hafif acılı, ₹…" gibi zenginleştirip arama motoru görünürlüğünü artırır. D-021 OpenAI primary + Anthropic fallback pattern'ı birebir devralınır — yeni provider abstraksiyonu katmanı (`apps.ai/`) Sprint 10+ SaaS scale için düşünülebilir, V1 inline kalır
+
+**Alternatifler:**
+- **Single provider (fallback yok):** Sprint 7 ile aynı trade-off — rate limit / outage'da demo kırılır
+- **Translation cache global (per-org değil):** Tenant izolasyonu kırılır — bir müşterinin gizli menü metni başka müşteri tarafından cache hit'le görülebilir
+- **`description` field doğrudan DB'de overwrite:** Admin'in manuel yazdığı içerik kaybolabilir. `is_edited` flag + `force` parametre guard'ı
+- **Service-layer audit emit (view-layer değil):** Bulk endpoint N event'i tekrar emit eder, double-count hatası. View-layer emit + service return ID — tek emit guarantee
+- **DE/AR locale desteği şimdi:** `LOCALE_CHOICES` (menu modelde) sadece TR+EN. DE/AR V2 backlog
+- **AIProviderError → 500 (DRF default):** Custom exception + DRF `custom_exception_handler` ile 502 `ai.provider_unavailable`
+- **Shared `apps.ai/` provider abstraction:** Sprint 7'de düşünülmemişti, Sprint 9 refactor scope şişerdi. Inline bırakıldı
+- **Async background task (Celery):** V1 complexity +52 satır, Sprint 7B PDF import sync pattern yeterli
+
+**Seçim gerekçesi:**
+- D-021 pattern birebir reuse: provider know-how'ı korunur, yeni bug surface yok
+- Per-org cache: tenant izolasyonu Sprint 8'de kanıtlanmış standart; tipik 25 item × 3 dil işleminde 10-15 hit beklenir (maliyet tasarrufu)
+- Regen guard (`is_edited` + `force`): kullanıcı manuel yazarsa AI üzerine yazmaz
+- View-layer audit emit: bulk endpoint double-count bug'ı test'te yakalandı, fix hemen uygulandı
+- 5 endpoint yeterli: öni̇zle vs uygula + bulk modu için her use case ayrı endpoint
+- DE/AR V2 backlog: `(src,tgt)` çifti ekle = tek satır değişiklik
+- 2000 char validation: OpenAI 16k context ama fiyat lineer; 500 kelime = tipik ürün açıklamasının 5-10 katı
+
+**Sonuçlar:**
+- `backend/apps/translate/` — yeni Django app (models, schemas, services, serializers, views, urls_translate, urls_describe, admin, migrations, tests)
+- `backend/apps/translate/models.py` — `TranslationMemory` (SHA-256 hash + cache) + `AIProductDescription` (regen guard). Indexes per (org, locale)
+- `backend/apps/translate/schemas.py` — `TRANSLATION_OUTPUT_SCHEMA` + `DESCRIPTION_OUTPUT_SCHEMA` + `TRANSLATION_PROMPTS[(src,tgt)]` + `DESCRIPTION_PROMPTS[locale]` + `AIProviderError`
+- `backend/apps/translate/services.py` — `translate_text`, `describe_product`, `describe_bulk`, `_get_openai`, `_get_anthropic`, `_dispatch_*` helper'lar
+- `backend/apps/translate/views.py` — 6 endpoint. `_resolve_organization` + audit view-layer emit
+- `backend/apps/translate/urls_translate.py` + `urls_describe.py` — separate `urlpatterns` so config include karışmaz
+- `backend/apps/translate/migrations/0001_initial.py` — 2 model + 4 index
+- `backend/apps/audit/migrations/0004_alter_*` — ACTION_CHOICES +2, TARGET_CHOICES +2 (AlterField, backward-compatible)
+- `backend/config/settings/base.py` — `apps.translate` INSTALLED_APPS, `AI_TRANSLATION_MAX_CHARS=2000`, `AI_DESCRIPTION_BULK_MAX_ITEMS=50`
+- `backend/config/urls.py` — `path("api/v1/admin/translate/", include("apps.translate.urls_translate"))` + `path("api/v1/admin/describe/", include("apps.translate.urls_describe"))`
+- `.env.example` + `.env.production.example` — comment-only env var referansı
+- Test: 269 yeşil (229 baseline + 40 yeni). Translate tests: test_translation (10), test_description (8), test_views (12), test_security (8), factories.py + conftest.py
+- Test coverage: provider happy-path + Anthropic fallback + cache hit/miss + validation + regen guard (force=False skip, force=True regen) + bulk filter + tenant isolation + audit org-scoped + endpoint integration
+- DECISIONS.md (bu karar) + SPRINT_9_PLAN.md'de dokümante
+- D-021 + D-022 ile provider + tenant pattern tutarlılığı korunur
+
+**Notlar:**
+- 9A sonunda 9B frontend başlayacak: admin menu item edit sayfasında "AI Çevir" + bulk translate modal + description generator — provider 9A API'sini kullanır
+- 9B sonunda 9C public SEO: hreflang + OG + JSON-LD menu schema — `MenuItem.translations` 9A ile büyüyecek (her locale için translation memory hit'li), 9C public'te render eder
+- V2 ileri: shared `apps.ai/` provider abstraction (multi-provider router), tenant-level AI quota, gerçek zamanlı müşteri tarafı AI çevirisi, image alt-text generation
+- Description regen guard UX: buton "İlk kez oluştur / Yeniden üret" 2-state (Sprint 9B)
+- V2 backlog: per-org custom glossary (örn. "pide" → "Turkish flatbread with thin crust")
+
 | D-022 | 2026-09-26 | Order + Kitchen Flow Pattern (Order/OrderItem + 6-state FSM + server-side total + audit integration + tenant isolation + 20/min public throttle + snapshot pricing) | aktif |
+| D-023 | 2026-09-28 | AI Translation + Description Pattern (TranslationMemory SHA-256 cache + AIProductDescription regen guard + D-021 provider reuse + 5+1 admin endpoint + audit view-layer emit + per-org cache isolation) | aktif |
