@@ -60,6 +60,14 @@ class AuditEvent(models.Model):
         # "AI activity" alongside admin human edits.
         ("ai_translation_generated", "AI translation: generated"),
         ("ai_description_generated", "AI description: generated"),
+        # Sprint 10A — Customer accounts + loyalty ledger (D-025). The
+        # five actions cover the magic-link auth flow plus the
+        # earn/redeem/adjust lifecycle for loyalty puan.
+        ("customer_registered", "Customer: registered (first magic link)"),
+        ("customer_login", "Customer: logged in (magic link verified)"),
+        ("loyalty_earned", "Loyalty: points earned"),
+        ("loyalty_redeemed", "Loyalty: points redeemed"),
+        ("loyalty_adjusted", "Loyalty: manual admin adjust"),
     ]
 
     # ---- target type -----------------------------------------------------
@@ -81,6 +89,13 @@ class AuditEvent(models.Model):
         # ``MenuItem.pk`` (with action=ai_description_generated).
         ("translation_memory", "Translation Memory"),
         ("ai_product_description", "AI Product Description"),
+        # Sprint 10A — Customer + loyalty ledger targets (D-025).
+        # ``customer`` covers register/login actions; ``loyalty_settings``
+        # covers admin settings changes; loyalty transactions use
+        # ``loyalty_transaction`` for per-row audits.
+        ("customer", "Customer"),
+        ("loyalty_settings", "Loyalty Settings"),
+        ("loyalty_transaction", "Loyalty Transaction"),
     ]
 
     actor = models.ForeignKey(
