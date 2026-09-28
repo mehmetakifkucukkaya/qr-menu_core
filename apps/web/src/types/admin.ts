@@ -530,3 +530,211 @@ export interface AITranslateStatsResponse {
   };
   supported_locales: AdminLocaleCode[];
 }
+
+/**
+ * Mirror of `apps.orders.models.OrderStatus`. Used by the loyalty/customer
+ * detail page where the recent orders are inline JSON objects without a
+ * cross-reference back to the orders module.
+ */
+export type AdminOrderStatus =
+  | "pending"
+  | "confirmed"
+  | "preparing"
+  | "ready"
+  | "delivered"
+  | "cancelled";
+
+// ---------------------------------------------------------------------------
+// Customer + Loyalty (Sprint 10C frontend — backend shipped in 10A)
+// ---------------------------------------------------------------------------
+//
+// Backend URL prefix is `/api/v1/account/admin/...` (mounted via
+// `apps.account.urls_admin`), NOT `/api/v1/admin/...` as the original
+// Sprint 10C spec brief suggested. The 10A backend shipped under
+// `account/` because the public + admin surfaces share the same models
+// (Customer, LoyaltySettings, LoyaltyTransaction) — D-025.
+//
+// All shapes below mirror the actual 10A backend serializers. Where the
+// spec brief asked for fields the backend does NOT expose yet, those are
+// marked optional + a `__spec_drift__` comment block notes the gap.
+// ---------------------------------------------------------------------------
+
+/**
+ * Loyalty transaction kind (mirrors `apps.account.models.TYPE_CHOICES`).
+ *
+ * `type` value pairs with the signed `points` column:
+ *   - earn / adjust: positive
+ *   - redeem / expire / reverse: negative
+ */
+export type LoyaltyTransactionType =
+  | "earn"
+  | "redeem"
+  | "expire"
+  | "adjust"
+  | "reverse";
+
+/**
+ * Mirror of `apps.account.serializers.LoyaltyTransactionSerializer`.
+ *
+ * __spec_drift__: the 10C spec brief asked for `organization_name` and
+ * `order_number`; the 10A serializer only exposes `order` (FK id) plus
+ * `note`. The detail page renders the FK id when no order number is
+ * available — operators can cross-reference from the linked `recent_orders`
+ * list. If the backend later joins these fields, the renderer should
+ * prefer them over the fallback.
+ */
+export interface LoyaltyTransactionAdmin {
+  id: number;
+  type: LoyaltyTransactionType;
+  /** Signed integer — positive for earn/adjust, negative for redeem/expire/reverse. */
+  points: number;
+  /** Order FK id (10C spec fallback — backend does not denormalize order_number). */
+  order: number | null;
+  note: string;
+  created_at: string;
+}
+
+/**
+ * Mirror of the `recent_orders` block inside
+ * `GET /api/v1/account/admin/customers/{id}/`.
+ *
+ * __spec_drift__: the 10C spec brief asked for `item_count`; the 10A
+ * serializer deliberately returns only the order header (no items list)
+ * for performance. Admin operators can drill into the linked order
+ * detail page to see items.
+ */
+export interface OrderHistoryAdmin {
+  id: number;
+  order_number: string;
+  status: AdminOrderStatus;
+  total_amount: string;
+  currency: string;
+  placed_at: string;
+}
+
+/**
+ * Customer profile block inside the admin detail payload.
+ *
+ * __spec_drift__: the 10C spec brief asked for `is_active`; the 10A
+ * `CustomerProfileSerializer` exposes only id/email/full_name/phone plus
+ * the two timestamps. `is_active` is intentionally NOT in the public
+ * serializer (D-025) and the admin detail page falls back to a derived
+ * "Aktif" badge based on the activity timestamps.
+ */
+export interface CustomerAdminProfile {
+  id: number;
+  email: string;
+  full_name: string;
+  phone: string;
+  created_at: string;
+  last_login_at: string | null;
+  /** 10C spec field — backend does not expose yet; UI derives from last_login_at. */
+  is_active?: boolean;
+}
+
+/**
+ * Loyalty summary block inside the admin detail payload.
+ *
+ * The backend returns a flat `loyalty_balance` int at the detail root
+ * (org-scoped — V1 admin is single-org), not the spec's
+ * `{ balance_by_org: [...] }` shape. The UI wraps it in a 1-element
+ * "Per-organization" table so the spec surface is preserved for the
+ * V2 multi-tenant upgrade.
+ */
+export interface CustomerAdminLoyalty {
+  /** 10A backend flat field; spec brief called this `balance`. */
+  loyalty_balance: number;
+  /** V2 spec brief: per-org balance breakdown. For V1 we synthesize a
+   *  single-entry list from the flat balance above (operator's own org). */
+  balance_by_org: Array<{
+    organization_id: number;
+    organization_name: string;
+    balance: number;
+  }>;
+  recent_transactions: LoyaltyTransactionAdmin[];
+  recent_orders: OrderHistoryAdmin[];
+}
+
+/**
+ * Full payload of `GET /api/v1/account/admin/customers/{id}/`.
+ *
+ * Wrapped by the backend in `{data, meta}` — the fetch layer unwraps.
+ */
+export interface CustomerAdminDetail {
+  customer: CustomerAdminProfile;
+  loyalty: CustomerAdminLoyalty;
+}
+
+/**
+ * Mirror of `apps.account.serializers.CustomerAdminSummarySerializer` —
+ * `GET /api/v1/account/admin/customers/`.
+ *
+ * __spec_drift__: the 10C spec brief asked for `total_orders` +
+ * `last_order_at`; the 10A serializer only ships `loyalty_balance` plus
+ * the standard profile fields. The list page hides the columns rather
+ * than rendering bogus zeros.
+ */
+export interface CustomerAdminSummary {
+  id: number;
+  email: string;
+  full_name: string;
+  phone: string;
+  is_active: boolean;
+  created_at: string;
+  last_login_at: string | null;
+  /** 10A field — spec brief called this `loyalty_balance_total`. */
+  loyalty_balance: number;
+  /** 10C spec field — backend does not expose yet. */
+  total_orders?: number;
+  /** 10C spec field — backend does not expose yet. */
+  last_order_at?: string | null;
+}
+
+/** Paginated list envelope for `GET /api/v1/account/admin/customers/`. */
+export interface CustomerAdminListResponse {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: CustomerAdminSummary[];
+}
+
+/** Payload for `POST /api/v1/account/admin/customers/{id}/loyalty-adjust/`. */
+export interface LoyaltyAdjustRequest {
+  /** Signed integer — positive adds points, negative deducts. Must be non-zero. */
+  delta_points: number;
+  note?: string;
+}
+
+/** Response payload for `POST .../loyalty-adjust/`. */
+export interface LoyaltyAdjustResponse {
+  transaction: LoyaltyTransactionAdmin;
+  new_balance: number;
+}
+
+/**
+ * Mirror of `apps.account.serializers.AdminLoyaltySettingsSerializer` —
+ * `GET` / `PUT /api/v1/account/admin/loyalty/settings/`.
+ *
+ * __spec_drift__: the 10C spec brief asked for `id`, `organization`,
+ * `created_at`, `updated_at`; the 10A serializer only ships the five
+ * configurable fields. `id` and `organization` are optional here so the
+ * UI can render an "unknown" badge if the backend ever starts returning
+ * them — but the form below does not require them.
+ */
+export interface LoyaltySettingsAdmin {
+  /** 10C spec field — backend does not expose yet. Optional for forward compat. */
+  id?: number | null;
+  /** 10C spec field — backend does not expose yet. Optional for forward compat. */
+  organization?: number;
+  is_enabled: boolean;
+  /** Decimal serialized as string (e.g. "1.00"). */
+  points_per_currency_unit: string;
+  /** Decimal serialized as string (e.g. "0.10"). */
+  redemption_rate: string;
+  min_points_to_redeem: number;
+  /** `null` = points never expire (Sprint 10A spec default). */
+  points_expiry_days: number | null;
+  /** 10C spec fields — backend does not expose yet. */
+  created_at?: string;
+  updated_at?: string;
+}

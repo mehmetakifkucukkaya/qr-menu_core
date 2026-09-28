@@ -31,12 +31,20 @@ import type {
   Branch,
   CsrfResponse,
   CurrentUser,
+  CustomerAdminDetail,
+  CustomerAdminListResponse,
+  CustomerAdminSummary,
   DietaryTag,
+  LoyaltyAdjustRequest,
+  LoyaltyAdjustResponse,
+  LoyaltySettingsAdmin,
+  LoyaltyTransactionAdmin,
   MenuImportDraftDetail,
   MenuImportDraftSummary,
   MenuImportItem,
   MenuImportItemPatch,
   MenuTranslation,
+  OrderHistoryAdmin,
   Organization,
   PdfConfirmResponse,
   PdfUploadResponse,
@@ -1462,4 +1470,133 @@ export async function fetchTranslateStats(
   return adminFetch<AITranslateStatsResponse>("/api/v1/admin/translate/stats/", {
     ...options,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Customer + Loyalty (Sprint 10C frontend — backend shipped in 10A / D-025)
+//
+// Endpoint prefix is `/api/v1/account/admin/...` — see
+// `apps.account.urls_admin`. The 10C spec brief said
+// `/api/v1/admin/...` but the 10A backend shipped under `account/` so
+// the customer + loyalty serializers could share model imports with the
+// public surface. All five endpoints below are `IsOrganizationMember`-
+// gated, so the cross-tenant isolation is enforced server-side and the
+// UI just renders `AdminApiError(404)` as `notFound()`.
+//
+// Spec drift summary (10A vs. the original 10C brief) — see the matching
+// `__spec_drift__` blocks in `types/admin.ts`:
+//   - `loyalty_balance_total` → `loyalty_balance` (list)
+//   - `total_orders` + `last_order_at` not exposed on list (hidden in UI)
+//   - `order_number` not denormalized on LoyaltyTransaction (FK id only)
+//   - `organization_name` not on LoyaltyTransaction
+//   - `item_count` not on CustomerAdminDetail.recent_orders
+//   - `id` + `organization` + `created_at` + `updated_at` not on
+//     LoyaltySettings (treated as optional in the type, form ignores them)
+// ---------------------------------------------------------------------------
+
+/**
+ * GET /api/v1/account/admin/customers/?search=&page= — paginated list.
+ *
+ * Tenant-scoped on the server: only customers with at least one Order
+ * or LoyaltyTransaction at the operator's org are returned. Search is
+ * case-insensitive substring across email / full_name / phone.
+ */
+export async function fetchCustomers(
+  filters: { search?: string; page?: number } = {},
+  options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
+): Promise<CustomerAdminListResponse> {
+  const params = new URLSearchParams();
+  if (filters.search) params.set("search", filters.search);
+  if (filters.page) params.set("page", String(filters.page));
+  const qs = params.toString();
+  return adminFetch<CustomerAdminListResponse>(
+    `/api/v1/account/admin/customers/${qs ? `?${qs}` : ""}`,
+    { ...options },
+  );
+}
+
+/**
+ * GET /api/v1/account/admin/customers/{id}/ — full detail.
+ *
+ * Throws `AdminApiError(404, "customer.not_found")` when the customer
+ * has no history at the operator's org (cross-tenant guard). Page
+ * segments catch this and call `notFound()` from `next/navigation`.
+ */
+export async function fetchCustomerDetail(
+  id: number,
+  options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
+): Promise<CustomerAdminDetail> {
+  return adminFetch<CustomerAdminDetail>(
+    `/api/v1/account/admin/customers/${id}/`,
+    { ...options },
+  );
+}
+
+/**
+ * POST /api/v1/account/admin/customers/{id}/loyalty-adjust/
+ *
+ * Backend records an `ADJUST` row + `loyalty_adjusted` audit event. We
+ * return both the new transaction + the recomputed balance so the
+ * caller can refresh without a follow-up detail fetch.
+ */
+export async function adjustLoyaltyPoints(
+  id: number,
+  payload: LoyaltyAdjustRequest,
+  csrfToken: string,
+  options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
+): Promise<LoyaltyAdjustResponse> {
+  return adminFetch<LoyaltyAdjustResponse>(
+    `/api/v1/account/admin/customers/${id}/loyalty-adjust/`,
+    {
+      method: "POST",
+      csrfToken,
+      body: payload,
+      ...options,
+    },
+  );
+}
+
+/**
+ * GET /api/v1/account/admin/loyalty/settings/ — full org-scoped read.
+ *
+ * The backend lazy-creates the settings row on first GET, so a 404 is
+ * only possible for orgs with no IsOrganizationMember principal (which
+ * would already be a middleware-level 401). The UI still tolerates the
+ * 404 case to be defensive.
+ */
+export async function fetchLoyaltySettings(
+  options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
+): Promise<LoyaltySettingsAdmin | null> {
+  try {
+    return await adminFetch<LoyaltySettingsAdmin>(
+      "/api/v1/account/admin/loyalty/settings/",
+      { ...options },
+    );
+  } catch (err) {
+    if (err instanceof AdminApiError && err.status === 404) {
+      return null;
+    }
+    throw err;
+  }
+}
+
+/**
+ * PUT /api/v1/account/admin/loyalty/settings/ — full replace (the
+ * serializer runs with `partial=True`, so callers can omit fields they
+ * want to keep unchanged).
+ */
+export async function updateLoyaltySettings(
+  payload: Partial<LoyaltySettingsAdmin>,
+  csrfToken: string,
+  options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
+): Promise<LoyaltySettingsAdmin> {
+  return adminFetch<LoyaltySettingsAdmin>(
+    "/api/v1/account/admin/loyalty/settings/",
+    {
+      method: "PUT",
+      csrfToken,
+      body: payload,
+      ...options,
+    },
+  );
 }
