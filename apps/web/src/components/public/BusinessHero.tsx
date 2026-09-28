@@ -17,21 +17,33 @@ interface BusinessHeroProps {
  * the page keeps the Modern Cafe defaults from src/styles/tokens.css. When
  * the backend payload carries a `theme` object (Sprint 6 demo seed), it
  * wins; otherwise we render with the default palette.
+ *
+ * Sprint A (Faz 1.1 + Faz 2.1):
+ *   - `cover_image` is honored as a separate field (was being driven by the
+ *     logo fallback chain — wrong, the logo was rendering as the cover).
+ *   - `logo` / `cover_image` fall back to SVG placeholders only when the
+ *     payload itself is missing the field (no more double-placeholder when
+ *     admin uploaded one but not the other).
+ *   - Short description, address, Google Maps link, website, email, phone
+ *     render in a tight contact strip below the name. Empty fields are
+ *     dropped so we don't show " · " separators next to nothing.
  */
 export function BusinessHero({ business, theme }: BusinessHeroProps) {
   const coverSrc =
-    business.logo?.startsWith("data:")
-      ? business.logo
-      : business.logo ??
-        getBusinessCoverPlaceholder(business.slug);
+    business.cover_image && !business.cover_image.startsWith("data:")
+      ? business.cover_image
+      : getBusinessCoverPlaceholder(business.slug);
 
-  const logoSrc = generatePlaceholderSvg({
-    emoji: business.name.charAt(0).toUpperCase() || "M",
-    color1: "#D4A574",
-    color2: "#8B5A3C",
-    size: 200,
-    label: `${business.name} logo`,
-  });
+  const logoSrc =
+    business.logo && !business.logo.startsWith("data:")
+      ? business.logo
+      : generatePlaceholderSvg({
+          emoji: business.name.charAt(0).toUpperCase() || "M",
+          color1: "#D4A574",
+          color2: "#8B5A3C",
+          size: 200,
+          label: `${business.name} logo`,
+        });
 
   // Inline CSS variables so a per-business theme can override without
   // re-rendering or affecting other tenants on the page.
@@ -44,6 +56,13 @@ export function BusinessHero({ business, theme }: BusinessHeroProps) {
         "--color-text": hexToRgbTriplet(theme.text_color),
       } as React.CSSProperties
     : {};
+
+  const description = business.description?.trim() ?? "";
+  const address = business.address?.trim() ?? "";
+  const mapsUrl = business.google_maps_url?.trim() ?? "";
+  const website = business.website?.trim() ?? "";
+  const email = business.email?.trim() ?? "";
+  const phone = business.phone?.trim() ?? "";
 
   return (
     <section
@@ -83,9 +102,74 @@ export function BusinessHero({ business, theme }: BusinessHeroProps) {
         >
           {business.name}
         </h1>
+        {description ? (
+          <p className="mt-2 max-w-md text-center text-sm text-muted sm:text-base">
+            {description}
+          </p>
+        ) : null}
         <p className="mt-1 text-xs uppercase tracking-wider text-muted">
           {business.currency} · QR Menü
         </p>
+
+        {(address || mapsUrl || website || email || phone) && (
+          <ul className="mt-4 flex w-full max-w-md flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-muted">
+            {address ? (
+              <li>
+                {mapsUrl ? (
+                  <a
+                    href={mapsUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 underline-offset-2 hover:text-text hover:underline"
+                  >
+                    <span aria-hidden>📍</span>
+                    <span className="line-clamp-1">{address}</span>
+                  </a>
+                ) : (
+                  <span className="inline-flex items-center gap-1">
+                    <span aria-hidden>📍</span>
+                    <span className="line-clamp-1">{address}</span>
+                  </span>
+                )}
+              </li>
+            ) : null}
+            {phone ? (
+              <li>
+                <a
+                  href={`tel:${phone.replace(/\s+/g, "")}`}
+                  className="inline-flex items-center gap-1 hover:text-text hover:underline"
+                >
+                  <span aria-hidden>📞</span>
+                  <span>{phone}</span>
+                </a>
+              </li>
+            ) : null}
+            {email ? (
+              <li>
+                <a
+                  href={`mailto:${email}`}
+                  className="inline-flex items-center gap-1 hover:text-text hover:underline"
+                >
+                  <span aria-hidden>✉️</span>
+                  <span className="line-clamp-1">{email}</span>
+                </a>
+              </li>
+            ) : null}
+            {website ? (
+              <li>
+                <a
+                  href={website}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 hover:text-text hover:underline"
+                >
+                  <span aria-hidden>🌐</span>
+                  <span className="line-clamp-1">{prettyWebsite(website)}</span>
+                </a>
+              </li>
+            ) : null}
+          </ul>
+        )}
       </div>
     </section>
   );
@@ -112,4 +196,12 @@ function hexToRgbTriplet(hex: string | null | undefined): string {
     return "139 90 60";
   }
   return `${r} ${g} ${b}`;
+}
+
+/** Strip protocol + trailing slash for display ("moderncafe.com"). */
+function prettyWebsite(url: string): string {
+  return url
+    .replace(/^https?:\/\//i, "")
+    .replace(/\/$/, "")
+    .slice(0, 40);
 }
