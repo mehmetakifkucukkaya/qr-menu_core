@@ -131,6 +131,27 @@ class PublicEventsView(APIView):
                 referrer=request.META.get("HTTP_REFERER") or None,
             )
 
+        # Sprint B1 — D-026 monthly usage counter. Fire-and-forget
+        # ``record_usage`` after the MenuViewEvent row is in. We wrap
+        # the increment in its own try/except so a counter-side error
+        # never blocks the public events endpoint (the analytics row
+        # is the canonical audit; the counter is just a roll-up).
+        from apps.billing.services import record_usage
+
+        try:
+            if event_type == "qr_open":
+                record_usage(organization, "scans", 1)
+            elif event_type == "menu_view":
+                record_usage(organization, "views", 1)
+        except Exception:  # noqa: BLE001
+            # Don't surface counter failures on a public endpoint —
+            # the MenuViewEvent row already captured the visit.
+            logger.exception(
+                "record_usage failed for org=%s event=%s",
+                organization.slug,
+                event_type,
+            )
+
         # 204 — no envelope, no body.
         return Response(status=status.HTTP_204_NO_CONTENT)
 
