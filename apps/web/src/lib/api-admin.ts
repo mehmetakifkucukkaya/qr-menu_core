@@ -48,7 +48,14 @@ import type {
   Organization,
   PdfConfirmResponse,
   PdfUploadResponse,
+  PlanLimitMatrix,
+  PlanSettings,
+  PlanSettingsUpdate,
+  PlanUsage,
+  ResetUsageResponse,
   ThemeConfig,
+  UpgradePreview,
+  UpgradePreviewRequest,
 } from "@/types/admin";
 
 /**
@@ -1596,6 +1603,154 @@ export async function updateLoyaltySettings(
       method: "PUT",
       csrfToken,
       body: payload,
+      ...options,
+    },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Billing (Sprint B2 frontend — backend shipped in B1, D-026)
+// ---------------------------------------------------------------------------
+//
+// Six endpoints under `/api/v1/admin/billing/`:
+//   GET    /plan/                          → current PlanSettings
+//   PUT    /plan/                          → operator update plan/feature/note
+//   GET    /usage/                         → current-month metric snapshot
+//   GET    /limits/                        → static 4-plan comparison matrix
+//   POST   /limits/preview-upgrade/        → diff current vs target plan
+//   POST   /reset-usage/                   → superuser-only demo helper
+//
+// All endpoints are tenant-scoped (operator's first membership wins —
+// mirrors the payment admin view). reset-usage is superuser-only; the
+// 403 response carries the standard error envelope.
+//
+// Each wrapper follows the existing pattern: optional `internal` for RSC
+// → backend hops, `cookieHeader` for server-side cookie forwarding, and
+// `csrfToken` for the unsafe methods (PUT, POST).
+// ---------------------------------------------------------------------------
+
+/**
+ * GET /api/v1/admin/billing/plan/ — current PlanSettings row.
+ *
+ * The B1 backend lazy-creates the row on first GET (D-025 OneToOne
+ * pattern), so a 404 is only possible for orgs with no
+ * IsOrganizationMember principal — already blocked by middleware. The
+ * UI tolerates the 404 case defensively.
+ */
+export async function fetchPlanSettings(
+  options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
+): Promise<PlanSettings | null> {
+  try {
+    return await adminFetch<PlanSettings>(
+      "/api/v1/admin/billing/plan/",
+      { ...options },
+    );
+  } catch (err) {
+    if (err instanceof AdminApiError && err.status === 404) {
+      return null;
+    }
+    throw err;
+  }
+}
+
+/**
+ * PUT /api/v1/admin/billing/plan/ — operator update plan / feature / note.
+ *
+ * All fields optional — the B1 serializer runs with partial semantics so
+ * omitting a field keeps the current value. ``features`` is sent as a
+ * nested dict (B1 contract); the spec's root-level shape is rejected.
+ */
+export async function updatePlanSettings(
+  payload: PlanSettingsUpdate,
+  csrfToken: string,
+  options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
+): Promise<PlanSettings> {
+  return adminFetch<PlanSettings>(
+    "/api/v1/admin/billing/plan/",
+    {
+      method: "PUT",
+      csrfToken,
+      body: payload,
+      ...options,
+    },
+  );
+}
+
+/**
+ * GET /api/v1/admin/billing/usage/ — current-month metric snapshot.
+ *
+ * The backend returns ``{ period_year, period_month, metrics: {<5 keys>:
+ * {used, limit, pct}} }`` — `metrics` is the B1 contract, NOT a flat
+ * payload as the B2 brief sketched. Wrappers that need the 5 metric
+ * rows reach into ``payload.metrics`` so the UI never has to.
+ */
+export async function fetchUsage(
+  options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
+): Promise<PlanUsage> {
+  return adminFetch<PlanUsage>(
+    "/api/v1/admin/billing/usage/",
+    { ...options },
+  );
+}
+
+/**
+ * GET /api/v1/admin/billing/limits/ — static 4-plan comparison matrix.
+ *
+ * Backend embeds `is_current` on each tier so the admin UI can highlight
+ * the active column without a separate "current_plan" lookup. The
+ * `current_plan` field at the root is also exposed for callers that
+ * just need the key (e.g. an upgrade-target dropdown that excludes the
+ * current tier).
+ */
+export async function fetchLimits(
+  options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
+): Promise<PlanLimitMatrix> {
+  return adminFetch<PlanLimitMatrix>(
+    "/api/v1/admin/billing/limits/",
+    { ...options },
+  );
+}
+
+/**
+ * POST /api/v1/admin/billing/limits/preview-upgrade/ — diff current vs
+ * target plan. The backend audits each call as a `plan_upgraded_preview`
+ * event so the admin UI can show "operator X previewed upgrade to PRO
+ * 3 times today" without a separate logging table.
+ */
+export async function previewUpgrade(
+  payload: UpgradePreviewRequest,
+  csrfToken: string,
+  options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
+): Promise<UpgradePreview> {
+  return adminFetch<UpgradePreview>(
+    "/api/v1/admin/billing/limits/preview-upgrade/",
+    {
+      method: "POST",
+      csrfToken,
+      body: payload,
+      ...options,
+    },
+  );
+}
+
+/**
+ * POST /api/v1/admin/billing/reset-usage/ — superuser-only demo helper.
+ *
+ * Deletes all `TenantUsageCounter` rows for the operator's org so the
+ * "500/1000" UI is fresh at the start of every demo session. Returns
+ * the deleted-row count + org id; non-superuser callers get a 403 with
+ * the standard error envelope (caller is expected to render a friendly
+ * toast — never expose the raw code to operators).
+ */
+export async function resetUsage(
+  csrfToken: string,
+  options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
+): Promise<ResetUsageResponse> {
+  return adminFetch<ResetUsageResponse>(
+    "/api/v1/admin/billing/reset-usage/",
+    {
+      method: "POST",
+      csrfToken,
       ...options,
     },
   );
