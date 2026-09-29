@@ -109,7 +109,28 @@ export function ItemCard({ item, category, onSelect }: ItemCardProps) {
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <h3 className="truncate font-heading text-base font-semibold text-text sm:text-lg">
+        {/* Sprint D1b — title is now a secondary tap target for the
+            detail drawer. The chevron button on the right is still the
+            primary affordance (already wired pre-D1b); making the title
+            clickable too gives thumb-friendlier access on mobile without
+            stealing taps from the cart "Sepete ekle" button (that button
+            lives in a sibling flex column so it never overlaps the title
+            area). The h3 carries the semantic heading; the click handler
+            is a thin wrapper so the markup stays valid (no nested
+            interactive elements). */}
+        <h3
+          role="button"
+          tabIndex={0}
+          onClick={() => onSelect?.(item)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              onSelect?.(item);
+            }
+          }}
+          aria-label={`${item.name} detayını aç`}
+          className="-mx-1 cursor-pointer truncate rounded px-1 font-heading text-base font-semibold text-text transition hover:text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:text-lg"
+        >
           {item.name}
         </h3>
         {item.description ? (
