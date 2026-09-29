@@ -74,7 +74,7 @@ export class AdminApiError extends Error {
   }
 }
 
-interface AdminFetchOptions {
+export interface AdminFetchOptions {
   method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
   /** CSRF token to echo in the X-CSRFToken header (required for unsafe methods). */
   csrfToken?: string;
