@@ -99,4 +99,4 @@ Desktop.ini
 # ----- Secrets (defense in depth) -----
 *.pem
 *.key
-secrets/
+secrets/DECISONS.md
