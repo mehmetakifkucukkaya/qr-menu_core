@@ -25,6 +25,7 @@ import { CartDrawer } from "./CartDrawer";
 import { LocaleSelector } from "./LocaleSelector";
 import { HeaderCartIcon } from "./HeaderCartIcon";
 import { AccountHeaderChip } from "./AccountHeaderChip";
+import { PrintButton } from "./PrintButton";
 import { useCartStore } from "@/lib/cart-store";
 
 interface MenuViewClientProps {
@@ -197,8 +198,13 @@ export function MenuViewClient({
       />
 
       {/* Sticky top bar: logo + name + locale selector + account chip
-          + cart icon. The interactive bits (AccountHeaderChip /
-          HeaderCartIcon) read feature flags via the provider above. */}
+          + cart icon + print button. The interactive bits
+          (AccountHeaderChip / HeaderCartIcon) read feature flags via
+          the provider above. Sprint D2 adds the PrintButton on the
+          right side of the chrome — it triggers window.print() and
+          relies on the global @media print rules (styles/print.css)
+          to render a clean A4 page. Hidden on mobile (< md) because
+          mobile browsers have no real print path. */}
       <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70">
         <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 py-2.5">
           <div className="flex min-w-0 items-center gap-2">
@@ -226,6 +232,14 @@ export function MenuViewClient({
             </span>
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            {/* Print button is desktop-only (≥ md) per Sprint D2 — see
+                PrintButton component for the rationale. Click fires
+                window.print() directly; the global @media print rules
+                in styles/print.css strip the chrome so the printed
+                output is a clean A4 menu. The dedicated
+                /m/[slug]/print route exists as a bookmarkable
+                preview / kiosk URL. */}
+            <PrintButton />
             <LocaleSelector current={locale} />
             <AccountHeaderChip
               initialProfile={headerInitial}

@@ -1,4 +1,11 @@
 @import "../styles/tokens.css";
+/* Sprint D2 — global print stylesheet. Defines @media print rules
+ * (hide chrome, A4 page, 11pt font, 15mm margins) plus the
+ * .print-root / .print-category / .print-header / .print-footer
+ * helper classes used by /m/[slug]/print. Imported globally so the
+ * main public menu page picks up the print rules when the customer
+ * clicks the 🖨️ Yazdır button. */
+@import "../styles/print.css";
 
 @tailwind base;
 @tailwind components;
