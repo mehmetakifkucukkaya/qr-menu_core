@@ -24,6 +24,7 @@ import {
   useCustomerProfile,
   useCustomerStore,
 } from "@/lib/customer-store";
+import { useFeatureFlag } from "@/lib/feature-flags";
 import { LoyaltyBadge } from "@/app/(public)/account/_components/LoyaltyBadge";
 
 interface AccountHeaderChipProps {
@@ -46,6 +47,12 @@ export function AccountHeaderChip({
   const loyalty = useCustomerStore((s) => s.loyalty);
   const loaded = useCustomerStore((s) => s.loaded);
 
+  // Sprint B3b — feature flag gating. Reads the FeatureFlagProvider
+  // mounted by <MenuViewClient>. Both flags default to false when
+  // settings haven't loaded (provider returns null → safe-default).
+  const customerAccountsEnabled = useFeatureFlag("customer_accounts_enabled");
+  const loyaltyEnabled = useFeatureFlag("loyalty_enabled");
+
   // Prefer the live store; fall back to the server-passed initial value.
   const profile = storeProfile ?? initialProfile ?? null;
   const loyaltyBalance =
@@ -55,8 +62,17 @@ export function AccountHeaderChip({
         ? initialLoyaltyBalance
         : 0;
 
+  // When both account-system and loyalty features are off, the chip
+  // adds zero value — render nothing rather than a confusing "Giriş
+  // Yap" link to a feature the tenant doesn't sell.
+  if (!customerAccountsEnabled && !loyaltyEnabled) {
+    return null;
+  }
+
   if (!profile) {
-    // Logged out (or still hydrating). Show a single "Giriş Yap" link.
+    // Logged out (or still hydrating). Show a single "Giriş Yap" link —
+    // only when customer accounts are enabled on this tenant.
+    if (!customerAccountsEnabled) return null;
     return (
       <Link
         href="/account/login"
@@ -70,10 +86,20 @@ export function AccountHeaderChip({
     );
   }
 
-  // Logged in — show "Hesabım" + (optionally) loyalty badge.
+  // Logged in — show "Hesabım" + (optionally) loyalty badge. Each piece
+  // is independently gated by its feature so a tenant with only
+  // `customer_accounts_enabled` still gets the chip, and one with only
+  // `loyalty_enabled` gets the puan badge without the "Hesabım" link.
+  const showLoyalty = loyaltyEnabled && loyaltyBalance > 0;
+  const showAccount = customerAccountsEnabled;
+
+  if (!showLoyalty && !showAccount) {
+    return null;
+  }
+
   return (
     <div className="flex items-center gap-2">
-      {loyaltyBalance > 0 ? (
+      {showLoyalty ? (
         <Link
           href="/account/loyalty"
           prefetch={false}
@@ -83,15 +109,17 @@ export function AccountHeaderChip({
           <LoyaltyBadge points={loyaltyBalance} size="sm" />
         </Link>
       ) : null}
-      <Link
-        href="/account"
-        prefetch={false}
-        aria-label={`Hesabım — ${profile.email}`}
-        className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-text transition hover:bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-      >
-        <User className="h-3.5 w-3.5" aria-hidden />
-        <span className="hidden sm:inline">Hesabım</span>
-      </Link>
+      {showAccount ? (
+        <Link
+          href="/account"
+          prefetch={false}
+          aria-label={`Hesabım — ${profile.email}`}
+          className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-text transition hover:bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+        >
+          <User className="h-3.5 w-3.5" aria-hidden />
+          <span className="hidden sm:inline">Hesabım</span>
+        </Link>
+      ) : null}
       {/* When the store is still cold we still render the chip from
           the server-passed prop — keeps the SSR vs CSR visual
           identical. */}

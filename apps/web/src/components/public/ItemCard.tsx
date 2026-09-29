@@ -6,6 +6,7 @@ import type { PublicMenuCategory, PublicMenuItem } from "@/types/menu";
 import { getItemPlaceholder } from "@/lib/placeholder";
 import { formatPrice } from "@/lib/format";
 import { useCartStore } from "@/lib/cart-store";
+import { useFeatureFlag } from "@/lib/feature-flags";
 
 interface ItemCardProps {
   item: PublicMenuItem;
@@ -29,6 +30,12 @@ interface ItemCardProps {
  * / allergen info (still useful for the allergic customer).
  */
 export function ItemCard({ item, category, onSelect }: ItemCardProps) {
+  // Sprint B3b — feature flag gate. Hides the entire cart button /
+  // qty selector group when the tenant disables shopping-cart. The
+  // chevron button (opens detail drawer) is kept so the customer can
+  // still inspect nutrition / allergen info even when ordering is off.
+  const cartEnabled = useFeatureFlag("cart_enabled");
+
   // Start with DB image, fall back to category-derived SVG placeholder.
   const [src, setSrc] = useState<string>(
     item.image || getItemPlaceholder({ ...item, category_slug: category.slug }),
@@ -123,58 +130,63 @@ export function ItemCard({ item, category, onSelect }: ItemCardProps) {
       </div>
 
       <div className="flex shrink-0 flex-col items-end justify-between gap-2">
-        {/* qty selector — appears only when the item is in the cart */}
-        {cartItem ? (
-          <div
-            role="group"
-            aria-label={`${item.name} adedi`}
-            className="inline-flex items-center gap-1 rounded-full border border-primary bg-primary/5 px-1 py-0.5"
-          >
-            <button
-              type="button"
-              onClick={handleDec}
-              aria-label="Azalt"
-              className="touch-target flex h-7 w-7 items-center justify-center rounded-full text-primary transition hover:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-primary"
+        {/* qty selector — appears only when the item is in the cart AND
+            the tenant has cart_enabled on. With cart off, only the
+            chevron (opens detail drawer) is rendered so BASIC tenants
+            still let customers inspect allergen / nutrition info. */}
+        {cartEnabled ? (
+          cartItem ? (
+            <div
+              role="group"
+              aria-label={`${item.name} adedi`}
+              className="inline-flex items-center gap-1 rounded-full border border-primary bg-primary/5 px-1 py-0.5"
             >
-              <Minus className="h-3.5 w-3.5" aria-hidden />
-            </button>
-            <span
-              aria-live="polite"
-              className="min-w-[1.5rem] text-center font-heading text-sm font-semibold tabular-nums text-primary"
-            >
-              {cartItem.quantity}
-            </span>
-            <button
-              type="button"
-              onClick={handleInc}
-              aria-label="Arttır"
-              className="touch-target flex h-7 w-7 items-center justify-center rounded-full text-primary transition hover:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-primary"
-            >
-              <Plus className="h-3.5 w-3.5" aria-hidden />
-            </button>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={handleAdd}
-            className={
-              "touch-target inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1 " +
-              (pulse ? "animate-[pulse-add_0.6s_ease-out]" : "")
-            }
-          >
-            {pulse ? (
-              <>
-                <Check className="h-3.5 w-3.5" aria-hidden />
-                Eklendi
-              </>
-            ) : (
-              <>
+              <button
+                type="button"
+                onClick={handleDec}
+                aria-label="Azalt"
+                className="touch-target flex h-7 w-7 items-center justify-center rounded-full text-primary transition hover:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <Minus className="h-3.5 w-3.5" aria-hidden />
+              </button>
+              <span
+                aria-live="polite"
+                className="min-w-[1.5rem] text-center font-heading text-sm font-semibold tabular-nums text-primary"
+              >
+                {cartItem.quantity}
+              </span>
+              <button
+                type="button"
+                onClick={handleInc}
+                aria-label="Arttır"
+                className="touch-target flex h-7 w-7 items-center justify-center rounded-full text-primary transition hover:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-primary"
+              >
                 <Plus className="h-3.5 w-3.5" aria-hidden />
-                Sepete ekle
-              </>
-            )}
-          </button>
-        )}
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={handleAdd}
+              className={
+                "touch-target inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1 " +
+                (pulse ? "animate-[pulse-add_0.6s_ease-out]" : "")
+              }
+            >
+              {pulse ? (
+                <>
+                  <Check className="h-3.5 w-3.5" aria-hidden />
+                  Eklendi
+                </>
+              ) : (
+                <>
+                  <Plus className="h-3.5 w-3.5" aria-hidden />
+                  Sepete ekle
+                </>
+              )}
+            </button>
+          )
+        ) : null}
 
         <button
           type="button"

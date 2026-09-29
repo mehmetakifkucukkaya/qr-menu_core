@@ -10,15 +10,27 @@ import type {
   PublicMenuItem,
   PublicMenuMenu,
 } from "@/types/menu";
+import type { PublicSettings } from "@/types/public";
 import { trackEvent } from "@/lib/events";
 import { resolveCurrency } from "@/lib/currency";
+import {
+  FeatureFlagProvider,
+  useFeatureFlag,
+} from "@/lib/feature-flags";
 import { CategoryNav } from "./CategoryNav";
 import { CategorySection } from "./CategorySection";
 import { ItemDetailDrawer } from "./ItemDetailDrawer";
 import { CartDrawer } from "./CartDrawer";
+import { LocaleSelector } from "./LocaleSelector";
+import { HeaderCartIcon } from "./HeaderCartIcon";
+import { AccountHeaderChip } from "./AccountHeaderChip";
 import { useCartStore } from "@/lib/cart-store";
 
 interface MenuViewClientProps {
+  /** Sprint B3b — server-fetched tenant plan / feature flags. `null`
+   *  when the fetch failed or was skipped; provider falls back to
+   *  safe-default (all flags off). */
+  publicSettings: PublicSettings | null;
   businessSlug: string;
   /** Sprint A — full business payload so we can resolve currency from the
    *  tenant default when neither menu nor items carry one. */
@@ -43,10 +55,31 @@ interface MenuViewClientProps {
     balance: number;
     settings: import("@/types/account").PublicLoyaltySettings | null;
   } | null;
+  /** SSR fallback for AccountHeaderChip (see Sprint 10B). */
+  headerInitial?: {
+    id: number;
+    email: string;
+    full_name: string;
+  } | null;
+  /** SSR fallback loyalty balance for AccountHeaderChip. */
+  headerLoyaltyBalance?: number;
+  /** Sprint B3b — server-rendered content that needs to live *inside*
+   *  the FeatureFlagProvider subtree (e.g. BusinessHero, menu name
+   *  caption, EmptyState when the catalog is empty). Passed through
+   *  verbatim between the sticky header and the category grid so the
+   *  visual order (header → hero → menu) is preserved. */
+  children?: React.ReactNode;
 }
 
 /**
- * MenuViewClient — owns the drawer state for the public menu page.
+ * MenuViewClient — owns the drawer state + sticky header for the
+ * public menu page.
+ *
+ * Sprint B3b refactor: this component now wraps its entire render
+ * output in `<FeatureFlagProvider settings={publicSettings}>` so that
+ * every descendant (AccountHeaderChip, HeaderCartIcon, CartFab, the
+ * "Sipariş Ver" button inside CartDrawer / CheckoutForm, ItemCard's
+ * "Sepete ekle" button) can call `useFeatureFlag(...)` directly.
  *
  * Splits the page so server components can stay server-only for the
  * heavy data fetch / SEO path, while we wrap the categories grid with
@@ -70,8 +103,17 @@ interface MenuViewClientProps {
  * Sprint A (Faz 1.2):
  *   - Currency now flows through the 4-step resolver chain so the cart,
  *     checkout, and order confirmation never drift apart.
+ *
+ * Sprint B3b:
+ *   - Owns the sticky top header (logo + name + LocaleSelector +
+ *     AccountHeaderChip + HeaderCartIcon) so every interactive piece
+ *     can read feature flags via context. The server-rendered
+ *     `BusinessHero` / menu-name caption / `EmptyState` are passed as
+ *     `children` and rendered between the header and the grid so the
+ *     visual order stays identical to the pre-B3b page.
  */
 export function MenuViewClient({
+  publicSettings,
   businessSlug,
   business,
   menu,
@@ -81,6 +123,9 @@ export function MenuViewClient({
   locale,
   customerProfile,
   customerLoyalty,
+  headerInitial,
+  headerLoyaltyBalance,
+  children,
 }: MenuViewClientProps) {
   const [activeItem, setActiveItem] = useState<PublicMenuItem | null>(null);
 
@@ -125,12 +170,128 @@ export function MenuViewClient({
     }
   }
 
-  const totalItems = useCartStore((s) => s.totalItems());
-  const openDrawer = useCartStore((s) => s.openDrawer);
-
   // Currency resolution chain (Sprint A — Faz 1.2):
   //   menu.currency → business.currency → first item.currency → "TRY"
   const currency = resolveCurrency(menu, business, allItems);
+
+  const isEmpty =
+    categories.length === 0 ||
+    categories.every((c) => c.items.length === 0);
+
+  return (
+    <FeatureFlagProvider settings={publicSettings}>
+      {/* Sticky top bar: logo + name + locale selector + account chip
+          + cart icon. The interactive bits (AccountHeaderChip /
+          HeaderCartIcon) read feature flags via the provider above. */}
+      <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70">
+        <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 py-2.5">
+          <div className="flex min-w-0 items-center gap-2">
+            {business.logo ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={business.logo}
+                alt=""
+                aria-hidden="true"
+                className="h-7 w-7 shrink-0 rounded-full bg-surface object-cover ring-1 ring-border"
+              />
+            ) : (
+              <span
+                aria-hidden
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground"
+              >
+                {business.name.charAt(0).toUpperCase()}
+              </span>
+            )}
+            <span
+              className="truncate font-heading text-sm font-semibold text-text sm:text-base"
+              title={business.name}
+            >
+              {business.name}
+            </span>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <LocaleSelector current={locale} />
+            <AccountHeaderChip
+              initialProfile={headerInitial}
+              initialLoyaltyBalance={headerLoyaltyBalance}
+            />
+            <HeaderCartIcon />
+          </div>
+        </div>
+      </header>
+
+      {/* Server-rendered chrome (BusinessHero + menu caption +
+          EmptyState when catalog is empty) — passed verbatim so the
+          visual order stays header → hero → menu. */}
+      {children}
+
+      {!isEmpty ? (
+        <MenuContent
+          businessSlug={businessSlug}
+          currency={currency}
+          catalogLookup={catalogLookup}
+          customerProfile={customerProfile}
+          customerLoyalty={customerLoyalty}
+          categories={categories}
+          allergens={allergens}
+          dietaryTags={dietaryTags}
+          locale={locale}
+          activeItem={activeItem}
+          onItemSelect={handleSelect}
+          onItemClose={handleClose}
+        />
+      ) : null}
+    </FeatureFlagProvider>
+  );
+}
+
+interface MenuContentProps {
+  businessSlug: string;
+  currency: string;
+  catalogLookup: Record<number, PublicMenuItem>;
+  customerProfile?: {
+    id: number;
+    full_name: string;
+    phone: string;
+    email: string;
+  } | null;
+  customerLoyalty?: {
+    balance: number;
+    settings: import("@/types/account").PublicLoyaltySettings | null;
+  } | null;
+  categories: PublicMenuCategory[];
+  allergens: PublicMenuAllergen[];
+  dietaryTags: PublicMenuDietaryTag[];
+  locale: LocaleCode;
+  activeItem: PublicMenuItem | null;
+  onItemSelect: (item: PublicMenuItem) => void;
+  onItemClose: () => void;
+}
+
+/**
+ * MenuContent — extracted inner subtree so the parent
+ * `<FeatureFlagProvider>` from MenuViewClient is already in scope when
+ * we call `useFeatureFlag` for the cart / order / payment gating.
+ */
+function MenuContent({
+  businessSlug,
+  currency,
+  catalogLookup,
+  customerProfile,
+  customerLoyalty,
+  categories,
+  allergens,
+  dietaryTags,
+  locale,
+  activeItem,
+  onItemSelect,
+  onItemClose,
+}: MenuContentProps) {
+  const cartEnabled = useFeatureFlag("cart_enabled");
+  const ordersEnabled = useFeatureFlag("orders_enabled");
+
+  const totalItems = useCartStore((s) => s.totalItems());
+  const openDrawer = useCartStore((s) => s.openDrawer);
 
   return (
     <>
@@ -140,30 +301,44 @@ export function MenuViewClient({
           <CategorySection
             key={category.id}
             category={category}
-            onItemSelect={handleSelect}
+            onItemSelect={onItemSelect}
           />
         ))}
       </div>
 
       {/* Floating cart button (mobile only — desktop gets the header
-          icon from the menu page itself). */}
-      <CartFab count={totalItems} onClick={openDrawer} />
+          icon). Hidden when the tenant disables cart feature OR when
+          there are no items yet. */}
+      {cartEnabled ? (
+        <CartFab count={totalItems} onClick={openDrawer} />
+      ) : null}
 
       <ItemDetailDrawer
         item={activeItem}
         allergens={allergens}
         dietaryTags={dietaryTags}
         locale={locale}
-        onClose={handleClose}
+        onClose={onItemClose}
       />
 
-      <CartDrawer
-        businessSlug={businessSlug}
-        currency={currency}
-        catalogLookup={catalogLookup}
-        customerProfile={customerProfile}
-        customerLoyalty={customerLoyalty}
-      />
+      {/* CartDrawer also drives the CheckoutForm. Both render only
+          when the tenant enables the cart feature. The CheckoutForm
+          itself additionally gates the payment step on
+          `payments_enabled` (Sprint B3b, see apps/web/src/components
+          /public/CheckoutForm.tsx) and the order-submission action on
+          `orders_enabled`. When `orders_enabled` is off but cart is on,
+          we still let customers add items but the "Sipariş Ver"
+          button is hidden inside CartDrawer (see that component). */}
+      {cartEnabled ? (
+        <CartDrawer
+          businessSlug={businessSlug}
+          currency={currency}
+          catalogLookup={catalogLookup}
+          customerProfile={customerProfile}
+          customerLoyalty={customerLoyalty}
+          ordersEnabled={ordersEnabled}
+        />
+      ) : null}
     </>
   );
 }

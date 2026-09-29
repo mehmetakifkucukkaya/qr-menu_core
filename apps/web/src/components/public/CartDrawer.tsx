@@ -27,6 +27,13 @@ interface CartDrawerProps {
     balance: number;
     settings: import("@/types/account").PublicLoyaltySettings | null;
   } | null;
+  /** Sprint B3b — when `false`, the "Sipariş Ver" CTA is hidden and
+   *  the customer can still inspect / edit the cart but cannot
+   *  submit. CartDrawer is mounted unconditionally when `cart_enabled`
+   *  is on; this flag decides whether the bottom submit button shows.
+   *  Defaults to `true` to preserve pre-B3b behavior for callers that
+   *  haven't threaded the flag through yet. */
+  ordersEnabled?: boolean;
 }
 
 /**
@@ -50,6 +57,7 @@ export function CartDrawer({
   catalogLookup,
   customerProfile,
   customerLoyalty,
+  ordersEnabled = true,
 }: CartDrawerProps) {
   const isOpen = useCartStore((s) => s.isOpen);
   const closeDrawer = useCartStore((s) => s.closeDrawer);
@@ -224,14 +232,28 @@ export function CartDrawer({
                   {formatPrice(totalAmount.toFixed(2), cur)}
                 </span>
               </div>
-              <button
-                type="button"
-                onClick={() => setCheckoutOpen(true)}
-                className="flex w-full items-center justify-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-bold uppercase tracking-wider text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-              >
-                <Receipt className="h-4 w-4" aria-hidden />
-                Sipariş Ver
-              </button>
+              {/* Sprint B3b — the order submission CTA is gated on
+                  `orders_enabled`. With the feature off, the cart
+                  remains usable for browsing but the customer can no
+                  longer submit — the spec note in CartDrawerProps
+                  explains the rationale. */}
+              {ordersEnabled ? (
+                <button
+                  type="button"
+                  onClick={() => setCheckoutOpen(true)}
+                  className="flex w-full items-center justify-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-bold uppercase tracking-wider text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+                >
+                  <Receipt className="h-4 w-4" aria-hidden />
+                  Sipariş Ver
+                </button>
+              ) : (
+                <p
+                  role="status"
+                  className="rounded-md border border-border bg-background px-3 py-2 text-center text-xs text-muted"
+                >
+                  Sipariş verme bu pakete dahil değil.
+                </p>
+              )}
             </footer>
           ) : null}
         </div>
