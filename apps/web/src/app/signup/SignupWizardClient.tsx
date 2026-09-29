@@ -3,6 +3,9 @@
 import { useSignupWizard } from "@/lib/stores/signup-wizard";
 
 import { Step1BusinessInfo } from "@/components/signup/Step1BusinessInfo";
+import { Step2LocaleCurrency } from "@/components/signup/Step2LocaleCurrency";
+import { Step3FirstCategory } from "@/components/signup/Step3FirstCategory";
+import { Step4FirstItems } from "@/components/signup/Step4FirstItems";
 
 /**
  * SignupWizardClient — Sprint C2.
@@ -12,9 +15,8 @@ import { Step1BusinessInfo } from "@/components/signup/Step1BusinessInfo";
  * server shell so cookies + redirect stay on the server side and
  * only this branch hydrates.
  *
- * Each case returns a small inline placeholder while the matching
- * step component lands in commits C2.5 / C2.6 — once all five real
- * components exist, the placeholders are swapped for imports.
+ * Step 5 still returns a placeholder — it lands in the next commit
+ * along with the success/QR confirmation screen.
  */
 
 function StepPlaceholder({ number, title }: { number: number; title: string }) {
@@ -38,14 +40,11 @@ export function SignupWizardClient() {
     case 1:
       return <Step1BusinessInfo />;
     case 2:
-      // Real component lands in Sprint C2.5 — Step2LocaleCurrency.
-      return <StepPlaceholder number={2} title="Dil ve para birimi" />;
+      return <Step2LocaleCurrency />;
     case 3:
-      // Real component lands in Sprint C2.5 — Step3FirstCategory.
-      return <StepPlaceholder number={3} title="İlk kategori" />;
+      return <Step3FirstCategory />;
     case 4:
-      // Real component lands in Sprint C2.5 — Step4FirstItems.
-      return <StepPlaceholder number={4} title="İlk ürünler" />;
+      return <Step4FirstItems />;
     case 5:
       // Real component lands in Sprint C2.6 — Step5SuccessQR.
       return <StepPlaceholder number={5} title="Hazır!" />;
