@@ -360,6 +360,10 @@ REST_FRAMEWORK = {
         # tier). Same 60/min/IP bucket as the public menu read endpoint
         # since they're usually fetched together.
         "public_settings": "60/min",
+        # Sprint C1 — Self-serve signup endpoint. Stricter bucket to
+        # slow account-creation spam (10/hour/IP). The wizard's
+        # check-slug endpoint uses the default 60/min/IP.
+        "signup": "10/hour",
     },
     # SessionAuth enforces CSRF on unsafe methods (POST/PUT/PATCH/DELETE).
     # This is the default but made explicit so future contributors don't relax it.
