@@ -29,6 +29,48 @@ import type { FeatureKey, Plan } from "@/types/admin";
  */
 export type PlanTier = Plan;
 
+// ---------------------------------------------------------------------------
+// Compliance / mevzuat fields (Sprint D1a — D-031)
+//
+// Mirror of the 6 MenuItem fields added by Sprint D1 in the backend
+// (calories, portion_size, ingredients, legal_notes, contains_alcohol,
+// is_halal). Exposed by `apps.menu.services.visibility.build_items_payload`
+// and consumed by:
+//   - `<ItemDetailDrawer>` — mevzuat badge rendering on the public menu page
+//   - `/m/[slug]/print`  — A4 printable export of the menu (Sprint D2)
+//   - the future SaaS PDF endpoint (Sprint D2 backend, V2)
+//
+// `null` / empty strings are explicitly allowed on the wire; the UI hides
+// individual badges when their source field is missing. This matches the
+// backend's "optional compliance data, never blocks menu publish" policy.
+// ---------------------------------------------------------------------------
+
+/**
+ * `ComplianceFields` — the subset of MenuItem attributes that satisfy
+ * Türk Gıda Kodeksi / etiket yönetmeliği disclosure requirements.
+ *
+ * All fields are optional because compliance disclosure is opt-in per
+ * tenant — a freshly seeded tenant has none of them populated.
+ */
+export interface ComplianceFields {
+  /** Calories per serving (positive int, kcal). */
+  calories?: number | null;
+  /** Human-readable portion size ("250g", "1 porsiyon", "350 ml"). */
+  portion_size?: string;
+  /** Free-text ingredients list ("Buğday unu, şeker, tereyağı, ..."). */
+  ingredients?: string;
+  /** Free-text allergen / warning notes ("Fıstık içerir", "Süt izi"). */
+  legal_notes?: string;
+  /** When true, surfaces an amber "🍷 Alkol içerir" callout in the drawer
+   *  and the print page. False / null suppresses the callout. */
+  contains_alcohol?: boolean;
+  /** Tri-state halal flag:
+   *    true  → green "Helal" badge
+   *    false → red   "Helal Değil" badge
+   *    null  → badge suppressed (tenant hasn't disclosed) */
+  is_halal?: boolean | null;
+}
+
 // Re-export the feature-flag union under its public-side name so callers
 // don't need to reach into the admin types module just to render a banner.
 // `FeatureName` reads better than `FeatureKey` in client-side flag checks

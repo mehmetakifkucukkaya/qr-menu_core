@@ -83,6 +83,14 @@ export interface PublicMenuItem {
   spice_level: number; // 0 = none
   allergens: string[]; // allergen codes (e.g. "gluten")
   dietary_tags: string[]; // dietary tag codes (e.g. "vegan")
+  // Sprint D1a — mevzuat uyum alanları (D-031). All optional; null /
+  // missing values render nothing in the public drawer and print page.
+  calories?: number | null;
+  portion_size?: string;
+  ingredients?: string;
+  legal_notes?: string;
+  contains_alcohol?: boolean;
+  is_halal?: boolean | null;
 }
 
 export interface PublicMenuCategory {
