@@ -301,6 +301,33 @@ def get_usage_snapshot(
 
 
 # ---------------------------------------------------------------------------
+# Public settings (Sprint B3 — public feature-flag reader)
+# ---------------------------------------------------------------------------
+
+
+def get_public_settings(organization: Organization) -> dict:
+    """Return the tenant-safe public settings payload.
+
+    Powers ``GET /api/v1/public/settings/<slug>/`` — the Next.js
+    public menu reads this to decide whether to render the cart
+    drawer, loyalty badge, account link, and payment step.
+
+    Only :data:`FEATURE_FIELDS` + ``active_plan`` are exposed.
+    Internal fields like ``billing_notes``, ``id``, ``updated_at``
+    and the OneToOne ``organization`` FK are deliberately omitted —
+    public clients don't need them, and we want to keep the API
+    surface tight in case the slug leaks via the QR code.
+    """
+    ps = get_plan_settings(organization)
+    return {
+        "slug": organization.slug,
+        "name": organization.name,
+        "active_plan": ps.active_plan,
+        "features": {feature: bool(getattr(ps, feature)) for feature in FEATURE_FIELDS},
+    }
+
+
+# ---------------------------------------------------------------------------
 # Plan matrix + upgrade preview
 # ---------------------------------------------------------------------------
 
