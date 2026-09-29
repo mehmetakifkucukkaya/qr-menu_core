@@ -711,6 +711,294 @@ export interface LoyaltyAdjustResponse {
   new_balance: number;
 }
 
+// ---------------------------------------------------------------------------
+// Billing (Sprint B2 frontend — backend shipped in B1)
+// ---------------------------------------------------------------------------
+//
+// URL prefix: `/api/v1/admin/billing/` (mounted via `apps.billing.urls_admin`).
+// Six endpoints total — plan, usage, limits, preview-upgrade, reset-usage.
+// All return the custom `_wrap()` `{ data, meta }` envelope on read; on
+// write (`PUT plan/`, `POST preview-upgrade/`, `POST reset-usage/`) the
+// backend returns the updated payload wrapped the same way. adminFetch
+// unwraps `{ data }` automatically.
+//
+// __spec_drift__: the B2 brief sketched the `usage` payload with
+// `views`/`scans`/... at the root, but the B1 serializer nests them
+// under `metrics`. The shapes below mirror the B1 contract exactly.
+//
+// __spec_drift__: the B2 brief listed the `limits.tiers[]` row as
+// `{plan, label, price_monthly_try, features, limits}`. B1 ships
+// `{id, label, limits, features, is_current}` — there's no `plan` or
+// `price_monthly_try` key. The frontend renders placeholder prices
+// from a static lookup so the comparison table can show ₺99/299/599/999
+// without depending on backend changes.
+// ---------------------------------------------------------------------------
+
+/** Plan tier keys — mirrors `apps.billing.constants.PLAN_TIER_ORDER`. */
+export type Plan = "basic" | "pro" | "orders" | "ops";
+
+/** Plan tier display label — Turkish, mirrors backend PLAN_CHOICES labels. */
+export const PLAN_LABEL: Record<Plan, string> = {
+  basic: "QR Menü Basic",
+  pro: "QR Menü Pro",
+  orders: "QR Sipariş",
+  ops: "Restoran Ops",
+};
+
+/**
+ * Visual tier accent — used by `PlanCard` + `LimitComparisonTable` to
+ * colour the active/featured tier column. Chosen to map onto Tailwind
+ * defaults so we don't need a custom palette.
+ */
+export const PLAN_TONE: Record<Plan, string> = {
+  basic: "slate",
+  pro: "blue",
+  orders: "amber",
+  ops: "violet",
+};
+
+/**
+ * V1 placeholder monthly prices (TRY). Used for the comparison table
+ * headline + plan card price chip — backend does NOT expose pricing in
+ * V1 (D-026). When the pricing matrix moves to a `PlanTierPrice` DB row
+ * (V2 SaaS), replace this with the API field and drop the constant.
+ */
+export const PLAN_PRICE_TRY: Record<Plan, number> = {
+  basic: 99,
+  pro: 299,
+  orders: 599,
+  ops: 999,
+};
+
+/**
+ * 8 boolean feature flags. Mirrors `apps.billing.constants.FEATURE_FIELDS`
+ * — kept in display order for the `<FeatureFlagList>` component.
+ */
+export const FEATURE_KEYS = [
+  "cart_enabled",
+  "orders_enabled",
+  "loyalty_enabled",
+  "customer_accounts_enabled",
+  "payments_enabled",
+  "ai_pdf_import_enabled",
+  "ai_translate_enabled",
+  "advanced_analytics_enabled",
+] as const;
+
+export type FeatureKey = (typeof FEATURE_KEYS)[number];
+
+/**
+ * Display label for each feature flag (Turkish). Mirrors the copy used in
+ * the audit messages + admin error toasts so the UI reads consistently.
+ */
+export const FEATURE_LABEL: Record<FeatureKey, string> = {
+  cart_enabled: "Sepet",
+  orders_enabled: "Siparişler",
+  loyalty_enabled: "Sadakat Programı",
+  customer_accounts_enabled: "Müşteri Hesapları",
+  payments_enabled: "Online Ödeme",
+  ai_pdf_import_enabled: "AI PDF Import",
+  ai_translate_enabled: "AI Çeviri",
+  advanced_analytics_enabled: "Gelişmiş Analitik",
+};
+
+/** Per-feature tooltip body shown next to the badge in `<FeatureFlagList>`. */
+export const FEATURE_DESCRIPTION: Record<FeatureKey, string> = {
+  cart_enabled:
+    "Müşterileriniz QR menüden sepete ürün ekleyip kasaya gelmeden önce siparişlerini hazırlayabilir.",
+  orders_enabled:
+    "Restoranda canlı sipariş akışı — mutfak ekranı, durum takibi ve masa numarası yönetimi.",
+  loyalty_enabled:
+    "Müşterilerinize sipariş başına puan kazandırın, puanları indirimle harcatın.",
+  customer_accounts_enabled:
+    "Müşteriler kendi hesaplarını oluşturup sipariş geçmişini görebilir.",
+  payments_enabled:
+    "Online ödeme entegrasyonu (iyzico / Stripe) ile ödemeyi menüden tahsis edin.",
+  ai_pdf_import_enabled:
+    "PDF menüden otomatik ürün / kategori / fiyat çıkarımı (AI).",
+  ai_translate_enabled:
+    "AI destekli çoklu dil çevirisi — ürün açıklamalarını otomatik çevirir.",
+  advanced_analytics_enabled:
+    "Şube, saat dilimi ve müşteri segmenti bazlı detaylı analitik panelleri.",
+};
+
+/**
+ * Response shape of `GET /api/v1/admin/billing/plan/`. Mirrors the
+ * `PlanSettingsSerializer` payload — the 8 feature flags are nested
+ * under the `features` key (B1 contract).
+ */
+export interface PlanSettings {
+  id: number;
+  organization: number;
+  active_plan: Plan;
+  features: Record<FeatureKey, boolean>;
+  billing_notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Body shape of `PUT /api/v1/admin/billing/plan/`. All fields optional —
+ * the backend treats this as a PATCH (omitted fields keep current value).
+ *
+ * Spec drift: the B2 brief described `{active_plan, cart_enabled, ...}`
+ * at the root, but the B1 serializer accepts `features` as a sub-dict.
+ * The frontend uses the nested form so the backend can validate the
+ * dict shape once.
+ */
+export interface PlanSettingsUpdate {
+  active_plan?: Plan;
+  features?: Partial<Record<FeatureKey, boolean>>;
+  billing_notes?: string;
+}
+
+/**
+ * Single metric row inside the `usage` snapshot — mirrors
+ * `UsageMetricSerializer`. ``limit`` is `null` for unlimited metrics
+ * (V1: never, but the type stays null-safe); ``pct`` is `null` when the
+ * limit is 0 or null (so the frontend can render "sınırsız").
+ */
+export interface PlanUsageMetric {
+  used: number;
+  limit: number | null;
+  pct: number | null;
+}
+
+/**
+ * 5 monthly counters exposed by `GET /api/v1/admin/billing/usage/`.
+ * Mirrors `USAGE_METRICS` in `apps.billing.constants`.
+ */
+export type PlanUsageMetricKey =
+  | "views"
+  | "scans"
+  | "ai_pdf_imports"
+  | "ai_translate_ops"
+  | "ai_description_ops";
+
+/** Display label for each usage metric — Turkish. */
+export const PLAN_USAGE_LABEL: Record<PlanUsageMetricKey, string> = {
+  views: "Aylık Görüntülenme",
+  scans: "Aylık QR Tarama",
+  ai_pdf_imports: "AI PDF Import",
+  ai_translate_ops: "AI Çeviri İşlemi",
+  ai_description_ops: "AI Açıklama Üretimi",
+};
+
+/**
+ * Response shape of `GET /api/v1/admin/billing/usage/`. Mirrors
+ * `UsageSnapshotSerializer` — metrics live under `metrics`, not at the
+ * root (B1 contract).
+ */
+export interface PlanUsage {
+  period_year: number;
+  period_month: number;
+  metrics: Record<PlanUsageMetricKey, PlanUsageMetric>;
+}
+
+/**
+ * Single resource key tracked by the limit matrix. Mirrors
+ * `RESOURCE_FIELDS` in `apps.billing.constants`.
+ */
+export type PlanLimitKey =
+  | "items"
+  | "categories"
+  | "branches"
+  | "locales"
+  | "monthly_views"
+  | "monthly_scans"
+  | "ai_pdf_imports"
+  | "ai_translate_ops"
+  | "ai_description_ops";
+
+/** Display label + description for each limit row in the comparison table. */
+export const PLAN_LIMIT_LABEL: Record<PlanLimitKey, string> = {
+  items: "Ürün sayısı",
+  categories: "Kategori sayısı",
+  branches: "Şube sayısı",
+  locales: "Desteklenen dil",
+  monthly_views: "Aylık görüntülenme",
+  monthly_scans: "Aylık QR tarama",
+  ai_pdf_imports: "AI PDF import / ay",
+  ai_translate_ops: "AI çeviri işlemi / ay",
+  ai_description_ops: "AI açıklama / ay",
+};
+
+/**
+ * Single tier row of `GET /api/v1/admin/billing/limits/`. Mirrors
+ * `LimitTierSerializer` — ``id`` (not ``plan``) + no ``price_monthly_try``.
+ * ``limits`` values can be `null` (unlimited — V1 OPS for items/categories/branches).
+ */
+export interface PlanLimit {
+  id: Plan;
+  label: string;
+  limits: Record<PlanLimitKey, number | null>;
+  features: Record<FeatureKey, boolean>;
+  is_current: boolean;
+}
+
+/** Response shape of `GET /api/v1/admin/billing/limits/`. */
+export interface PlanLimitMatrix {
+  current_plan: Plan;
+  tiers: PlanLimit[];
+}
+
+/**
+ * Single feature-flag delta in the upgrade preview payload.
+ * ``direction`` is `"up"` (false→true) or `"down"` (true→false).
+ */
+export interface FeatureDelta {
+  feature: FeatureKey;
+  before: boolean;
+  after: boolean;
+  direction: "up" | "down";
+}
+
+/**
+ * Single resource-limit delta in the upgrade preview payload. ``before``
+ * and ``after`` can be `null` (unlimited) — UI renders "Sınırsız".
+ */
+export interface ResourceDelta {
+  resource: PlanLimitKey;
+  before: number | null;
+  after: number | null;
+}
+
+/** Tiny tier summary block inside the preview payload. */
+export interface UpgradePreviewTier {
+  id: Plan;
+  label: string;
+}
+
+/**
+ * Response shape of `POST /api/v1/admin/billing/limits/preview-upgrade/`.
+ * Mirrors `apps.billing.services.preview_upgrade` — deltas use
+ * ``feature`` + ``before``/``after`` keys (not ``name`` + ``old``/``new``).
+ */
+export interface UpgradePreview {
+  current_plan: Plan;
+  target_plan: Plan;
+  current_tier: UpgradePreviewTier;
+  target_tier: UpgradePreviewTier;
+  feature_deltas: FeatureDelta[];
+  resource_deltas: ResourceDelta[];
+}
+
+/** Request body of `POST .../preview-upgrade/`. */
+export interface UpgradePreviewRequest {
+  target_plan: Plan;
+}
+
+/**
+ * Response shape of `POST /api/v1/admin/billing/reset-usage/`.
+ *
+ * __spec_drift__: the B2 brief described `{ deleted: int }`. B1 ships
+ * `{ reset_count, organization_id }`. We mirror the actual contract.
+ */
+export interface ResetUsageResponse {
+  reset_count: number;
+  organization_id: number;
+}
+
 /**
  * Mirror of `apps.account.serializers.AdminLoyaltySettingsSerializer` —
  * `GET` / `PUT /api/v1/account/admin/loyalty/settings/`.
