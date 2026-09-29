@@ -1606,102 +1606,57 @@ Local'de birden fazla Postgres instance çakışmasın diye ana stack'te host po
 | D-030 | 2026-09-29 | Self-Serve Onboarding Wizard Pattern (Sprint C — 5-step wizard + POST /api/v1/auth/signup/ atomic transaction + PlanSettings(BASIC→14d OPS trial) auto-create + slug availability real-time check + Modern Cafe demo template import + TrialBanner countdown + signup trial hook + complete_onboarding idempotent category/items + first QR bootstrap + audit tenant_created action) | aktif |
 | D-031 | 2026-09-29 | Türk Gıda Kodeksi Mevzuat Uyum Pattern (Sprint D1 — MenuItem 6 yeni alan: calories/portion_size/ingredients/legal_notes/contains_alcohol/is_halal + nullable+blank migration + public payload expose + admin form fieldsets + Sprint C wizard auto-fill + Sprint B3 FeatureFlag consumer + D-024 payload expansion pattern) | aktif |
 | D-032 | 2026-09-29 | Printable/PDF Menü Export Pattern (Sprint D2 — /m/[slug]/print A4 server page + @media print stylesheet hide nav/header/banner + window.print() trigger + kategori başına break-before: page + 11pt font + 15mm margin + 6 mevzuat badge'leri + /m/[slug] PrintButton desktop mount) | aktif |
+| D-033 | 2026-09-29 | MediaAsset + Storage Abstraction Pattern (Sprint E — apps/media MediaAsset tenant-scoped model + LocalStorageBackend/S3StorageBackend factory + Pillow resize+thumbnail image processing + 3 admin endpoint + django-storages[boto3] AWS S3/Cloudflare R2 + backward-compatible ImageField retention + soft-delete + tenant-isolated storage_key template) | aktif |
 
 ---
 
-## KARAR D-031 — Türk Gıda Kodeksi Mevzuat Uyum Pattern (Sprint D1)
+## KARAR D-033 — MediaAsset + Storage Abstraction Pattern (Sprint E)
 
 **Karar:**
-- **6 mevzuat alanı:** ``MenuItem.calories`` (PositiveIntegerField, nullable, kcal), ``portion_size`` (CharField max_length=60, blank, "250g"/"1 porsiyon"), ``ingredients`` (TextField, blank, virgülle ayrılmış içerik), ``legal_notes`` (TextField, blank, alerjen uyarıları), ``contains_alcohol`` (BooleanField, vergi/yasal etiket), ``is_halal`` (BooleanField, nullable None=belirtilmemiş).
-- **Nullable + blank:** Migration 0009 backward-compatible — eski ürünler migration sonrası null/empty değerle yaşar. Operator admin panelinden doldurur.
-- **Public payload expose:** ``apps.menu.services.visibility.get_full_menu_payload`` 6 alanı public menü response'a ekler (D-024 12→18 field pattern reuse). Frontend ItemDetailDrawer mevzuat section render eder.
-- **Admin form fieldsets:** ``MenuItemAdmin.fieldsets`` yeni "Mevzuat Bilgileri (Türk Gıda Kodeksi)" fieldset'i (calories + portion_size + ingredients + legal_notes + contains_alcohol + is_halal, açıklayıcı description ile).
-- **Validation:** ``calories`` PositiveIntegerField → negatif olamaz. ``portion_size`` CharField max 60. ``is_halal`` None/True/False üç durumlu (Sprint D1'de 3-state semantics).
-- **Public render UX:** Frontend ItemDetailDrawer 6 badge: ``🔥 350 kcal`` (Flame), ``📏 250g`` (Ruler), ``Helal`` / ``Helal Değil`` (yeşil/kırmızı), ``🍷 Alkol içerir`` (amber callout), ``İçindekiler`` chip listesi, ``Yasal not`` callout (alerjen içeriyorsa kırmızı border).
-- **Out-of-scope (V2 SaaS):** Allergens EU 14 standard list mapping, otomatik kalori hesaplama (AI vision), gıda etiket mevzuatı compliance certification, Türk Gıda Kodeksi otomatik kontrol.
-- **Sprint A + B + C reuse:** D-024 (Sprint A public payload 12→18 expansion pattern), D-025 (LoyaltySettings OneToOne), D-026 (Online ödeme — alcohol flag vergi uyumu için), D-028 (PlanSettings tenant-scoped), D-030 (Signup — wizard step 4 mevzuat alanlarına dair initial skip option).
+- **MediaAsset modeli:** Tenant-isolated (organization FK), 4 kind enum (image/video/audio/file), storage_key + public_url ayrı tutulur (CDN-friendly), width/height/size_bytes/alt_text uploaded_by FK + is_active soft-delete + thumbnail_key/url.
+- **Backward-compatible ImageField retention:** Organization.logo, cover_image, MenuCategory.image, MenuItem.image AYNI KALIR. Yeni upload'lar MediaAsset üzerinden. V2 SaaS feature: V1 → V2 data migration script.
+- **Storage backend factory:** ``apps.media.storage.get_storage_backend()`` singleton — ``settings.MEDIA_STORAGE_BACKEND`` env ile ``local`` (default) veya ``s3`` (prod, django-storages[boto3]) seçilir.
+- **LocalStorageBackend:** Django ``default_storage`` üzerinden MEDIA_ROOT'a yazar. V1 demo bu backend kullanır.
+- **S3StorageBackend:** AWS S3 / Cloudflare R2 (R2 = S3-compatible + AWS_S3_ENDPOINT_URL). django-storages[boto3] lazy import. ``MEDIA_PUBLIC_BASE_URL`` env ile CDN override.
+- **Tenant isolation:** ``build_storage_key(org_slug, kind, filename)`` → ``tenants/{org_slug}/{kind}/{uuid}{ext}``. UUID collision-safe, client hiçbir zaman key'i kontrol etmez.
+- **Image processing (Pillow):** resize max 1920x1080 (aspect preserved), 400x400 JPEG thumbnail, EXIF orientation (``ImageOps.exif_transpose``).
+- **3 yeni endpoint:** POST /api/v1/admin/media/upload/, GET /api/v1/admin/media/, DELETE /api/v1/admin/media/<id>/. Soft-delete + audit (media_uploaded, media_deleted).
+- **Eski /api/v1/admin/media/upload korundu** (Sprint 5A backward compat).
+- **Frontend (Sprint E2):** MediaUploader drag-drop + XHR progress + multi-file + validation retry. MediaGallery grid + filter + delete ConfirmDialog + IntersectionObserver lazy. 6 yeşil Node test (jsdom + tsx).
+- **Out-of-scope (V2 SaaS):** AVIF/WebP transcoding, video processing + HLS streaming, CDN image resizer (Cloudflare Images / Imgix), bulk upload, EXIF GPS stripping.
+- **Sprint A + B + C + D reuse:** D-024 (public payload), D-028 (PlanSettings tenant), D-030 (Signup), D-031 (Mevzuat — print image preview).
 
 **Tarih:** 2026-09-29
 
-**Bağlam:** V1 satışa hazırlık Faz 4 — Türkiye pazarı için mevzuat uyumu. Rakiplerin mevzuat/uyum argümanına karşı güçlü ürün. Competitor audit (2026-09-28) "Türk Gıda Kodeksi mevzuat alanları + printable fiyat listesi" V1 demo için kritik özellik olarak işaretledi. Sprint A + Sprint B serisi + Sprint C tamamlandıktan sonra Faz 4 backend kısmı.
+**Bağlam:** V1 satışa hazırlık Faz 5 — Medya ve production olgunluğu. Sprint D mevzuat + printable tamamlandıktan sonra Faz 5.
 
 **Alternatifler:**
-- **6 alan vs 3 alan:** calories + portion_size + ingredients yeterli mi yoksa legal_notes + alcohol + halal de gerekli mi? Türk Gıda Kodeksi için 6 alan zorunlu (alıcı bilgilendirme). 6 tercih edildi
-- **Nullable BooleanField (is_halal) vs PositiveSmallIntegerField (3 enum):** 3-state semantics için nullable Boolean (None/True/False) Django standardı. Enum daha tip-güvenli ama migration zor. Boolean tercih
-- **ingredients TextField vs JSONField:** JSON yapısal ama V1 admin'de text girişi daha kolay. Comma-splitting client-side. TextField tercih (V2 SaaS feature: JSONField with autocomplete)
-- **Migration'da default value:** NULL default (nullable) vs "" default. "" default for TextField + None for numeric/Boolean tercih (Django ORM standardı)
-- **Public payload expose:** 6 alanı public'te göstermek gerekli mi (Privacy concerns)? Türk Gıda Kodeksi zorunlu bilgilendirme — public'te olmalı. Expose edildi
-- **Allergens EU 14 standard mapping:** V1'de M2M allergens modeli zaten var (D-021'den). 6 alana ek olarak allergens M2M ayrı kullanılır. Sprint D1'de dokunulmadı (reuse)
-- **AI PDF import auto-fill:** Sprint 7A regex pattern best-effort mapping. V1'de eklenmedi (Sprint D3 follow-up). V2 SaaS feature: AI vision mapping
-- **Admin form inline vs separate page:** Django admin fieldset ile inline edit. V1 demo için inline tercih (UX hızı)
+- MediaAsset vs ImageField direct S3 — yeni model migration riski yok
+- django-storages global MEDIA backend vs factory — factory flexible
+- Pillow AVIF/WebP vs JPEG/PNG — V1 demo için build complexity düşük
+- CDN image resizer (Cloudflare Images / Imgix) — V2 SaaS feature
+- Multi-file upload — V1 sequential, V2 SaaS chunked
+- Video processing — V2 SaaS feature (FFmpeg + HLS)
+- S3 direct upload (presigned URL) — V2 SaaS feature
+- Storage backend Protocol vs concrete class — V1 concrete yeterli
+- Soft-delete vs hard-delete — V1 soft-delete (GDPR/KVKK compliance)
+- Tenant storage prefix slug vs ID — slug okunabilir
+- UUID collision-safe key — V1 UUID4 hex yeterli
 
-**Seçim gerekçesi:**
-- **6 alan:** Türk Gıda Kodeksi tam coverage (kalori + porsiyon + içindekiler + yasal not + alkol + helal). Rakiplerden ayrışma
-- **Nullable BooleanField (is_halal):** Django standardı, 3-state semantics native
-- **TextField comma-split (ingredients):** Admin UX kolay, client-side parse basit
-- **Public payload expose:** Yasal zorunluluk + müşteri güveni
-- **Migration backward-compatible:** Eski data migration yok, operator manuel doldurur
-- **Sprint D1 backend only:** Frontend Sprint D2 (Sprint D2 worker paralel)
+**Seçim gerekçesi:** MediaAsset yeni model (no migration risk), factory pattern (V1 demo local, prod s3 tek env değişikliği), Pillow JPEG/PNG (build complexity düşük), tenant slug prefix (okunabilir + debug), soft-delete (GDPR/KVKK), django-storages lazy import (V1 demo s3 optional), CDN override via MEDIA_PUBLIC_BASE_URL.
 
 **Sonuçlar:**
-- **D1a backend (3 commit):** MenuItem 6 mevzuat alanı + migration 0009 + serializer + public payload + admin form fieldsets + 7 yeşil compliance test
-- **D1b frontend (5 commit, worker):** ItemDetailDrawer mevzuat section + ItemCard drawer integration + print page foundation
-- **D2 frontend (2 commit, worker):** PrintButton + print stylesheet + /m/[slug]/print A4 page
-- **Toplam Sprint D (frontend + backend):** 9 commit (3 backend + 6 frontend)
-- **Backend test sayısı:** 464 baseline → **471 yeşil** (+7 compliance tests). 18 payment spec gap unchanged
-- **Frontend:** tsc 0 error / lint 0 warning / build ✓ — ``/m/[businessSlug]/print`` 187 B + ``/m/[businessSlug]`` 26.7 kB
+- E1 backend (2 commit root): MediaAsset + storage + processing + 3 endpoint + migration + 12 yeşil test
+- E2 frontend (5 commit worker): api-media + MediaUploader + MediaGallery + /admin/media + sidebar nav + 6 yeşil Node test
+- Toplam Sprint E: 7 commit
+- Backend test: 471 baseline → **483 yeşil** (+12)
+- Frontend: /admin/media 9 kB + 98 kB First Load JS
+- Demo: /admin/media → drag-drop → progress → thumbnail → gallery → delete
+- Production deploy: pip install django-storages[boto3] + env (MEDIA_STORAGE_BACKEND=s3 + AWS_*)
 
 **Notlar:**
-- Modern Cafe demo seed güncellemesi Sprint D3'te skip edildi — 25 ürünün tümüne manuel mevzuat eklemek seed_demo.py'ı şişirir. Sprint E polish sprint'inde eklenebilir
-- Allergens M2M modeli zaten Sprint 7A'dan var (D-021) — mevzuat alanlarıyla entegre
-- V1 demo: drawer'da Modern Cafe items için mevzuat badge'leri hidden (boş) — Sprint E'de seed update ile dolu gösterebilir
-- Türk Gıda Kodeksi otomatik kontrol V2 SaaS feature — V1'de operator sorumluluğunda
-- AI vision ile otomatik kalori hesaplama V2 SaaS feature
-- 18 payment spec gap pre-existing, Sprint D dokunmadı
-
----
-
-## KARAR D-032 — Printable/PDF Menü Export Pattern (Sprint D2)
-
-**Karar:**
-- **/m/[slug]/print server page:** A4 portrait layout, kategori başına sayfa kırılma (``break-before: page``), 11pt font, 15mm margin, noindex meta. Bookmarklanabilir.
-- **@media print stylesheet:** ``apps/web/src/styles/print.css`` global. Nav, header, sticky banner (UpgradeBanner, TrialBanner), footer gizlenir. Sadece menü items + tenant header + generation timestamp footer görünür.
-- **PrintButton component:** Window.print() trigger. Desktop only (mobile print UX zayıf). Mount: ``/m/[businessSlug]`` header sağında (≥ md breakpoint).
-- **Item detail integration:** ItemDetailDrawer mevzuat section + print page item row aynı badge component'leri kullanır — DRY.
-- **PDF backend endpoint:** V1'de YOK (V2 SaaS feature — WeasyPrint/ReportLab). Frontend contract hazır, backend Sprint E veya sonra.
-- **Footer:** İşletme adı + TR/EN localized generation timestamp (``new Date().toLocaleString('tr-TR')``).
-- **Out-of-scope (V2 SaaS):** PDF binary export, multi-language A4 brochure, otomatik email gönderimi, özelleştirilebilir template.
-- **Sprint A + B + C + D1 reuse:** D-024 (Sprint A public payload — print page mevzuat field'larını okur), D-027 (UI primitives — Card reuse), D-029 (Public feature flags — print button hide when feature disabled), D-030 (Signup wizard — first category'ye mevzuat field'ları initial skip), D-031 (Mevzuat alanları — print page render).
-
-**Tarih:** 2026-09-29
-
-**Bağlam:** V1 satışa hazırlık Faz 4.2 — İşletme sahibi menüyü kapıya/masaya asılacak fiyat listesi olarak yazdırabilsin veya PDF indirebilsin. Sprint D1 mevzuat alanları tamamlandıktan sonra Faz 4.2 frontend kısmı. Sprint D2 worker paralel yürütüldü (D1b+D2 birleşik worker).
-
-**Alternatifler:**
-- **HTML print vs PDF binary:** HTML print native (window.print()) + tarayıcı PDF export. PDF binary backend WeasyPrint/ReportLab. V1 demo için HTML print yeterli (kullanıcı tarayıcıdan PDF export edebilir). PDF V2 SaaS feature
-- **Server component print page vs client component:** Server component = SEO-safe + no JavaScript needed for print. Client component gereksiz. Server tercih
-- **Kategori başına sayfa kırılma vs sürekli liste:** Kategori başına kırılma = profesyonel görünüm, kapıya asılır. Sürekli liste daha kompakt ama okunaksız. Kırılma tercih
-- **A4 portrait vs landscape:** Portrait = dikey fiyat listesi (standart). Landscape = 2 sütunlu (kompakt). Portrait tercih (Türkiye'de standart)
-- **Font size 11pt vs 10pt vs 12pt:** 11pt = okunabilir + kompakt. 10pt çok küçük, 12pt çok büyük. 11pt tercih
-- **Margin 15mm vs 10mm vs 20mm:** 15mm standart yazıcı margin. 10mm yazıcı sınırına yakın, 20mm aşırı boşluk. 15mm tercih
-- **Footer generation timestamp:** V1'de client-side locale string. V2 SaaS feature: backend-generated timestamp (timezone-aware)
-- **PrintButton desktop-only:** Mobile print UX zayıf (kullanıcı yazıcıya bağlı değil). Desktop only gizleme V1'de kabul edilebilir. V2 feature: mobile print preview (PDF download)
-- **ItemDetailDrawer'da mevzuat + print page aynı badge:** DRY principle. Tek component reuse.
-
-**Seçim gerekçesi:**
-- **HTML print (V1):** Backend complexity yok, native browser PDF export yeterli, kullanıcı kontrolü
-- **Server component print page:** SEO + accessibility (no JS needed)
-- **Kategori başına sayfa kırılma:** Profesyonel görünüm, kapı asılacak format
-- **A4 portrait + 11pt + 15mm:** Türkiye yazıcı standartları
-- **Desktop-only PrintButton:** Mobile print zayıf UX
-- **DRY badge component:** ItemDetailDrawer + print page aynı render
-
-**Sonuçlar:**
-- **D2 frontend (worker ile birlikte D1b+D2 6 commit):** PrintButton + @media print stylesheet + /m/[businessSlug]/print page A4 layout
-- **Frontend:** tsc 0 error / lint 0 warning / build ✓ — ``/m/[businessSlug]/print`` 187 B
-- **Demo flow:** /m/modern-cafe → "🖨️ Yazdır" tıkla → window.print() → A4 print preview
-
-**Notlar:**
-- PDF binary backend endpoint Sprint E polish'te veya sonra eklenebilir
-- Mobile print UX V1'de skip edildi
-- AI import auto-fill mevzuat (V2 SaaS feature)
+- Worker auth-expire parçalı scope başarılı (E1 root 2 commit + E2 worker 5 commit)
+- Modern Cafe seed update (mevzuat + logo/cover) Sprint D3'te skip + Sprint E3 kapsamı dışı — Sprint E polish'te eklenebilir
+- 18 payment spec gap pre-existing, Sprint E dokunmadı
+- V1 demo local backend (MEDIA_ROOT). Production'a geçiş: pip install + env set
+- R2: ek olarak AWS_S3_ENDPOINT_URL + MEDIA_PUBLIC_BASE_URL
