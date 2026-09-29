@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -10,22 +10,35 @@ import {
   Eye,
   Info,
   LayoutDashboard,
+  Loader2,
   Sparkles,
 } from "lucide-react";
 
 import { useSignupWizard } from "@/lib/stores/signup-wizard";
+import {
+  generateFirstQR,
+  importDemoTemplate,
+  type FirstQRResponse,
+} from "@/lib/api-onboarding";
+import { AdminApiError } from "@/lib/api-admin";
 
 /**
  * Step5SuccessQR — wizard step 5 (final screen).
  *
- * Shows a success summary + three primary actions:
- *   - "/admin'e git"       → /admin/dashboard (the main operator
- *                            landing — replaces the redundant
- *                            /admin redirect target on the page)
- *   - "Menü önizleme"      → /m/<slug> (the public preview; the
- *                            slug field is the URL key)
- *   - "İlk QR'ı indir"     → disabled with a tooltip (Sprint C3 will
- *                            wire this to the QR-generation flow)
+ * Shows a success summary + four primary actions:
+ *   - "/admin'e git"          → /admin/dashboard (the main operator
+ *                               landing — replaces the redundant
+ *                               /admin redirect target on the page)
+ *   - "Menü önizleme"         → /m/<slug> (the public preview; the
+ *                               slug field is the URL key)
+ *   - "İlk QR'ı indir"        → POSTs /qr-codes/first/ and exposes
+ *                               the target_url + admin detail link.
+ *                               Sprint C3 backend handler is wired
+ *                               (apps/onboarding/services.generate_first_qr).
+ *   - "Demo menüden başla"    → POSTs /onboarding/demo-seed/ to copy
+ *                               Modern Cafe's published template into
+ *                               the new tenant menu (idempotent —
+ *                               second call returns skipped=true).
  *
  * Step 5 is also where the persisted form state stops mattering —
  * we proactively wipe the wizard store on mount so a reload doesn't
@@ -54,6 +67,12 @@ export function Step5SuccessQR() {
     // admin shell. Force a hard navigation so the wizard's persisted
     // state doesn't bleed into the admin route.
     router.push("/admin/dashboard");
+  }
+
+  function handleGoToAdminAfterSeed() {
+    // After the demo seed lands, hop into the admin dashboard so the
+    // operator can immediately see the imported menu in the Menus list.
+    router.push("/admin/menus");
   }
 
   return (
@@ -96,7 +115,7 @@ export function Step5SuccessQR() {
           <Eye className="h-4 w-4" />
           Menü önizleme
         </Link>
-        <QrDownloadButton disabled />
+        <QrDownloadButton />
       </div>
 
       <div className="rounded-md border border-dashed border-border bg-background/40 p-4 text-left text-xs text-muted">
@@ -104,18 +123,21 @@ export function Step5SuccessQR() {
           <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <div className="space-y-1">
             <p>
-              <strong className="text-text">İlk QR kodu oluşturma:</strong>{" "}
-              admin panelinden QR Codes menüsüne giderek dilediğiniz
-              zaman indirebilirsiniz.
+              <strong className="text-text">QR kodu yönetimi:</strong>{" "}
+              admin panelindeki QR Codes menüsünden yeni QR&apos;lar
+              oluşturabilir, var olanları yeniden adlandırabilirsiniz.
             </p>
             <p className="flex items-center gap-1">
               <Sparkles className="h-3 w-3" />
-              Sprint C3&apos;te demo seed (Modern Cafe şablonu) ve
-              TrialBanner da aktif olacak.
+              Deneme süreniz başladı — üst şeritteki{" "}
+              <strong className="text-text">Plan &amp; Limitler</strong>{" "}
+              bağlantısından kalan gün sayısını görebilirsiniz.
             </p>
           </div>
         </div>
       </div>
+
+      <DemoSeedPanel onAfterSeed={handleGoToAdminAfterSeed} />
 
       <p className="text-xs text-muted">
         <Link href="/login" className="hover:text-primary">
@@ -186,21 +208,195 @@ function formatLocales(form: SummaryPanelProps["form"]): string {
 }
 
 // ---------------------------------------------------------------------------
-// QrDownloadButton — disabled stub. Sprint C3 will swap the onClick for
-// the QR-generation endpoint and remove the disabled + tooltip pair.
+// QrDownloadButton — Sprint C3b active.
+//
+// Fires POST /api/v1/qr-codes/first/ (idempotent — returns the
+// existing QR on subsequent calls). On success the button morphs
+// into a "QR'ı yönet" link pointing at /admin/qr-codes/<id>, plus
+// a copy-target affordance for the target_url. On failure we surface
+// the error inline (no toast library yet — keep the dependency surface
+// small for V1).
 // ---------------------------------------------------------------------------
 
-function QrDownloadButton({ disabled }: { disabled?: boolean }) {
+function QrDownloadButton() {
+  const [qr, setQr] = useState<FirstQRResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleClick() {
+    if (loading || qr) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await generateFirstQR();
+      setQr(res);
+    } catch (err) {
+      const msg =
+        err instanceof AdminApiError
+          ? err.message
+          : "QR oluşturulamadı. Lütfen tekrar deneyin.";
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (qr) {
+    return (
+      <div
+        data-testid="qr-success"
+        className="inline-flex flex-col items-center gap-1 rounded-md border border-primary/40 bg-primary/5 px-4 py-2 text-xs text-text"
+      >
+        <Link
+          href={`/admin/qr-codes/${qr.id}`}
+          className="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          <Download className="h-4 w-4" />
+          QR&apos;ı yönet
+        </Link>
+        <a
+          href={qr.target_url}
+          target="_blank"
+          rel="noreferrer"
+          className="break-all text-[11px] text-muted hover:text-text"
+          title={qr.target_url}
+        >
+          {qr.target_url}
+        </a>
+      </div>
+    );
+  }
+
   return (
-    <button
-      type="button"
-      disabled={disabled}
-      title="Şimdilik admin panelden QR oluşturabilirsiniz — Sprint C3'te aktif olacak"
-      aria-label="İlk QR kodu indir (Sprint C3&apos;te aktif olacak)"
-      className="inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-md border border-border bg-surface px-5 py-2.5 text-sm font-semibold text-muted opacity-60"
-    >
-      <Download className="h-4 w-4" />
-      İlk QR&apos;ı indir
-    </button>
+    <div className="flex flex-col items-center gap-1">
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={loading}
+        aria-busy={loading || undefined}
+        className="inline-flex items-center justify-center gap-2 rounded-md border border-border bg-surface px-5 py-2.5 text-sm font-semibold text-text transition hover:border-primary/40 hover:bg-background focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-70"
+      >
+        {loading ? (
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+        ) : (
+          <Download className="h-4 w-4" />
+        )}
+        {loading ? "QR oluşturuluyor…" : "İlk QR'ı indir"}
+      </button>
+      {error ? (
+        <p
+          role="alert"
+          data-testid="qr-error"
+          className="max-w-xs text-center text-[11px] font-medium text-accent"
+        >
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// DemoSeedPanel — Sprint C3b "Demo menüden başla" affordance.
+//
+// Calls POST /api/v1/onboarding/demo-seed/. Idempotent — a tenant that
+// already imported Modern Cafe gets skipped=true on the second call.
+//
+// On success we hand control back to the parent (Step5) which routes
+// the operator into /admin/menus so they immediately see the imported
+// menu in the Menus list.
+// ---------------------------------------------------------------------------
+
+function DemoSeedPanel({
+  onAfterSeed,
+}: {
+  onAfterSeed: () => void;
+}) {
+  const [status, setStatus] = useState<
+    | { kind: "idle" }
+    | { kind: "loading" }
+    | { kind: "success"; categories: number; items: number; skipped: boolean }
+    | { kind: "error"; message: string }
+  >({ kind: "idle" });
+
+  async function handleClick() {
+    if (status.kind === "loading") return;
+    setStatus({ kind: "loading" });
+    try {
+      const res = await importDemoTemplate();
+      setStatus({
+        kind: "success",
+        categories: res.categories_copied,
+        items: res.items_copied,
+        skipped: res.skipped,
+      });
+      // Hop into the admin so the operator sees the import land. We
+      // keep a brief delay so the success pill is visible before the
+      // route swap.
+      window.setTimeout(onAfterSeed, 900);
+    } catch (err) {
+      const msg =
+        err instanceof AdminApiError
+          ? err.message
+          : "Demo şablon yüklenemedi. Lütfen tekrar deneyin.";
+      setStatus({ kind: "error", message: msg });
+    }
+  }
+
+  return (
+    <div className="rounded-md border border-border bg-surface/60 p-4 text-left text-xs text-muted">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-text">
+            <Sparkles className="mr-1 inline h-3.5 w-3.5 text-primary" />
+            Hızlı başlangıç: Modern Cafe şablonu
+          </p>
+          <p className="mt-1 max-w-md">
+            5 hazır kategori ve 25 örnek ürün menünüze tek tıkla
+            eklenir. Sonra admin panelden düzenleyebilirsiniz.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={handleClick}
+          disabled={status.kind === "loading" || status.kind === "success"}
+          className="inline-flex items-center gap-2 rounded-md border border-primary/40 bg-primary/5 px-4 py-2 text-sm font-semibold text-primary transition hover:bg-primary/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-wait disabled:opacity-70"
+        >
+          {status.kind === "loading" ? (
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+          ) : (
+            <Sparkles className="h-4 w-4" aria-hidden />
+          )}
+          {status.kind === "loading"
+            ? "Yükleniyor…"
+            : status.kind === "success" && status.skipped
+              ? "Zaten yüklü"
+              : status.kind === "success"
+                ? "Yüklendi ✓"
+                : "Demo menüden başla"}
+        </button>
+      </div>
+
+      {status.kind === "success" ? (
+        <p
+          role="status"
+          data-testid="demo-seed-success"
+          className="mt-2 text-[11px] font-medium text-primary"
+        >
+          {status.skipped
+            ? "Demo şablonu zaten yüklüydü — atlandı."
+            : `${status.categories} kategori ve ${status.items} ürün menüye eklendi.`}
+        </p>
+      ) : null}
+      {status.kind === "error" ? (
+        <p
+          role="alert"
+          data-testid="demo-seed-error"
+          className="mt-2 text-[11px] font-medium text-accent"
+        >
+          {status.message}
+        </p>
+      ) : null}
+    </div>
   );
 }
