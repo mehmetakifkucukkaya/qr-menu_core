@@ -17,6 +17,7 @@ import {
   FeatureFlagProvider,
   useFeatureFlag,
 } from "@/lib/feature-flags";
+import { UpgradeBanner } from "@/components/billing/UpgradeBanner";
 import { CategoryNav } from "./CategoryNav";
 import { CategorySection } from "./CategorySection";
 import { ItemDetailDrawer } from "./ItemDetailDrawer";
@@ -180,6 +181,21 @@ export function MenuViewClient({
 
   return (
     <FeatureFlagProvider settings={publicSettings}>
+      {/* Sprint B3b — sticky upgrade banner. Sits above the page
+          header with a higher z-index so the prompt stays visible
+          while the customer scrolls. Hidden when the tenant's plan
+          already enables the highlighted feature (UpgradeBanner's
+          internal `hasFeature` check). On BASIC all four flags are
+          off so the cart banner shows; on PRO+ the cart feature is
+          still off (orders+ only) but we promote the orders+ tier
+          because that's the next relevant upgrade step for the
+          demo customer. */}
+      <UpgradeBanner
+        feature="cart_enabled"
+        targetPlan="orders"
+        settings={publicSettings}
+      />
+
       {/* Sticky top bar: logo + name + locale selector + account chip
           + cart icon. The interactive bits (AccountHeaderChip /
           HeaderCartIcon) read feature flags via the provider above. */}
