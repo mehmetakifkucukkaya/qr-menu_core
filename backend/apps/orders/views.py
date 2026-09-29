@@ -157,6 +157,28 @@ class PublicOrderCreateView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
+        # Sprint B1 — D-026 feature flag guard. ``orders_enabled`` must
+        # be True on the PlanSettings. We audit on rejection so the
+        # admin UI can surface "operator X tried to order with BASIC".
+        from apps.billing.services import require_feature
+
+        try:
+            require_feature(org, "orders_enabled")
+        except Exception as exc:  # FeatureDisabled from billing
+            return Response(
+                {
+                    "error": {
+                        "code": getattr(exc, "code", "billing.feature_disabled"),
+                        "message": getattr(exc, "message", str(exc)),
+                        "feature": getattr(exc, "extra", {}).get("feature"),
+                    },
+                    "meta": {
+                        "request_id": request.META.get("HTTP_X_REQUEST_ID", "")
+                    },
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         branch = None
         if payload.get("branch_slug"):
             branch = Branch.objects.filter(
@@ -206,6 +228,29 @@ class PublicOrderCreateView(APIView):
         loyalty_points_to_redeem = int(
             payload.get("loyalty_points_to_redeem") or 0
         )
+
+        # Sprint B1 — D-026 feature flag guard. If the customer is
+        # trying to redeem loyalty puan we require ``loyalty_enabled``
+        # on the PlanSettings. BASIC/PRO/ORDERS plans return 403 +
+        # audit (BASIC tier has the feature off; PRO/ORDERS can
+        # override it on if the operator chose to).
+        if loyalty_points_to_redeem:
+            try:
+                require_feature(org, "loyalty_enabled")
+            except Exception as exc:  # FeatureDisabled from billing
+                return Response(
+                    {
+                        "error": {
+                            "code": getattr(exc, "code", "billing.feature_disabled"),
+                            "message": getattr(exc, "message", str(exc)),
+                            "feature": getattr(exc, "extra", {}).get("feature"),
+                        },
+                        "meta": {
+                            "request_id": request.META.get("HTTP_X_REQUEST_ID", "")
+                        },
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
 
         # If the client claims to redeem puan, we need a customer +
         # an enabled loyalty config. Otherwise treat as 400.

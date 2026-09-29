@@ -63,6 +63,9 @@ urlpatterns = [
     # admin under /api/v1/payment/admin/. Webhook at
     # /api/v1/payment/webhooks/<provider>/.
     path("api/v1/payment/", include("apps.payment.urls")),
+    # Sprint B1 — Plan + Feature Flags + Limits (D-026). Admin-only,
+    # under /api/v1/admin/billing/. No public endpoints.
+    path("api/v1/admin/billing/", include("apps.billing.urls")),
 ]
 
 if settings.DEBUG:

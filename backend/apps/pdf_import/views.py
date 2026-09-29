@@ -72,6 +72,25 @@ class PdfUploadView(APIView):
                 status.HTTP_403_FORBIDDEN,
             )
 
+        # Sprint B1 — D-026 feature flag guard. ``ai_pdf_import_enabled``
+        # must be True on the tenant's PlanSettings (BASIC returns 403 +
+        # audit). PRO / ORDERS / OPS default the flag on.
+        from apps.billing.services import require_feature
+
+        try:
+            require_feature(organization, "ai_pdf_import_enabled")
+        except Exception as exc:  # FeatureDisabled from billing
+            return Response(
+                {
+                    "error": {
+                        "code": getattr(exc, "code", "billing.feature_disabled"),
+                        "message": getattr(exc, "message", str(exc)),
+                        "feature": getattr(exc, "extra", {}).get("feature"),
+                    }
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         uploaded = request.FILES.get("file")
         if uploaded is None:
             return _error(

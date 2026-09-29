@@ -137,6 +137,23 @@ class CreateOrderPaymentView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Sprint B1 — D-026 feature flag guard. ``payments_enabled`` must
+        # be True on the tenant's PlanSettings (BASIC / PRO / ORDERS
+        # tenants return 403 here). Audit + 403 mirror the orders guard.
+        from apps.billing.services import require_feature
+
+        try:
+            require_feature(order.organization, "payments_enabled")
+        except Exception as exc:  # FeatureDisabled from billing
+            return Response(
+                {
+                    "detail": getattr(exc, "message", str(exc)),
+                    "code": getattr(exc, "code", "billing.feature_disabled"),
+                    "feature": getattr(exc, "extra", {}).get("feature"),
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         try:
             payment = create_payment_for_order(order=order)
         except DjangoValidationError as exc:

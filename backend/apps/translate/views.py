@@ -124,6 +124,26 @@ class TranslateTextView(APIView):
                 status.HTTP_403_FORBIDDEN,
             )
 
+        # Sprint B1 — D-026 feature flag guard. ``ai_translate_enabled``
+        # must be True on the tenant's PlanSettings (BASIC tier returns
+        # 403 + audit). PRO / ORDERS / OPS all default the flag on but
+        # the operator can disable it.
+        from apps.billing.services import require_feature
+
+        try:
+            require_feature(organization, "ai_translate_enabled")
+        except Exception as exc:  # FeatureDisabled from billing
+            return Response(
+                {
+                    "error": {
+                        "code": getattr(exc, "code", "billing.feature_disabled"),
+                        "message": getattr(exc, "message", str(exc)),
+                        "feature": getattr(exc, "extra", {}).get("feature"),
+                    }
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         serializer = TranslateTextSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(
@@ -172,6 +192,23 @@ class TranslateMenuItemView(APIView):
                 "translate.no_organization",
                 "Çeviri için bir işletmeye üye olmalısınız.",
                 status.HTTP_403_FORBIDDEN,
+            )
+
+        # Sprint B1 — D-026 feature flag guard (ai_translate_enabled).
+        from apps.billing.services import require_feature
+
+        try:
+            require_feature(organization, "ai_translate_enabled")
+        except Exception as exc:  # FeatureDisabled from billing
+            return Response(
+                {
+                    "error": {
+                        "code": getattr(exc, "code", "billing.feature_disabled"),
+                        "message": getattr(exc, "message", str(exc)),
+                        "feature": getattr(exc, "extra", {}).get("feature"),
+                    }
+                },
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         item = _scoped_item(organization, pk)
@@ -294,6 +331,23 @@ class TranslateMenuCategoryView(APIView):
                 status.HTTP_403_FORBIDDEN,
             )
 
+        # Sprint B1 — D-026 feature flag guard (ai_translate_enabled).
+        from apps.billing.services import require_feature
+
+        try:
+            require_feature(organization, "ai_translate_enabled")
+        except Exception as exc:  # FeatureDisabled from billing
+            return Response(
+                {
+                    "error": {
+                        "code": getattr(exc, "code", "billing.feature_disabled"),
+                        "message": getattr(exc, "message", str(exc)),
+                        "feature": getattr(exc, "extra", {}).get("feature"),
+                    }
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         category = _scoped_category(organization, pk)
         if category is None:
             return _error(
@@ -409,6 +463,23 @@ class DescribeMenuItemView(APIView):
                 status.HTTP_403_FORBIDDEN,
             )
 
+        # Sprint B1 — D-026 feature flag guard (ai_translate_enabled).
+        from apps.billing.services import require_feature
+
+        try:
+            require_feature(organization, "ai_translate_enabled")
+        except Exception as exc:  # FeatureDisabled from billing
+            return Response(
+                {
+                    "error": {
+                        "code": getattr(exc, "code", "billing.feature_disabled"),
+                        "message": getattr(exc, "message", str(exc)),
+                        "feature": getattr(exc, "extra", {}).get("feature"),
+                    }
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         item = _scoped_item(organization, pk)
         if item is None:
             return _error(
@@ -499,6 +570,23 @@ class DescribeBulkView(APIView):
                 "describe.no_organization",
                 "Toplu açıklama üretimi için bir işletmeye üye olmalısınız.",
                 status.HTTP_403_FORBIDDEN,
+            )
+
+        # Sprint B1 — D-026 feature flag guard (ai_translate_enabled).
+        from apps.billing.services import require_feature
+
+        try:
+            require_feature(organization, "ai_translate_enabled")
+        except Exception as exc:  # FeatureDisabled from billing
+            return Response(
+                {
+                    "error": {
+                        "code": getattr(exc, "code", "billing.feature_disabled"),
+                        "message": getattr(exc, "message", str(exc)),
+                        "feature": getattr(exc, "extra", {}).get("feature"),
+                    }
+                },
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         serializer = DescribeBulkSerializer(data=request.data)

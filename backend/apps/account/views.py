@@ -263,6 +263,14 @@ class MagicLinkRequestView(APIView):
     Always returns 200 (enumeration safe). The audit + log signals
     are the only way the operator can detect abuse; the user
     experience is identical for known and unknown emails.
+
+    Sprint B1 — D-026 feature flag guard. When the customer's tenant
+    PlanSettings has ``customer_accounts_enabled = False`` (BASIC,
+    PRO, ORDERS tiers), this endpoint is locked — return 403 with a
+    stable code so the client can render the upgrade CTA. We only
+    gate this when ``?organization=<slug>`` is present in the query
+    string; without a tenant identifier we cannot resolve a plan and
+    the safe default is to allow the request through.
     """
 
     authentication_classes: list = []
@@ -270,6 +278,44 @@ class MagicLinkRequestView(APIView):
     throttle_classes = [MagicLinkRequestThrottle]
 
     def post(self, request: Request) -> Response:
+        # Sprint B1 — Plan tier guard. Resolve the org from
+        # ``?organization=<slug>`` and reject the request if
+        # ``customer_accounts_enabled`` is False. We do this BEFORE
+        # the serializer runs so a basic-tier client never gets a
+        # magic-link dispatch attempt at all.
+        slug = request.query_params.get("organization", "").strip()
+        if slug:
+            from apps.organizations.models import Organization
+
+            org = Organization.objects.filter(
+                slug=slug, is_active=True
+            ).first()
+            if org is not None:
+                from apps.billing.services import require_feature
+
+                try:
+                    require_feature(org, "customer_accounts_enabled")
+                except Exception as exc:  # FeatureDisabled from billing
+                    return Response(
+                        {
+                            "error": {
+                                "code": getattr(
+                                    exc, "code", "billing.feature_disabled"
+                                ),
+                                "message": getattr(exc, "message", str(exc)),
+                                "feature": getattr(
+                                    exc, "extra", {}
+                                ).get("feature"),
+                            },
+                            "meta": {
+                                "request_id": request.META.get(
+                                    "HTTP_X_REQUEST_ID", ""
+                                )
+                            },
+                        },
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
+
         serializer = MagicLinkRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         email = serializer.validated_data["email"]
