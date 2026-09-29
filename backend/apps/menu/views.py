@@ -3,6 +3,12 @@
 Standard CRUD for Menu / MenuCategory / MenuItem + dedicated reorder
 endpoints. Reference data (Allergen, DietaryTag) is read-only because
 those rows are seeded via management command.
+
+Sprint B1 — D-026 limit enforcement. ``MenuItemViewSet.create`` /
+``.update`` (touching the row count) and ``MenuCategoryViewSet.create``
+both call :func:`apps.billing.services.enforce_limit` against the
+``items`` / ``categories`` resource before persisting. The guard is
+applied pre-save so a 402 response never leaves a dangling row.
 """
 
 from __future__ import annotations
@@ -14,6 +20,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.permissions import IsOrganizationMember
+from apps.accounts.models import Membership
+from apps.billing.services import enforce_limit
+from apps.billing.errors import LimitExceeded
 
 from .models import (
     Allergen,
@@ -159,6 +168,42 @@ class MenuCategoryViewSet(viewsets.ModelViewSet):
         return _wrap(response.data, request)
 
     def create(self, request, *args, **kwargs):
+        # Sprint B1 — D-026 limit enforcement. ``categories`` resource
+        # is bounded per Plan tier (BASIC=5, PRO=20, ORDERS=50, OPS=∞).
+        # The guard audits ``limit_exceeded_attempt`` and raises HTTP
+        # 402 ``billing.limit_exceeded`` when the tenant is at the cap.
+        org = self._resolve_org_for_user(request)
+        if org is None:
+            return Response(
+                {
+                    "data": None,
+                    "meta": {
+                        "request_id": request.META.get("HTTP_X_REQUEST_ID", "")
+                    },
+                    "error": {
+                        "code": "menu.no_organization",
+                        "message": "İşletme bulunamadı.",
+                    },
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        try:
+            enforce_limit(org, "categories", actor=request.user)
+        except LimitExceeded as exc:
+            return Response(
+                {
+                    "data": None,
+                    "meta": {
+                        "request_id": request.META.get("HTTP_X_REQUEST_ID", "")
+                    },
+                    "error": {
+                        "code": exc.code,
+                        "message": exc.message,
+                        **exc.extra,
+                    },
+                },
+                status=exc.http_status,
+            )
         response = super().create(request, *args, **kwargs)
         return _wrap_response(response, request)
 
@@ -172,6 +217,18 @@ class MenuCategoryViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         response = super().destroy(request, *args, **kwargs)
         return Response(status=response.status_code)
+
+    @staticmethod
+    def _resolve_org_for_user(request):
+        """First active membership → organization (D-022 + D-026 mirror)."""
+        membership = (
+            Membership.objects.filter(
+                user=request.user, organization__is_active=True
+            )
+            .select_related("organization")
+            .first()
+        )
+        return membership.organization if membership else None
 
 
 # ---------------------------------------------------------------------------
@@ -216,10 +273,46 @@ class MenuItemViewSet(viewsets.ModelViewSet):
         return _wrap(response.data, request)
 
     def create(self, request, *args, **kwargs):
+        # Sprint B1 — D-026 limit enforcement. ``items`` resource is
+        # bounded per Plan tier (BASIC=25, PRO=100, ORDERS=200, OPS=∞).
+        org = self._resolve_org_for_user(request)
+        if org is None:
+            return Response(
+                {
+                    "data": None,
+                    "meta": {
+                        "request_id": request.META.get("HTTP_X_REQUEST_ID", "")
+                    },
+                    "error": {
+                        "code": "menu.no_organization",
+                        "message": "İşletme bulunamadı.",
+                    },
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        try:
+            enforce_limit(org, "items", actor=request.user)
+        except LimitExceeded as exc:
+            return Response(
+                {
+                    "data": None,
+                    "meta": {
+                        "request_id": request.META.get("HTTP_X_REQUEST_ID", "")
+                    },
+                    "error": {
+                        "code": exc.code,
+                        "message": exc.message,
+                        **exc.extra,
+                    },
+                },
+                status=exc.http_status,
+            )
         response = super().create(request, *args, **kwargs)
         return _wrap_response(response, request)
 
     def update(self, request, *args, **kwargs):
+        # ``items`` count does not change on update — we only enforce
+        # on create. Update goes through unchanged.
         response = super().update(request, *args, **kwargs)
         return _wrap_response(response, request)
 
@@ -229,6 +322,18 @@ class MenuItemViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         response = super().destroy(request, *args, **kwargs)
         return Response(status=response.status_code)
+
+    @staticmethod
+    def _resolve_org_for_user(request):
+        """First active membership → organization (D-022 + D-026 mirror)."""
+        membership = (
+            Membership.objects.filter(
+                user=request.user, organization__is_active=True
+            )
+            .select_related("organization")
+            .first()
+        )
+        return membership.organization if membership else None
 
 # ---------------------------------------------------------------------------
 # Reorder endpoints
