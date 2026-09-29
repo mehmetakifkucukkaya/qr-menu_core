@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { X } from "lucide-react";
+import { X, Flame, Wine, Beef } from "lucide-react";
 import type {
   PublicMenuAllergen,
   PublicMenuDietaryTag,
@@ -30,6 +30,17 @@ interface ItemDetailDrawerProps {
  *
  * Accessibility: role="dialog", aria-modal, focus moves to close
  * button on open, restores focus on close.
+ *
+ * Sprint D1b — adds the mevzuat (compliance) section. Six optional
+ * fields from the backend payload surface as badges / callouts:
+ *   - calories    → "🔥 350 kcal" badge (Flame icon)
+ *   - portion_size → "📏 250g"   badge
+ *   - contains_alcohol true → amber callout "🍷 Alkol içerir"
+ *   - is_halal    true / false / null → green / red / hidden badge
+ *   - ingredients → comma-separated chip list
+ *   - legal_notes → callout (red border if mentions alerjen, else amber)
+ * Each subsection silently hides when its source field is missing so
+ * a non-compliant tenant renders an unchanged drawer.
  */
 export function ItemDetailDrawer({
   item,
@@ -72,6 +83,23 @@ export function ItemDetailDrawer({
     .map((code) => dietaryTags.find((t) => t.code === code))
     .filter(Boolean) as PublicMenuDietaryTag[];
 
+  // Sprint D1b — derive compliance-view-model flags once so the
+  // mevzuat section can early-return cleanly when no data is present.
+  const hasCalories =
+    typeof item.calories === "number" && Number.isFinite(item.calories);
+  const hasPortion = !!(item.portion_size && item.portion_size.trim());
+  const hasIngredients = !!(item.ingredients && item.ingredients.trim());
+  const hasLegalNotes = !!(item.legal_notes && item.legal_notes.trim());
+  const showAlcohol = item.contains_alcohol === true;
+  const showHalal = item.is_halal === true || item.is_halal === false;
+  const hasAnyCompliance =
+    hasCalories ||
+    hasPortion ||
+    hasIngredients ||
+    hasLegalNotes ||
+    showAlcohol ||
+    showHalal;
+
   return (
     <div
       role="dialog"
@@ -106,11 +134,136 @@ export function ItemDetailDrawer({
         </header>
 
         <div className="flex-1 overflow-y-auto px-4 py-4">
+          {/* Hero image — only when an image URL is present. The drawer
+              never breaks layout when the source DB has no image. */}
+          {item.image ? (
+            <div className="mb-4 overflow-hidden rounded-lg bg-background">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={item.image}
+                alt={item.name}
+                loading="lazy"
+                decoding="async"
+                className="h-40 w-full object-cover sm:h-48"
+              />
+            </div>
+          ) : null}
+
           {item.description ? (
             <p className="text-sm text-text sm:text-base">{item.description}</p>
           ) : (
             <p className="text-sm italic text-muted">Açıklama bulunmuyor.</p>
           )}
+
+          {/* Sprint D1b — mevzuat bölümü. Renders only when at least one
+              of the six compliance fields is present. Each subsection
+              independently hides when its field is missing. */}
+          {hasAnyCompliance ? (
+            <section
+              aria-label="Mevzuat bilgileri"
+              className="mt-5 rounded-xl border border-border bg-background/40 p-3"
+            >
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">
+                Mevzuat bilgileri
+              </h3>
+
+              <div className="flex flex-wrap gap-2">
+                {hasCalories ? (
+                  <span
+                    title={`${item.calories} kalori (kcal)`}
+                    className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-900 ring-1 ring-orange-200"
+                  >
+                    <Flame className="h-3.5 w-3.5" aria-hidden />
+                    <span aria-hidden>🔥</span>
+                    <span>{item.calories} kcal</span>
+                  </span>
+                ) : null}
+
+                {hasPortion ? (
+                  <span
+                    title={`Porsiyon: ${item.portion_size}`}
+                    className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-900 ring-1 ring-slate-200"
+                  >
+                    <span aria-hidden>📏</span>
+                    <span>{item.portion_size}</span>
+                  </span>
+                ) : null}
+
+                {showHalal && item.is_halal === true ? (
+                  <span
+                    title="Helal"
+                    className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-900 ring-1 ring-emerald-200"
+                  >
+                    <Beef className="h-3.5 w-3.5" aria-hidden />
+                    <span>Helal</span>
+                  </span>
+                ) : null}
+                {showHalal && item.is_halal === false ? (
+                  <span
+                    title="Helal Değil"
+                    className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-900 ring-1 ring-rose-200"
+                  >
+                    <Beef className="h-3.5 w-3.5" aria-hidden />
+                    <span>Helal Değil</span>
+                  </span>
+                ) : null}
+              </div>
+
+              {/* Alkol callout — amber, full-width, sits inside the
+                  mevzuat card so it reads as a compliance warning. */}
+              {showAlcohol ? (
+                <div
+                  role="note"
+                  aria-label="Alkol uyarısı"
+                  className="mt-3 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900 sm:text-sm"
+                >
+                  <Wine className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                  <span>🍷 Alkol içerir</span>
+                </div>
+              ) : null}
+
+              {/* Ingredients chips — comma-separated source string. */}
+              {hasIngredients ? (
+                <div className="mt-3">
+                  <h4 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted">
+                    İçindekiler
+                  </h4>
+                  <ul className="flex flex-wrap gap-1.5">
+                    {item.ingredients!
+                      .split(",")
+                      .map((s) => s.trim())
+                      .filter(Boolean)
+                      .map((ing, idx) => (
+                        <li
+                          key={`${ing}-${idx}`}
+                          className="inline-flex items-center rounded-full bg-surface px-2 py-0.5 text-[11px] font-medium text-text ring-1 ring-border"
+                        >
+                          {ing}
+                        </li>
+                      ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              {/* Legal notes — red border if mentions alerjen/alerji,
+                  otherwise amber. Free-text, server-supplied. */}
+              {hasLegalNotes ? (
+                <div
+                  role="note"
+                  aria-label="Yasal uyarı"
+                  className={
+                    "mt-3 rounded-lg border px-3 py-2 text-xs sm:text-sm " +
+                    (isAllergenNote(item.legal_notes!)
+                      ? "border-rose-300 bg-rose-50 text-rose-900"
+                      : "border-amber-300 bg-amber-50 text-amber-900")
+                  }
+                >
+                  <p className="font-semibold">Yasal not</p>
+                  <p className="mt-0.5 leading-snug">{item.legal_notes}</p>
+                </div>
+              ) : null}
+            </section>
+          ) : null}
 
           {allergenMeta.length > 0 ? (
             <div className="mt-5">
@@ -161,6 +314,14 @@ export function ItemDetailDrawer({
       `}</style>
     </div>
   );
+}
+
+/** True when the legal_notes string mentions alerjen / alerji — used to
+ *  pick the red border tone (allergen warning) vs the amber tone
+ *  (general compliance note). Case-insensitive substring match. */
+function isAllergenNote(text: string): boolean {
+  const lower = text.toLocaleLowerCase("tr-TR");
+  return lower.includes("alerjen") || lower.includes("alerji");
 }
 
 function AllergenBadge({
