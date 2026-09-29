@@ -2,10 +2,13 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { X, Receipt, CheckCircle2 } from "lucide-react";
+import { X, Receipt, CheckCircle2, Banknote } from "lucide-react";
 import { useCartStore } from "@/lib/cart-store";
 import { createOrder, OrdersApiError } from "@/lib/api-orders";
 import { formatPrice } from "@/lib/format";
+import { useFeatureFlag } from "@/lib/feature-flags";
+import { UpgradeBanner } from "@/components/billing/UpgradeBanner";
+import { useFeatureFlags } from "@/lib/feature-flags";
 import { LoyaltyRedemptionCheckbox } from "@/app/(public)/account/_components/LoyaltyRedemptionCheckbox";
 import type { PublicLoyaltySettings } from "@/types/account";
 
@@ -60,6 +63,20 @@ export function CheckoutForm({
   const clear = useCartStore((s) => s.clear);
   const totalAmount = useCartStore((s) => s.totalAmount());
 
+  // Sprint B3b — payment feature flag. When the tenant doesn't have
+  // payments_enabled on (PRO and below), the modal shows an Upgrade-
+  // Banner at the top + a "cash-only" confirmation box so the customer
+  // knows the order will be settled at the till rather than online.
+  // The flag is read through the provider mounted by MenuViewClient;
+  // CheckoutForm must be rendered inside that subtree.
+  const paymentsEnabled = useFeatureFlag("payments_enabled");
+  const settings = useFeatureFlags();
+  /** Sprint B3b — cash-only confirmation. The customer must tick this
+   *  before submitting an order on a tenant without payments_enabled —
+   *  keeps the legal acknowledgement explicit and prevents accidental
+   *  "I thought I was paying online" complaints. */
+  const [cashOnlyConfirmed, setCashOnlyConfirmed] = useState(false);
+
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [notes, setNotes] = useState("");
@@ -90,6 +107,10 @@ export function CheckoutForm({
     // Reset loyalty toggle when (re-)opening so a previous session's
     // selection doesn't silently apply to a new draft.
     setLoyaltyRedeem({ enabled: false, points: 0, discountAmount: "0.00" });
+    // Sprint B3b — also reset the cash-only acknowledgement so the
+    // customer re-confirms every new order (the previous order's tick
+    // box shouldn't silently carry over).
+    setCashOnlyConfirmed(false);
     queueMicrotask(() => nameRef.current?.focus());
   }, [open, tableNumber, setTableNumber, customerProfile]);
 
@@ -108,6 +129,13 @@ export function CheckoutForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submitting || items.length === 0) return;
+    // Sprint B3b — gate submission on the cash-only acknowledgement
+    // when payments_enabled is off. The customer must explicitly
+    // confirm they understand the order will be settled at the till.
+    if (!paymentsEnabled && !cashOnlyConfirmed) {
+      setError("Lütfen kapıda nakit ödeme onayını işaretleyin.");
+      return;
+    }
     setSubmitting(true);
     setError(null);
 
@@ -197,6 +225,51 @@ export function CheckoutForm({
         </header>
 
         <div className="flex-1 overflow-y-auto px-4 py-4">
+          {/* Sprint B3b — payment feature flag. When payments_enabled
+              is off, surface the UpgradeBanner (Sprint 12A Card +
+              IconButton — inline variant) + a "cash-only" confirmation
+              box. With payments on, this section renders nothing and
+              the order flow proceeds as before; the Sprint 11A payment
+              step (when it lands) owns the rest of the payment UX. */}
+          {!paymentsEnabled ? (
+            <div className="mb-4 space-y-3">
+              <UpgradeBanner
+                feature="payments_enabled"
+                targetPlan="ops"
+                settings={settings}
+                variant="inline"
+              />
+              <label
+                className="flex cursor-pointer items-start gap-3 rounded-lg border border-amber-200 bg-amber-50/70 p-3 text-sm text-amber-900 transition hover:bg-amber-100/70 focus-within:ring-2 focus-within:ring-amber-600 motion-reduce:transition-none dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-100 dark:hover:bg-amber-950/60"
+              >
+                <input
+                  type="checkbox"
+                  checked={cashOnlyConfirmed}
+                  onChange={(e) => setCashOnlyConfirmed(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 shrink-0 rounded border-amber-300 text-amber-600 focus:ring-amber-600"
+                  aria-describedby="cash-only-hint"
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-1.5 font-semibold">
+                    <Banknote
+                      className="h-3.5 w-3.5 text-amber-700 dark:text-amber-300"
+                      aria-hidden
+                    />
+                    Kapıda nakit ödeme
+                  </span>
+                  <span
+                    id="cash-only-hint"
+                    className="mt-0.5 block text-[11px] leading-snug text-amber-800 dark:text-amber-200"
+                  >
+                    Bu işletme online ödeme almıyor — siparişinizi
+                    teslim alırken kasada nakit olarak ödeyeceksiniz.
+                    Onaylıyor musunuz?
+                  </span>
+                </span>
+              </label>
+            </div>
+          ) : null}
+
           {/* Order summary */}
           <section
             aria-label="Sipariş özeti"
@@ -338,7 +411,13 @@ export function CheckoutForm({
           </button>
           <button
             type="submit"
-            disabled={submitting || items.length === 0 || !name.trim() || !phone.trim()}
+            disabled={
+              submitting ||
+              items.length === 0 ||
+              !name.trim() ||
+              !phone.trim() ||
+              (!paymentsEnabled && !cashOnlyConfirmed)
+            }
             className="flex-[2] inline-flex items-center justify-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-bold uppercase tracking-wider text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting ? (
@@ -346,7 +425,7 @@ export function CheckoutForm({
             ) : (
               <>
                 <CheckCircle2 className="h-4 w-4" aria-hidden />
-                Onayla
+                {paymentsEnabled ? "Onayla" : "Siparişi Onayla"}
               </>
             )}
           </button>
