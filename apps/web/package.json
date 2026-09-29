@@ -10,25 +10,31 @@
     "type-check": "tsc --noEmit",
     "test:seo": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test src/lib/seo.test.ts",
     "test:currency": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test src/lib/currency.test.ts",
-    "test:feature-flags": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test src/lib/feature-flags.test.ts"
+    "test:feature-flags": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test src/lib/feature-flags.test.ts",
+    "test:trial-banner": "TSX_TSCONFIG_PATH=tsconfig.test.json node --import tsx --import ./src/test-dom.ts --no-warnings=ExperimentalWarning --test src/components/billing/TrialBanner.test.tsx"
   },
   "dependencies": {
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.460.0",
     "next": "14.2.18",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "clsx": "^2.1.1",
-    "lucide-react": "^0.460.0",
     "zustand": "^5.0.1"
   },
   "devDependencies": {
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/react": "^16.3.3",
+    "@types/jsdom": "^30.0.0",
     "@types/node": "^20.17.6",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "autoprefixer": "^10.4.20",
     "eslint": "^8.57.1",
     "eslint-config-next": "14.2.18",
+    "jsdom": "^29.1.1",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.15",
+    "tsx": "^4.23.15",
     "typescript": "^5.6.3"
   }
 }

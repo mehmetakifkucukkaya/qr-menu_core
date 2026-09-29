@@ -1,0 +1,14 @@
+{
+  "//": "Test-runner tsconfig — Sprint C3b. Extends the main tsconfig and forces jsx=react-jsx so the `tsx` loader can strip JSX without needing `import React from 'react'` in every component. next lint must NOT touch this file (it auto-resets jsx=preserve on the main tsconfig).",
+
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx"
+  },
+  "include": [
+    "next-env.d.ts",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    ".next/types/**/*.ts"
+  ]
+}
