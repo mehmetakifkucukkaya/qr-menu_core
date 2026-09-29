@@ -85,6 +85,12 @@ class AuditEvent(models.Model):
         ("plan_upgraded_preview", "Billing: plan upgrade previewed"),
         ("limit_exceeded_attempt", "Billing: limit exceeded attempt"),
         ("feature_disabled_access", "Billing: feature disabled access attempt"),
+        # Sprint C1 — Self-serve onboarding (D-030 follow-up). Emitted
+        # by SignupView after the atomic User + Organization +
+        # Membership + PlanSettings transaction commits. The ``organization``
+        # target_type already exists from Sprint 4 so no schema change
+        # needed for the FK side — only the ACTION_CHOICES entry.
+        ("tenant_created", "Onboarding: tenant + owner signup"),
     ]
 
     # ---- target type -----------------------------------------------------
