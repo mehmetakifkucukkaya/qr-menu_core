@@ -139,29 +139,3 @@ export function useFeatureFlag(feature: FeatureName): boolean {
   }
   return ctx.hasFeature(feature);
 }
-
-// ---------------------------------------------------------------------------
-// Placeholder exports — Sprint B3b fills these in
-// ---------------------------------------------------------------------------
-
-/**
- * Skeleton export for the upgrade banner that Sprint B3b will mount in
- * the public menu page when a tenant is on a lower tier than the
- * feature they tried to access (e.g. OPS visitor trying to use
- * loyalty). Type-only here so callers can already import the symbol
- * without runtime cost.
- *
- * Empty for now; once B3b adds real props (e.g. `feature`, `currentTier`,
- * `requiredTier`), expand this interface in place. Using a type alias
- * rather than a named interface today keeps the export surface narrow.
- */
-export type UpgradeBannerPlaceholderProps = Record<string, never>;
-
-/**
- * Skeleton component — B3b replaces with a real CTA banner. Renders
- * nothing for now so the import site in B3b can be wired without
- * rendering artefacts during B3a.
- */
-export function UpgradeBannerPlaceholder(_props: UpgradeBannerPlaceholderProps) {
-  return null;
-}
