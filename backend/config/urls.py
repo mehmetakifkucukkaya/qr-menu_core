@@ -53,6 +53,8 @@ urlpatterns = [
     path("api/v1/public/", include("apps.analytics.urls_public")),
     # Sprint 8A — public order placement + status polling (D-022).
     path("api/v1/public/", include("apps.orders.urls_public")),
+    # Sprint B3 — public tenant-safe settings (active_plan + feature flags).
+    path("api/v1/public/", include("apps.billing.urls_public")),
     # Sprint 10A — Customer accounts + magic-link auth + loyalty ledger (D-025).
     # Public + customer surface under /api/v1/account/, admin under
     # /api/v1/account/admin/. Two separate URLConfs so ``config/urls``

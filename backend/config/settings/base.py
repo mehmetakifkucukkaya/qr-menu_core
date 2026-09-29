@@ -356,6 +356,10 @@ REST_FRAMEWORK = {
         # so the throttle is the only signal that the user hit the
         # rate cap.
         "magic_link_request": "5/hour",
+        # Sprint B3 — Public settings endpoint (feature flags + plan
+        # tier). Same 60/min/IP bucket as the public menu read endpoint
+        # since they're usually fetched together.
+        "public_settings": "60/min",
     },
     # SessionAuth enforces CSRF on unsafe methods (POST/PUT/PATCH/DELETE).
     # This is the default but made explicit so future contributors don't relax it.

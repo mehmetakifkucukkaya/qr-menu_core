@@ -9,8 +9,13 @@ Six admin endpoints under ``/api/v1/admin/billing/``:
 * POST /limits/preview-upgrade/  — diff current → target plan
 * POST /reset-usage/             — superuser-only demo helper
 
-All endpoints use ``IsAuthenticated + IsOrganizationMember``. The
-reset-usage endpoint additionally requires ``is_superuser``.
+Plus one public endpoint (Sprint B3):
+
+* GET  /api/v1/public/settings/<slug>/  — tenant-safe feature flags
+
+The admin endpoints use ``IsAuthenticated + IsOrganizationMember``. The
+reset-usage endpoint additionally requires ``is_superuser``. The
+public endpoint is ``AllowAny`` + 60/min/IP throttle.
 
 Tenant isolation mirrors the D-026 payment pattern — the operator's
 first active membership wins. Platform admins with no membership
@@ -24,10 +29,11 @@ from __future__ import annotations
 import logging
 
 from rest_framework import status
-from rest_framework.exceptions import PermissionDenied
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import NotFound, PermissionDenied
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 
 from apps.accounts.permissions import IsOrganizationMember
@@ -223,3 +229,60 @@ class BillingResetUsageAdminView(APIView):
         org = _resolve_organization(request)
         deleted = services.reset_usage_for_org(org)
         return _wrap({"reset_count": deleted, "organization_id": org.id}, request)
+
+# ---------------------------------------------------------------------------
+# Public settings (Sprint B3)
+# ---------------------------------------------------------------------------
+
+
+class PublicSettingsThrottle(AnonRateThrottle):
+    """60 req/min/IP — matches PublicMenuView throttle (Sprint 3)."""
+
+    scope = "public_settings"
+
+
+class PublicSettingsView(APIView):
+    """``GET /api/v1/public/settings/<slug>/``.
+
+    Returns the tenant's ``active_plan`` + 8 boolean feature flags.
+    No auth — the QR menu pages need this on every load. Tenant
+    isolation is enforced via the slug lookup: an unknown slug
+    returns 404 (we don't differentiate 404 vs 403 to avoid
+    enumeration).
+
+    Only :data:`FEATURE_FIELDS` + ``active_plan`` are exposed; the
+    service deliberately drops internal fields (``billing_notes``,
+    ``updated_at``, the FK). See ``services.get_public_settings``.
+    """
+
+    permission_classes = [AllowAny]
+    throttle_classes = [PublicSettingsThrottle]
+    authentication_classes: list = []
+
+    def get(self, request: Request, slug: str) -> Response:
+        # Slug → Organization. We deliberately don't reuse
+        # ``apps.organizations.services._resolve_organization_by_slug``
+        # because it may layer in membership checks later — for the
+        # public surface we want a pure slug lookup that matches the
+        # menu public endpoint (apps/menu/views_public.py).
+        from apps.organizations.models import Organization
+
+        try:
+            org = Organization.objects.get(slug=slug, is_active=True)
+        except Organization.DoesNotExist as exc:
+            raise NotFound(
+                detail={
+                    "error": {
+                        "code": "public.tenant_not_found",
+                        "message": "İşletme bulunamadı veya pasif.",
+                    }
+                }
+            ) from exc
+
+        return Response(
+            {
+                "data": services.get_public_settings(org),
+                "meta": {"version": "v1"},
+            },
+            status=status.HTTP_200_OK,
+        )
