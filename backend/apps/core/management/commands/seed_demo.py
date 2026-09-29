@@ -270,6 +270,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         from apps.accounts.models import Membership, MembershipRole, User, UserRole
+        from apps.billing.services import get_plan_settings
         from apps.menu.models import (
             Allergen,
             DietaryTag,
@@ -347,6 +348,13 @@ class Command(BaseCommand):
                 organization=organization,
                 defaults={"role": MembershipRole.OWNER},
             )
+
+            # Sprint B1 — D-026 plan + feature flags. Modern Cafe is the
+            # V1 demo so it ships on the OPS tier (all 8 features on).
+            # ``get_plan_settings`` is idempotent — re-running the seed
+            # won't reset operator overrides the admin applied via the
+            # /admin/billing/plan/ endpoint.
+            get_plan_settings(organization)
 
             # --- Menu ---
             menu, menu_created = Menu.objects.get_or_create(
