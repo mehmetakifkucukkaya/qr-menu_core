@@ -2,6 +2,8 @@
 
 import { useSignupWizard } from "@/lib/stores/signup-wizard";
 
+import { Step1BusinessInfo } from "@/components/signup/Step1BusinessInfo";
+
 /**
  * SignupWizardClient — Sprint C2.
  *
@@ -11,8 +13,8 @@ import { useSignupWizard } from "@/lib/stores/signup-wizard";
  * only this branch hydrates.
  *
  * Each case returns a small inline placeholder while the matching
- * step component lands in commits C2.4 / C2.5 / C2.6 — once all five
- * real components exist, the placeholders are swapped for imports.
+ * step component lands in commits C2.5 / C2.6 — once all five real
+ * components exist, the placeholders are swapped for imports.
  */
 
 function StepPlaceholder({ number, title }: { number: number; title: string }) {
@@ -34,8 +36,7 @@ export function SignupWizardClient() {
 
   switch (currentStep) {
     case 1:
-      // Real component lands in Sprint C2.4 — Step1BusinessInfo.
-      return <StepPlaceholder number={1} title="İşletme bilgileri" />;
+      return <Step1BusinessInfo />;
     case 2:
       // Real component lands in Sprint C2.5 — Step2LocaleCurrency.
       return <StepPlaceholder number={2} title="Dil ve para birimi" />;
@@ -49,6 +50,6 @@ export function SignupWizardClient() {
       // Real component lands in Sprint C2.6 — Step5SuccessQR.
       return <StepPlaceholder number={5} title="Hazır!" />;
     default:
-      return <StepPlaceholder number={1} title="İşletme bilgileri" />;
+      return <Step1BusinessInfo />;
   }
 }
