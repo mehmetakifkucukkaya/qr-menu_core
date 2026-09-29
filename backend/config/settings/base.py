@@ -99,6 +99,8 @@ LOCAL_APPS = [
     "apps.account",
     # Sprint 11A — Online payment (Stripe primary + iyzico adapter) (D-026).
     "apps.payment",
+    # Sprint B1 — Plan + Feature Flags + Limits (D-026).
+    "apps.billing",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -303,6 +305,19 @@ PAYMENT_DEFAULT_TEST_MODE = _env_bool(
 PAYMENT_WEBHOOK_BASE_URL = os.environ.get(
     "PAYMENT_WEBHOOK_BASE_URL", "http://localhost:8000"
 )
+
+# ---------------------------------------------------------------------------
+# Sprint B1 — Billing (D-026)
+# ---------------------------------------------------------------------------
+# Default plan for fresh tenants (no row yet). V1 demo posture: OPS
+# so Modern Cafe runs full feature set. Production / V2 SaaS flips to
+# ``basic`` and the seed / signup wizard upgrades as needed.
+BILLING_DEFAULT_PLAN = os.environ.get("BILLING_DEFAULT_PLAN", "ops")
+# Grace percent applied to tier limits before ``enforce_limit`` fails.
+# V1 hard-fails at the boundary (``BILLING_LIMIT_GRACE_PCT=0``); V2
+# SaaS uses a positive value (e.g. 10) to send a warning email at
+# 90 % before 402-ing on 100 %.
+BILLING_LIMIT_GRACE_PCT = int(os.environ.get("BILLING_LIMIT_GRACE_PCT", "0"))
 
 # ---------------------------------------------------------------------------
 # DRF

@@ -68,6 +68,23 @@ class AuditEvent(models.Model):
         ("loyalty_earned", "Loyalty: points earned"),
         ("loyalty_redeemed", "Loyalty: points redeemed"),
         ("loyalty_adjusted", "Loyalty: manual admin adjust"),
+        # Sprint 11A — Online payment (Stripe primary + iyzico adapter)
+        # round-up flow. The 5 actions cover the webhook events + the
+        # admin-side refund / provider-test / reconcile paths.
+        ("order_paid", "Order: payment captured (webhook)"),
+        ("order_refunded", "Order: payment refunded"),
+        ("payment_provider_test", "Payment: provider test ping"),
+        ("payment_webhook_received", "Payment: webhook event received"),
+        ("payment_reconciled", "Payment: reconciliation triggered"),
+        # Sprint B1 — Plan + Feature Flags + Limits (D-026). Four
+        # actions cover the operator plan-change path + the two guard
+        # trip paths (``limit_exceeded_attempt`` from
+        # ``enforce_limit``, ``feature_disabled_access`` from
+        # ``require_feature``).
+        ("plan_changed", "Billing: plan tier + features updated"),
+        ("plan_upgraded_preview", "Billing: plan upgrade previewed"),
+        ("limit_exceeded_attempt", "Billing: limit exceeded attempt"),
+        ("feature_disabled_access", "Billing: feature disabled access attempt"),
     ]
 
     # ---- target type -----------------------------------------------------
@@ -96,6 +113,15 @@ class AuditEvent(models.Model):
         ("customer", "Customer"),
         ("loyalty_settings", "Loyalty Settings"),
         ("loyalty_transaction", "Loyalty Transaction"),
+        # Sprint 11A — Online payment target (D-026). Generic FK target
+        # for both ``order_paid`` (payment captured) and ``order_refunded``
+        # (refund issued) events. ``target_id`` = OrderPayment.pk.
+        ("payment", "Payment"),
+        # Sprint B1 — Plan + Feature Flags + Limits target (D-026).
+        # Generic FK for plan_changed / plan_upgraded_preview /
+        # limit_exceeded_attempt / feature_disabled_access events.
+        # ``target_id`` = PlanSettings.pk.
+        ("plan_settings", "Plan Settings"),
     ]
 
     actor = models.ForeignKey(

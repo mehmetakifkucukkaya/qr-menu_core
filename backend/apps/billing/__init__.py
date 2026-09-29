@@ -1,0 +1,1 @@
+"""Billing app — Plan + Feature Flags + Limits (Sprint B1, D-026)."""
