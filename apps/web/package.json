@@ -9,7 +9,8 @@
     "lint": "next lint",
     "type-check": "tsc --noEmit",
     "test:seo": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test src/lib/seo.test.ts",
-    "test:currency": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test src/lib/currency.test.ts"
+    "test:currency": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test src/lib/currency.test.ts",
+    "test:feature-flags": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test src/lib/feature-flags.test.ts"
   },
   "dependencies": {
     "next": "14.2.18",

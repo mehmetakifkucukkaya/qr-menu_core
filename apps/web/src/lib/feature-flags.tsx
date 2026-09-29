@@ -26,27 +26,14 @@ import type {
   PublicSettings,
 } from "@/types/public";
 
-// ---------------------------------------------------------------------------
-// Pure helper
-// ---------------------------------------------------------------------------
+import { hasFeature } from "./feature-flags-helpers";
 
-/**
- * Pure, null-safe feature-flag check. Returns `false` when settings
- * haven't loaded yet (e.g. the server component hadn't propagated them
- * to the client subtree, or the fetch failed). Callers should treat
- * "absent" the same as "feature disabled" — render the safest variant.
- */
-export function hasFeature(
-  settings: PublicSettings | null | undefined,
-  feature: FeatureName,
-): boolean {
-  if (!settings || !settings.features) return false;
-  const flag = settings.features[feature];
-  // Treat undefined / non-boolean as false (defensive — backend always
-  // returns the full 8-key dict but new flags added server-side could
-  // arrive as `undefined` on a stale build).
-  return flag === true;
-}
+// Re-export the pure helper so existing call sites
+// (`import { hasFeature } from "@/lib/feature-flags"`) keep working
+// unchanged. The actual implementation lives in
+// `feature-flags-helpers.ts` so the Node `--experimental-strip-types`
+// test runner can import it without a JSX-aware loader.
+export { hasFeature };
 
 // ---------------------------------------------------------------------------
 // Context
