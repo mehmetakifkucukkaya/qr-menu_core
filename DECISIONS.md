@@ -1338,7 +1338,7 @@ Local'de birden fazla Postgres instance çakışmasın diye ana stack'te host po
 
 | D-022 | 2026-09-26 | Order + Kitchen Flow Pattern (Order/OrderItem + 6-state FSM + server-side total + audit integration + tenant isolation + 20/min public throttle + snapshot pricing) | aktif |
 | D-023 | 2026-09-28 | AI Translation + Description Pattern (TranslationMemory SHA-256 cache + AIProductDescription regen guard + D-021 provider reuse + 5+1 admin endpoint + audit view-layer emit + per-org cache isolation) | aktif |
-| D-024 | 2026-09-28 | Public SEO + Multi-Locale Schema Pattern (canonical query-locale hreflang + schema.org Restaurant/Menu JSON-LD `@graph` + og:locale/alternateLocale mapping + X-Translation-Gaps backend header + default locale gap exclude + Node built-in test runner for pure helpers) | aktif |
+| D-024 | 2026-09-28 | V1 Satış Hazırlık Critical Fixes (public payload 12→18 alan + currency 4-step fallback + QR scan_count DB-side atomic increment + cross-tenant FK null guard + image URL resolver) | aktif |
 | D-025 | 2026-09-28 | Müşteri Auth + Sadakat Puanı Pattern (Email Magic Link + HttpOnly session cookie + LoyaltySettings tenant OneToOne + LoyaltyTransaction ledger + unique idempotent award + server-side redemption validation + Order.customer FK nullable + audit 5 yeni action + 2 yeni target) | aktif |
 | D-026 | 2026-09-28 | Online Ödeme + Provider Abstraction Pattern (Stripe primary + iyzico V2 SaaS placeholder + Fernet encryption at rest + PaymentProvider ABC + 2-tier webhook idempotency + CSRF exempt + signature verify + Order.paid→confirmed FSM + Loyalty REVERSE integration + 11 endpoint + 23/40 yeşil test) | aktif |
 
@@ -1416,6 +1416,7 @@ Local'de birden fazla Postgres instance çakışmasın diye ana stack'te host po
 | D-025 | 2026-09-28 | Müşteri Auth + Sadakat Puanı Pattern (Email Magic Link + HttpOnly session cookie + LoyaltySettings tenant OneToOne + LoyaltyTransaction ledger + unique idempotent award + server-side redemption validation + Order.customer FK nullable + audit 5 yeni action + 2 yeni target) | aktif |
 | D-026 | 2026-09-28 | Online Ödeme + Provider Abstraction Pattern (Stripe primary + iyzico V2 SaaS placeholder + Fernet encryption at rest + PaymentProvider ABC + 2-tier webhook idempotency + CSRF exempt + signature verify + Order.paid→confirmed FSM + Loyalty REVERSE integration + 11 endpoint + 23/40 yeşil test) | aktif |
 | D-027 | 2026-09-28 | UI/UX Design System + Modern Polish Pattern (token layer extension — radius/shadow/transition + Playfair SC + Karla pairing + dark mode CSS variable + ThemeProvider zustand persist + 4 UI primitive + focus-visible global + skip-to-content + prefers-reduced-motion reset + dependency-free shadcn-style API) | aktif |
+| D-028 | 2026-09-29 | Plan + Feature Flags + Limits Pattern (Plan enum BASIC/PRO/ORDERS/OPS + PlanSettings tenant OneToOne + 8 boolean feature flags + TenantUsageCounter monthly aggregate + PLAN_TIER_LIMITS static matrix + has_feature/enforce_limit/record_usage services + 6 admin endpoint + 8 endpoint guards + D-025 OneToOne pattern reuse + audit 4 actions + 1 target_type) | aktif |
 
 ---
 
@@ -1477,3 +1478,127 @@ Local'de birden fazla Postgres instance çakışmasın diye ana stack'te host po
 | D-025 | 2026-09-28 | Müşteri Auth + Sadakat Puanı Pattern (Email Magic Link + HttpOnly session cookie + LoyaltySettings tenant OneToOne + LoyaltyTransaction ledger + unique idempotent award + server-side redemption validation + Order.customer FK nullable + audit 5 yeni action + 2 yeni target) | aktif |
 | D-026 | 2026-09-28 | Online Ödeme + Provider Abstraction Pattern (Stripe primary + iyzico V2 SaaS placeholder + Fernet encryption at rest + PaymentProvider ABC + 2-tier webhook idempotency + CSRF exempt + signature verify + Order.paid→confirmed FSM + Loyalty REVERSE integration + 11 endpoint + 23/40 yeşil test) | aktif |
 | D-027 | 2026-09-28 | UI/UX Design System + Modern Polish Pattern (token layer extension — radius/shadow/transition + Playfair SC + Karla pairing + dark mode CSS variable + ThemeProvider zustand persist + 4 UI primitive + focus-visible global + skip-to-content + prefers-reduced-motion reset + dependency-free shadcn-style API) | aktif |
+
+---
+
+## KARAR D-028 — Plan + Feature Flags + Limits Pattern (Sprint B1)
+
+**Karar:**
+- **Plan enum:** 4 tier — `basic / pro / orders / ops` (`MODEL_CHOICES` CharField, D-025 LoyaltySettings pattern reuse). V1 demo default = OPS (Modern Cafe full feature set)
+- **`PLAN_TIER_LIMITS` static matrix:** items (25 / 100 / 200 / None), categories (5 / 20 / 50 / None), branches (2 / 5 / 10 / None), locales (2 / 4 / 8 / 8), monthly views (1k / 25k / 100k / 1M), monthly scans (500 / 5k / 25k / 250k), AI translate ops (0 / 100 / 1k / 50k), AI description ops (0 / 100 / 1k / 50k), AI PDF imports (0 / 10 / 50 / 500)
+- **8 boolean feature flags (`PlanSettings` model):** `cart_enabled`, `orders_enabled`, `loyalty_enabled`, `customer_accounts_enabled`, `payments_enabled`, `ai_pdf_import_enabled`, `ai_translate_enabled`, `advanced_analytics_enabled` — operator override alanı (plan tier'ından default edilir, individual toggle override edilebilir)
+- **`TenantUsageCounter`:** monthly aggregate row per `(organization, period_year, period_month)` — UNIQUE composite. Atomic F() expression increment. 5 metric fields (views, scans, ai_pdf_imports, ai_translate_ops, ai_description_ops)
+- **Service signatures (11 public functions):**
+  - `get_plan_settings(org) → PlanSettings` — lazy OneToOne, OPS default
+  - `has_feature(org|ps, feature) → bool` — polymorphic
+  - `require_feature(org, feature)` — raises `FeatureDisabled(403)` + audit
+  - `enforce_limit(org, resource)` — raises `LimitExceeded(402)` + audit, None=unlimited
+  - `record_usage(org, metric, delta=1)` — atomic F() monthly increment
+  - `get_active_plan(org) → (plan, settings)`
+  - `get_usage_snapshot(org) → {metric: {used, limit, pct}}`
+  - `get_plan_limit_matrix(org) → {current_plan, tiers[]}`
+  - `preview_upgrade(org, target) → {feature_deltas, resource_deltas}`
+  - `update_plan_settings(org, ...)` — audit trip
+  - `reset_usage_for_org(org) → int` — superuser only
+- **6 admin endpoint:**
+  - `GET /api/v1/admin/billing/plan/` — current plan + features
+  - `PUT /api/v1/admin/billing/plan/` — operator manual upgrade (Stripe checkout öncesi V2 SaaS feature)
+  - `GET /api/v1/admin/billing/usage/` — current month snapshot
+  - `GET /api/v1/admin/billing/limits/` — 4-tier comparison matrix
+  - `POST /api/v1/admin/billing/limits/preview-upgrade/` — diff visualization
+  - `POST /api/v1/admin/billing/reset-usage/` — superuser only demo helper
+- **5 feature-flag guards integrated on existing endpoints:**
+  - `apps.orders.views.PublicOrderCreateView` → `require_feature('orders_enabled')`
+  - `apps.payment.views.CreateOrderPaymentView` → `require_feature('payments_enabled')`
+  - `apps.account.views.RedeemPointsView` (loyalty) → `require_feature('loyalty_enabled')`
+  - `apps.account.views.RequestMagicLinkView` → `require_feature('customer_accounts_enabled')`
+  - `apps.translate.views.TranslateView` → `require_feature('ai_translate_enabled')`
+  - `apps.pdf_import.views.UploadView` → `require_feature('ai_pdf_import_enabled')` (bonus integration)
+- **3 enforce_limit guards on viewset create:**
+  - `apps.menu.views.MenuItemViewSet.create/update` → `enforce_limit('items')`
+  - `apps.menu.views.MenuCategoryViewSet.create` → `enforce_limit('categories')`
+  - `apps.branches.views.BranchViewSet.create` → `enforce_limit('branches')`
+- **Passively recording usage on analytics events:**
+  - `apps.analytics.views_public.record_menu_view` → `record_usage(org, 'views', 1)` (async — wrapped in try/except, not blocking)
+  - `apps.qr.views_public.record_qr_open` (Sprint A'da zaten qr_id cross-tenant guard'lı) → `record_usage(org, 'scans', 1)`
+- **Audit integration:** 4 new action (`plan_changed`, `plan_upgraded_preview`, `limit_exceeded_attempt`, `feature_disabled_access`) + 1 new target_type (`plan_settings`). Migration `apps/audit/migrations/0007_alter_auditevent_*.py`
+- **Plan enum'unda CharField + LOOKUP:** Operatör panelden "Upgrade Pro'ya" tıklaması → `PUT /admin/billing/plan/` body `{active_plan: 'pro'}` → service `update_plan_settings()` tüm 8 feature flag'leri `default_features('pro')`'a resetleyip save eder. `billing_notes` ile operator metni not düşebilir (coupon applied vs.)
+- **Manual override priority:** PlanSettings effective_features() üzerinden — operator `PRO` plan'da `cart_enabled` flag override alanı. Manual override plan tier'ından bağımsız çalışır (V2 SaaS'de "trial extension" use case)
+- **Tenant isolation (D-022):** `_resolve_organization` helper audit view'da. `cross_org_plan returns 404`. Endpoint'ler IsOrganizationMember + IsAuthenticated permission
+- **Hard-fail V1:** `BILLING_LIMIT_GRACE_PCT=0`. Limit aşımı → `402 billing.limit_exceeded`. V2 SaaS feature: soft-warning banner
+- **Critical fixes compatibility:** D-014 (theme override) + D-022 (tenant isolation) + D-024 (Sprint A public fixes — logo/cover/currency) + D-025 (LoyaltySettings OneToOne pattern reuse) + D-026 (Online ödeme — payments_enabled flag'ı ile guard) + D-027 (UI primitives — Sprint B2 admin /billing page Card/Skeleton reuse eder)
+- **Out-of-scope:** Stripe webhook + self-serve checkout (V2 SaaS), free trial flow (Sprint C), overage billing notification (V2 SaaS), Celery monthly counter reset cron (V2 SaaS — V1 manual reset endpoint yeterli), coupon codes (V2 SaaS), multi-region pricing (V2 SaaS), prorated billing (V2 SaaS), revenue analytics dashboard (V2 SaaS)
+
+**Tarih:** 2026-09-29
+
+**Bağlam:** V1 satışa hazırlık Faz 3.1 — `agency-qr-menu` projesini net paketlenmiş bir SaaS haline getirmek. Competitor audit (2026-09-28) "Basic / Pro / Sipariş / Ops" 4 tier paket ayrımını işaretledi. **Önce sade ve sağlam QR Menü Basic/Pro satılabilir hale gelsin; sipariş, mutfak, sadakat, ödeme upsell olarak konumlansın** felsefesi. Sprint A (kritik public fix — logo/cover/currency/QR) + Sprint 11A (online ödeme backend) tamamlandıktan sonra Faz 3.1 backend parçası.
+
+**Alternatifler:**
+- **CharField enum vs integer choices:** CharField okunabilir, DB migration 4 row için trivial, future plan değişikliği V2 SaaS'de integer FK V2 ileri seçenek olarak var. CharField V1 yeterli
+- **`PlanSettings` (OneToOne) vs `Organization` field extensions:** LoyaltySettings pattern reuse (D-025). OneToOne separate model — feature flag toggles per-tenant plan indirection korunur
+- **TenantUsageCounter ayrı model vs JSONField on Organization:** Aggregation query (sum) için ayrı table. JSONField'da subquery yazılamaz; ayrı table = clean
+- **`LimitExceeded` HTTP 402 vs 400:** RFC 6585 — 402 Payment Required (overage/upgrade), 400 Bad Request (input validation). Limit aşımı = kullanıcı upgrade'e yönlendirilir → 402 semantically correct
+- **Hard-fail vs soft-warning:** V1 demo için hard-fail anlaşılır (operator test), V2 SaaS soft-warning banner (UX)
+- **Manual override field (8 boolean) vs JSONField:** Operator override UX'i her feature'ı ayrı column olarak UI'da toggle edilebilir. JSONField'da UI hard
+- **`preview-upgrade` endpoint vs separate matrix endpoint:** V1 tek endpoint — operator "preview" tıklar feature/resource delta görür. Matrix endpoint ayrı (static 4 tier rendering için)
+- **`reset_usage_for_org` superuser only:** V1 demo seed verisi sıfırlama ihtiyacı. V2 SaaS feature: Celery monthly cron, superuser reset deprecated
+- **`has_feature` Returns False vs raise FeatureDisabled:** Service-level flexibility için False default, view-level explicit `require_feature()` raises. DRY: False default + explicit require
+- **Audit view-level emit (D-023 pattern):** Feature-disabled-access audit view'da emit edilmez service'de (DRY). limit-exceeded-attempt view'da
+
+**Seçim gerekçesi:**
+- **4 tier enum:** Competitor audit ile uyumlu 4 paket — basic/pro/orders/ops. V1 demo OPS full feature
+- **PLAN_TIER_LIMITS static:** 4 plan için hard-coded tier matrix. Operator override feature flag alanları ve limitleri ignore edebilir
+- **8 boolean feature flag + 1 active_plan:** Setting UI'sı yönetilebilir. JSONField'dan kaçınılmış (UI karmaşıklık)
+- **`TenantUsageCounter` separate table:** Aylık aggregation sütunları, UNIQUE composite (org, year, month), partial reset/checkpointing
+- **`require_feature` + `enforce_limit` service separation:** Service katmanı reusable — view katmanında explicit guard çağırısı D-023 audit pattern ile uyumlu
+- **HTTP 402 LimitExceeded:** Semantically doğru — kullanıcı upgrade'e yönlendirilecek
+- **Manual override priority effective_features()'da:** Operator plan tier'ından bağımsız feature açıp kapatabilir (V2 SaaS trial extension use case)
+- **Passively recording usage:** Analytics event'lerinde async try/except wrap — analytics latency eklemez, hata olursa silent
+- **D-014 + D-022 + D-025 + D-026 + D-027 reuse:** Yeni pattern yok, var olan patterns'ın uzantısı
+- **V1 hard-fail:** Demo'da anlaşılır UX — "limit doldu, upgrade" message. V2 SaaS soft-warning banner
+
+**Sonuçlar:**
+- `backend/apps/billing/` — yeni Django app (11 dosya: models/services/serializers/views/urls/admin/migrations/4 test files + conftest + factories)
+- `backend/apps/billing/models.py` — `PlanSettings` (OneToOne Organization, 8 boolean flag + billing_notes), `TenantUsageCounter` (FK Organization, monthly aggregate, UNIQUE composite)
+- `backend/apps/billing/constants.py` — `PLAN_CHOICES`, `PLAN_TIER_LIMITS`, `default_features()` (opsiyonel — models.py'ye inline de olur)
+- `backend/apps/billing/services.py` — 11 service function (has_feature, require_feature, enforce_limit, record_usage, get_plan_settings, get_active_plan, get_usage_snapshot, get_plan_limit_matrix, preview_upgrade, update_plan_settings, reset_usage_for_org)
+- `backend/apps/billing/serializers.py` — 6 serializer (PlanSettings, PlanTierChoices, Usage, LimitMatrix, UpgradePreview, LimitExceeded/FeatureDisabled)
+- `backend/apps/billing/views.py` — 6 admin endpoint + `require_feature` dekoratör + `_resolve_organization` + `IsOrgAdminOnly` permission
+- `backend/apps/billing/urls.py` — `/api/v1/admin/billing/*` mount
+- `backend/apps/billing/admin.py` — Django admin (read-mostly + superuser manual override view)
+- `backend/apps/billing/migrations/0001_initial.py` — 2 model + 3 index + 1 UNIQUE
+- `backend/apps/billing/migrations/0002_alter_plan_active_plan_choice/` (optional PLAN_CHOICES index)
+- `backend/apps/audit/models.py` — ACTION_CHOICES +4, TARGET_CHOICES +1 (backward-compatible)
+- `backend/apps/audit/migrations/0007_alter_*` — D-026 anchor (committed in Sprint B1)
+- `backend/apps/orders/views.py` — feature-flag guard on `PublicOrderCreateView.post` + `enforce_limit` on `MenuItemViewSet.create/update`
+- `backend/apps/menu/views.py` — `enforce_limit` on `MenuCategoryViewSet.create`
+- `backend/apps/branches/views.py` — `enforce_limit` on `BranchViewSet.create`
+- `backend/apps/payment/views.py` — `require_feature('payments_enabled')` on `CreateOrderPaymentView.post`
+- `backend/apps/account/views.py` — `require_feature('loyalty_enabled')` on redeem + `require_feature('customer_accounts_enabled')` on MagicLink
+- `backend/apps/translate/views.py` — `require_feature('ai_translate_enabled')` on translate endpoint
+- `backend/apps/pdf_import/views.py` — `require_feature('ai_pdf_import_enabled')` on upload endpoint
+- `backend/apps/analytics/views_public.py` — `record_usage(org, 'views', 1)` on `record_menu_view`
+- `backend/apps/qr/views_public.py` — `record_usage(org, 'scans', 1)` on `record_qr_open`
+- `backend/config/settings/base.py` — `apps.billing` INSTALLED_APPS + `BILLING_DEFAULT_PLAN=ops` + `BILLING_LIMIT_GRACE_PCT=0`
+- `backend/apps/core/management/commands/seed_demo.py` — Modern Cafe PlanSettings OPS oluştur
+- Test: 396 baseline → **429 yeşil** (+33 Sprint B1: 4 plan_model + 8 feature_flags + 7 limit + 7 views + 6 security + 1 factory = 33 yeni test). Sıfır regresyon. 18 payment spec gap fail (Sprint 11B scope, dokunulmadı)
+
+**Notlar:**
+- Worker 7 commit + Sprint B1 rapor ile push edildi (background task succeeded). Root session D-028 kararı + Sprint B1 final rapor ekleyecek
+- Sprint B2 (admin UI) + Sprint B3 (public UI conditional render + UpgradeBanner) sonraki alt sprint'ler
+- V2 SaaS feature'ı: Stripe webhook self-serve upgrade. V1'de operator manual upgrade (V1 satış ekibi kolay)
+- Plan tier'lar değişirse (V2 SaaS) integer FK + migration. V1 simple CharField
+- Free trial flow Sprint C onboarding wizard'da eklenir — V1 demo'da Trial kartı seçince 14 gün PRO feature enable olur
+- PlanSettings feature override alanları operatörün "tenant 5 için kart aktif ama sadakat kapalı" gibi mixed scenario'larını destekler
+- PlanSettings migrate 0001 sıfır veri kaybı (AddField nullable + OneToOne)
+- Reset endpoint superuser only — V2 SaaS feature: Celery monthly cron
+- V1 demo'da Modern Cafe OPS plan'da (full features) — Sprint A fix + Sprint B1 guards birleşince Modern Cafe tüm modüller açık; PR'da bu özellik test edilebilir (sidebar nav'da plan & limitler görünür)
+- Demo time-of-demo'lar: `Modern Cafe admin panel → Plan & Limitler` sayfası OPS + tüm feature flags enabled + usage 0/limit ✓ görünür
+
+| D-022 | 2026-09-26 | Order + Kitchen Flow Pattern (Order/OrderItem + 6-state FSM + server-side total + audit integration + tenant isolation + 20/min public throttle + snapshot pricing) | aktif |
+| D-023 | 2026-09-28 | AI Translation + Description Pattern (TranslationMemory SHA-256 cache + AIProductDescription regen guard + D-021 provider reuse + 5+1 admin endpoint + audit view-layer emit + per-org cache isolation) | aktif |
+| D-024 | 2026-09-28 | V1 Satış Hazırlık Critical Fixes (public payload 12→18 alan + currency 4-step fallback + QR scan_count DB-side atomic increment + cross-tenant FK null guard + image URL resolver) | aktif |
+| D-025 | 2026-09-28 | Müşteri Auth + Sadakat Puanı Pattern (Email Magic Link + HttpOnly session cookie + LoyaltySettings tenant OneToOne + LoyaltyTransaction ledger + unique idempotent award + server-side redemption validation + Order.customer FK nullable + audit 5 yeni action + 2 yeni target) | aktif |
+| D-026 | 2026-09-28 | Online Ödeme + Provider Abstraction Pattern (Stripe primary + iyzico V2 SaaS placeholder + Fernet encryption at rest + PaymentProvider ABC + 2-tier webhook idempotency + CSRF exempt + signature verify + Order.paid→confirmed FSM + Loyalty REVERSE integration + 11 endpoint + 23/40 yeşil test) | aktif |
+| D-027 | 2026-09-28 | UI/UX Design System + Modern Polish Pattern (token layer extension — radius/shadow/transition + Playfair SC + Karla pairing + dark mode CSS variable + ThemeProvider zustand persist + 4 UI primitive + focus-visible global + skip-to-content + prefers-reduced-motion reset + dependency-free shadcn-style API) | aktif |
+| D-028 | 2026-09-29 | Plan + Feature Flags + Limits Pattern (Plan enum BASIC/PRO/ORDERS/OPS + PlanSettings tenant OneToOne + 8 boolean feature flags + TenantUsageCounter monthly aggregate + PLAN_TIER_LIMITS static matrix + has_feature/enforce_limit/record_usage services + 6 admin endpoint + 8 endpoint guards + D-025 OneToOne pattern reuse + audit 4 actions + 1 target_type) | aktif |
