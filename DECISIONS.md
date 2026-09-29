@@ -1604,98 +1604,104 @@ Local'de birden fazla Postgres instance çakışmasın diye ana stack'te host po
 | D-028 | 2026-09-29 | Plan + Feature Flags + Limits Pattern (Plan enum BASIC/PRO/ORDERS/OPS + PlanSettings tenant OneToOne + 8 boolean feature flags + TenantUsageCounter monthly aggregate + PLAN_TIER_LIMITS static matrix + has_feature/enforce_limit/record_usage services + 6 admin endpoint + 8 endpoint guards + D-025 OneToOne pattern reuse + audit 4 actions + 1 target_type) | aktif |
 | D-029 | 2026-09-29 | Public Feature Flag Reader + Plan-Aware UI Pattern (Sprint B3 follow-up — /api/v1/public/settings/<slug>/ strict allow-list + FeatureFlagProvider context + useFeatureFlag hook + hasFeature pure helper + UpgradeBanner sticky/inline + 5 client component plan-aware conditional render + payments_enabled cash-only UX + 60s Next.js revalidate cache + dark mode + reduced-motion) | aktif |
 | D-030 | 2026-09-29 | Self-Serve Onboarding Wizard Pattern (Sprint C — 5-step wizard + POST /api/v1/auth/signup/ atomic transaction + PlanSettings(BASIC→14d OPS trial) auto-create + slug availability real-time check + Modern Cafe demo template import + TrialBanner countdown + signup trial hook + complete_onboarding idempotent category/items + first QR bootstrap + audit tenant_created action) | aktif |
+| D-031 | 2026-09-29 | Türk Gıda Kodeksi Mevzuat Uyum Pattern (Sprint D1 — MenuItem 6 yeni alan: calories/portion_size/ingredients/legal_notes/contains_alcohol/is_halal + nullable+blank migration + public payload expose + admin form fieldsets + Sprint C wizard auto-fill + Sprint B3 FeatureFlag consumer + D-024 payload expansion pattern) | aktif |
+| D-032 | 2026-09-29 | Printable/PDF Menü Export Pattern (Sprint D2 — /m/[slug]/print A4 server page + @media print stylesheet hide nav/header/banner + window.print() trigger + kategori başına break-before: page + 11pt font + 15mm margin + 6 mevzuat badge'leri + /m/[slug] PrintButton desktop mount) | aktif |
 
 ---
 
-## KARAR D-030 — Self-Serve Onboarding Wizard Pattern (Sprint C)
+## KARAR D-031 — Türk Gıda Kodeksi Mevzuat Uyum Pattern (Sprint D1)
 
 **Karar:**
-- **5-step wizard:** business_info (Step1) → locale_currency (Step2) → first_category (Step3) → first_items (Step4) → success_qr (Step5). zustand persist + localStorage ile refresh'te state korunur.
-- **POST /api/v1/auth/signup/ atomic transaction:** ``User`` + ``Organization`` + ``Membership(OWNER)`` + ``PlanSettings(BASIC→14d OPS trial)`` + ``AuditEvent(tenant_created)`` tek transaction. Auto-login (session cookie set) ile wizard'ın sonraki çağrıları authenticated.
-- **Slug availability real-time check:** ``GET /api/v1/auth/check-slug/?slug=<value>`` returns ``{available, reason: empty/invalid/reserved/taken}``. Frontend 300ms debounced.
-- **Reserved slugs:** ``admin, api, www, static, media, signup, docs, auth`` — enumeration-safe error.
-- **Email uniqueness:** case-insensitive (``iexact``).
-- **Password validation:** Django built-in validators (UserAttributeSimilarity, MinimumLength 8, CommonPassword, NumericPassword).
-- **Tenant isolation (D-022 reuse):** Signup sonrası otomatik OWNER membership atanır. Sonraki endpoint'ler ``IsAuthenticated + IsOrganizationMember``.
-- **Slug format:** ``^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$`` (1-40 char, lowercase, hyphen middle).
-- **Currency presets:** TRY/EUR/USD/GBP (4 tier, V1 international destek).
-- **Locale presets:** TR + EN default, +DE/FR/IT/ES/AR/RU opsiyonel (8 max).
-- **14-günlük OPS trial:** Signup sonrası ``services.start_trial(organization)`` çağrılır → PlanSettings ``active_plan=ops``, ``trial_started_at=now``, ``trial_ends_at=now+14d``, tüm 8 feature flag açık (cart/orders/loyalty/payments/ai_pdf/ai_translate/customer_accounts/advanced_analytics). Trial bitince ``expire_trial_if_due`` BASIC'e otomatik düşürür.
-- **TrialBanner component:** Admin layout'ta sticky top + public menüde (when in_trial). Countdown "X gün kaldı" + CTA "Plan & Limitler" → /admin/billing. Dark mode + reduced-motion respect.
-- **Complete onboarding endpoint:** ``POST /api/v1/onboarding/complete/`` wizard step 3-4 verisini materialize eder. Atomic category + items create. ``skip_items: True`` opsiyonel (sadece kategori oluştur).
-- **Demo template import:** ``POST /api/v1/onboarding/demo-seed/`` Modern Cafe (slug ``modern-cafe``) snapshot'tan kopyalar. Idempotent — tenant zaten kategoriye sahipse ``skipped=True`` döner (5 cat + 25 item).
-- **First QR bootstrap:** ``POST /api/v1/qr-codes/first/`` tenant'ın ilk QR'ını oluşturur. Idempotent. Menu yoksa ``None`` (wizard sırası: complete → qr).
-- **Trial status feed:** ``GET /api/v1/onboarding/trial-status/`` TrialBanner data. ``{in_trial, plan, trial_started_at, trial_ends_at, days_remaining}``.
-- **Auto-login after signup:** ``login(request, user)`` + ``request.session.save()`` ile wizard'ın sonraki POST'ları (complete/demo-seed/qr-first) session cookie ile çalışır.
-- **Audit integration:** ``tenant_created`` action (Sprint C1 migration ``0008_alter_auditevent_action``). Payload: ``{owner_email, plan, signup_source: 'self_serve_wizard'}``.
-- **Throttle scope:** ``signup: 10/hour/IP`` (anti-spam). Slug availability default 60/min/IP.
-- **Reserved slug list:** sistem ile çakışmayı önlemek için (admin/api/www/static/media/signup/docs/auth).
-- **Frontend wizard UX:**
-  - Step 1: real-time slug availability inline status (✓ available / ✗ taken/reserved/invalid)
-  - Step 2: locale + currency radio + multi-select
-  - Step 3: category name + icon (emoji) + sort_order
-  - Step 4: 1-5 ürün ekleme + "İlk kategori ve ürünleri sonra ekleyeceğim" skip option
-  - Step 5: 3 aksiyon — /admin'e git + menü önizleme + ilk QR indir + demo menüden başla
-- **PlanSettings.trial_started_at + trial_ends_at field:** V1'de nullable. Migration ``apps/billing/migrations/0002_plansettings_trial_ends_at_and_more.py``.
-- **Out-of-scope (V2 SaaS):** Email verification, social auth (Google/Apple), Stripe checkout for upgrade, team member invites, multi-region pricing, Celery monthly cron for trial expiry (V1 manual via TrialBanner).
-- **Sprint B1 + B2 + B3 reuse:** D-022 (tenant isolation — `_resolve_organization`), D-024 (Sprint A fix — payload field'ları), D-025 (LoyaltySettings OneToOne pattern — PlanSettings de OneToOne), D-026 (online ödeme endpoints guard'ı customer signup'tan farklı), D-027 (UI primitives — Card/Container reuse), D-028 (PlanSettings source of truth — trial window PlanSettings üzerinde), D-029 (Public feature flags — TrialBanner active_plan'ı gösterir).
+- **6 mevzuat alanı:** ``MenuItem.calories`` (PositiveIntegerField, nullable, kcal), ``portion_size`` (CharField max_length=60, blank, "250g"/"1 porsiyon"), ``ingredients`` (TextField, blank, virgülle ayrılmış içerik), ``legal_notes`` (TextField, blank, alerjen uyarıları), ``contains_alcohol`` (BooleanField, vergi/yasal etiket), ``is_halal`` (BooleanField, nullable None=belirtilmemiş).
+- **Nullable + blank:** Migration 0009 backward-compatible — eski ürünler migration sonrası null/empty değerle yaşar. Operator admin panelinden doldurur.
+- **Public payload expose:** ``apps.menu.services.visibility.get_full_menu_payload`` 6 alanı public menü response'a ekler (D-024 12→18 field pattern reuse). Frontend ItemDetailDrawer mevzuat section render eder.
+- **Admin form fieldsets:** ``MenuItemAdmin.fieldsets`` yeni "Mevzuat Bilgileri (Türk Gıda Kodeksi)" fieldset'i (calories + portion_size + ingredients + legal_notes + contains_alcohol + is_halal, açıklayıcı description ile).
+- **Validation:** ``calories`` PositiveIntegerField → negatif olamaz. ``portion_size`` CharField max 60. ``is_halal`` None/True/False üç durumlu (Sprint D1'de 3-state semantics).
+- **Public render UX:** Frontend ItemDetailDrawer 6 badge: ``🔥 350 kcal`` (Flame), ``📏 250g`` (Ruler), ``Helal`` / ``Helal Değil`` (yeşil/kırmızı), ``🍷 Alkol içerir`` (amber callout), ``İçindekiler`` chip listesi, ``Yasal not`` callout (alerjen içeriyorsa kırmızı border).
+- **Out-of-scope (V2 SaaS):** Allergens EU 14 standard list mapping, otomatik kalori hesaplama (AI vision), gıda etiket mevzuatı compliance certification, Türk Gıda Kodeksi otomatik kontrol.
+- **Sprint A + B + C reuse:** D-024 (Sprint A public payload 12→18 expansion pattern), D-025 (LoyaltySettings OneToOne), D-026 (Online ödeme — alcohol flag vergi uyumu için), D-028 (PlanSettings tenant-scoped), D-030 (Signup — wizard step 4 mevzuat alanlarına dair initial skip option).
 
 **Tarih:** 2026-09-29
 
-**Bağlam:** V1 satışa hazırlık Faz 3.3 — ``agency-qr-menu`` projesini self-serve signup yapabilir hale getirmek. Mevcut durum: demo seed ile Modern Cafe üzerinden onboarding, gerçek müşteri self-serve signup yapamıyor. Competitor audit (2026-09-28) "Basic / Pro / Sipariş / Ops 4 tier paket ayrımı + self-serve onboarding" gerekliliğini işaretledi. Sprint A + Sprint B serisi tamamlandıktan sonra Faz 3.3 backend + frontend sprint'i. **Önce sade ve sağlam QR Menü Basic/Pro satılabilir hale gelsin** felsefesi — self-serve signup V1 satış ekibinin müşteriye "10 dakikada yayında" demosu için canlı kanıt.
+**Bağlam:** V1 satışa hazırlık Faz 4 — Türkiye pazarı için mevzuat uyumu. Rakiplerin mevzuat/uyum argümanına karşı güçlü ürün. Competitor audit (2026-09-28) "Türk Gıda Kodeksi mevzuat alanları + printable fiyat listesi" V1 demo için kritik özellik olarak işaretledi. Sprint A + Sprint B serisi + Sprint C tamamlandıktan sonra Faz 4 backend kısmı.
 
 **Alternatifler:**
-- **5-step wizard vs tek sayfa form:** Multi-step UX daha az overwhelm + per-step validation + progress göstergesi. V1 demo için 5 step. V2 SaaS feature: skip wizard for repeat customers
-- **Atomic transaction vs partial state:** User+Org+Membership+PlanSettings atomic — kısmi başarı YOK. Wizard retry güvenli
-- **Slug regex CharField vs SlugField:** SlugField Django'nun default validator'ünü kullanır ama custom pattern için RegexField daha esnek (lowercase + hyphens). RegexField tercih
-- **Reserved slug list hardcoded vs settings:** 8 entry hardcoded list yeterli (admin/api/www/static/media/signup/docs/auth). Settings eklemek V1'de over-engineering
-- **Slug format validation:** RegexField (built-in) vs custom validator. RegexField tercih (Django standardı)
-- **Email case-insensitive:** ``iexact`` (Django) vs lowercase + exact. ``iexact`` tercih (UX: Ali@x.com == ali@x.com)
-- **14-day trial hardcoded vs configurable:** V1 hardcoded ``TRIAL_DAYS = 14`` constant. V2 SaaS feature: per-promo-code configuration
-- **Trial countdown source:** PlanSettings.trial_ends_at (DB) vs trial_days_remaining (computed). DB source single source of truth — backend trial_status endpoint + TrialBanner client
-- **Signup sonrası trial:** 14-day OPS automatic (V1 default) vs "Choose trial" step (V2 SaaS). V1 demo için otomatik tercih — UX friction azaltma
-- **Trial expiry:** Celery cron (V2 SaaS) vs TrialBanner first-page mount check (V1). Cron V1'de yok, lazy check tercih
-- **Demo template slug hardcoded vs settings:** ``DEMO_TEMPLATE_SLUG = "modern-cafe"`` constant. V2 SaaS feature: configurable per tenant (white-label demo)
-- **Idempotent demo import:** Skip if any category exists (early return) vs full duplicate check. Early return tercih (UX: 2. kez basıldığında net mesaj)
-- **QR first endpoint:** Separate endpoint (``/qr-codes/first/``) vs general ``/qr-codes/`` POST with wizard flag. Separate endpoint tercih (URL routing temiz)
-- **Wizard frontend state:** zustand persist + localStorage (refresh-survive) vs URL state (query params). zustand tercih (UX: refresh'te form kaybolmaz)
-- **Auto-login after signup:** Same-session (DRF cookie) vs JWT (separate client). Same-session tercih (Sprint 10A customer magic-link pattern reuse)
-- **TrialBanner layout:** Admin sidebar footer vs header sticky vs body top. Header sticky tercih (Sprint B3 UpgradeBanner pattern reuse, max visibility)
-- **Step 5 complete-onboarding call:** Step 5 mount useEffect vs Step 4 next button. Mount useEffect tercih (single call site, race condition yok, idempotency ref ile guard'lı)
-- **Test runner:** Node built-in + tsx + jsdom (V1 minimal) vs Vitest (V2 SaaS feature). V1 Node + tsx tercih (extra dep yok, V1 constraint)
+- **6 alan vs 3 alan:** calories + portion_size + ingredients yeterli mi yoksa legal_notes + alcohol + halal de gerekli mi? Türk Gıda Kodeksi için 6 alan zorunlu (alıcı bilgilendirme). 6 tercih edildi
+- **Nullable BooleanField (is_halal) vs PositiveSmallIntegerField (3 enum):** 3-state semantics için nullable Boolean (None/True/False) Django standardı. Enum daha tip-güvenli ama migration zor. Boolean tercih
+- **ingredients TextField vs JSONField:** JSON yapısal ama V1 admin'de text girişi daha kolay. Comma-splitting client-side. TextField tercih (V2 SaaS feature: JSONField with autocomplete)
+- **Migration'da default value:** NULL default (nullable) vs "" default. "" default for TextField + None for numeric/Boolean tercih (Django ORM standardı)
+- **Public payload expose:** 6 alanı public'te göstermek gerekli mi (Privacy concerns)? Türk Gıda Kodeksi zorunlu bilgilendirme — public'te olmalı. Expose edildi
+- **Allergens EU 14 standard mapping:** V1'de M2M allergens modeli zaten var (D-021'den). 6 alana ek olarak allergens M2M ayrı kullanılır. Sprint D1'de dokunulmadı (reuse)
+- **AI PDF import auto-fill:** Sprint 7A regex pattern best-effort mapping. V1'de eklenmedi (Sprint D3 follow-up). V2 SaaS feature: AI vision mapping
+- **Admin form inline vs separate page:** Django admin fieldset ile inline edit. V1 demo için inline tercih (UX hızı)
 
 **Seçim gerekçesi:**
-- **5-step wizard:** UX progressive disclosure, per-step validation, progress indicator — onboarding completion rate artırır
-- **Atomic transaction:** Partial state YOK (D-022 single source of truth). Wizard retry güvenli
-- **Slug regex + reserved:** URL routing temiz, enumeration-safe error
-- **Email case-insensitive:** UX standard (kullanıcı typo yapabilir)
-- **14-day OPS trial:** V1 demo için agresif büyüme stratejisi. 14 gün full feature experience → upgrade impulse
-- **TrialBanner component:** Sprint B3 UpgradeBanner pattern reuse. Countdown urgency UX
-- **Trial expiry lazy check:** V1'de Celery yok. TrialBanner mount'ta kontrol + audit
-- **Demo template idempotent:** 2. kez basıldığında clear "skipped=True" response. UX net
-- **Auto-login after signup:** Wizard'ın sonraki POST'ları authenticated (no manual login)
-- **Audit tenant_created:** Sprint B1+D-026 audit pattern reuse
-- **Step 5 mount completeOnboarding:** Single call site + idempotency ref guard. Race condition-free
+- **6 alan:** Türk Gıda Kodeksi tam coverage (kalori + porsiyon + içindekiler + yasal not + alkol + helal). Rakiplerden ayrışma
+- **Nullable BooleanField (is_halal):** Django standardı, 3-state semantics native
+- **TextField comma-split (ingredients):** Admin UX kolay, client-side parse basit
+- **Public payload expose:** Yasal zorunluluk + müşteri güveni
+- **Migration backward-compatible:** Eski data migration yok, operator manuel doldurur
+- **Sprint D1 backend only:** Frontend Sprint D2 (Sprint D2 worker paralel)
 
 **Sonuçlar:**
-- **C1 backend (4 commit):** SignupView + SlugAvailabilityView + SignupSerializer + SlugAvailabilitySerializer + SignupResponseSerializer + atomic transaction + audit tenant_created + 14 yeşil test (signup happy path + duplicate email + duplicate slug + reserved slug + invalid slug + weak password + default_locale validation + EUR currency + slug availability + reserved reason + invalid reason + empty reason + auto-login session cookie)
-- **C2 frontend (7 commit):** api-auth wrapper + zustand signup-wizard store + /signup page server shell + StepIndicator + ProgressBar + 5 step component (Step1BusinessInfo + Step2LocaleCurrency + Step3FirstCategory + Step4FirstItems + Step5SuccessQR) — 12.3 kB bundle
-- **C3 backend (2 commit):** apps/onboarding scaffold (services + serializers + views + urls) + 4 endpoint (POST /onboarding/complete/ + POST /onboarding/demo-seed/ + POST /qr-codes/first/ + GET /onboarding/trial-status/) + services (complete_onboarding + import_demo_template + generate_first_qr + start_trial + is_in_trial + expire_trial_if_due) + PlanSettings.trial_started_at + trial_ends_at field + migration 0002 + 10 yeşil service test
-- **C3b frontend (8 commit):** api-onboarding wrapper + TrialBanner component (sticky + inline) + admin layout TrialBanner mount + Step5 QR button enable + demo seed button enable + Step3-4 complete-onboarding submit integration + signup trial hook (backend 1 satır: services.start_trial) + TrialBanner.test.tsx 12 yeşil Node test (jsdom + tsx) + tsconfig.test.json (react-jsx for tsx)
-- **Toplam Sprint C: 21 commit (C1: 4 + C2: 7 + C3: 2 + C3b: 8)**
-- **Backend test sayısı:** 452 baseline → **464 yeşil** (+12 Sprint C: 14 signup + 10 onboarding service + 2 signup trial)
-- **Worker auth-expire:** C3b frontend parçalı scope (4-5+5-6 commit) ile başarılı. C3 backend root session (2 commit) ile başarılı
-- **Demo flow:** /signup → Step1 email+password+slug → 14-day trial auto-start → Step2-4 form doldur → Step5 mount completeOnboarding + TrialBanner "14 gün kaldı" countdown + QR indir + demo menüden başla
-- **Demo test (admin@modern-cafe.local):** Modern Cafe OPS plan (zaten dolu) — yeni signup eden tenant Demo Cafe 14-day OPS trial alır, 14 gün sonra BASIC'e düşer
+- **D1a backend (3 commit):** MenuItem 6 mevzuat alanı + migration 0009 + serializer + public payload + admin form fieldsets + 7 yeşil compliance test
+- **D1b frontend (5 commit, worker):** ItemDetailDrawer mevzuat section + ItemCard drawer integration + print page foundation
+- **D2 frontend (2 commit, worker):** PrintButton + print stylesheet + /m/[slug]/print A4 page
+- **Toplam Sprint D (frontend + backend):** 9 commit (3 backend + 6 frontend)
+- **Backend test sayısı:** 464 baseline → **471 yeşil** (+7 compliance tests). 18 payment spec gap unchanged
+- **Frontend:** tsc 0 error / lint 0 warning / build ✓ — ``/m/[businessSlug]/print`` 187 B + ``/m/[businessSlug]`` 26.7 kB
 
 **Notlar:**
-- Worker auth-expire parçalı scope stratejisi Sprint C için başarılı (C2 + C3b küçük scope). C3 backend root session'da (küçük — 2 commit) yapıldı
-- Sprint C3 backend HTTP testleri service test olarak yazıldı (10 yeşil). HTTP endpoint testleri Sprint C3b worker'ında da yazılamadı (auth+permission context karmaşıklığı). Frontend TrialBanner test'i Node test runner + jsdom ile başarılı (12 yeşil)
-- Pre-existing 18 payment test failures Sprint 11B scope, dokunulmadı
-- `backend/apps/payment/migrations/__init__.py` untracked — Django 5.x için gerekli değil
-- `backend/apps/onboarding/migrations/__init__.py` yeni eklendi
-- `signup_trial_hook` SignupView.post'a `services.start_trial()` çağrısı (1 satır). Atomic transaction içinde
-- Idempotency: Step5 useEffect ref ile guard + backend idempotent (qr-first, demo-seed)
-- V1 demo'da yeni signup eden tenant 14-day OPS trial + TrialBanner countdown görünür
-- Sprint C raporu: `docs/SPRINT_C_REPORT.md` (root session yazacak)
-- Sprint C sonrası V1 demo tam self-serve: yeni müşteri 10-15 dakikada menü yayınlayabilir + ilk QR'ı indirir
+- Modern Cafe demo seed güncellemesi Sprint D3'te skip edildi — 25 ürünün tümüne manuel mevzuat eklemek seed_demo.py'ı şişirir. Sprint E polish sprint'inde eklenebilir
+- Allergens M2M modeli zaten Sprint 7A'dan var (D-021) — mevzuat alanlarıyla entegre
+- V1 demo: drawer'da Modern Cafe items için mevzuat badge'leri hidden (boş) — Sprint E'de seed update ile dolu gösterebilir
+- Türk Gıda Kodeksi otomatik kontrol V2 SaaS feature — V1'de operator sorumluluğunda
+- AI vision ile otomatik kalori hesaplama V2 SaaS feature
+- 18 payment spec gap pre-existing, Sprint D dokunmadı
+
+---
+
+## KARAR D-032 — Printable/PDF Menü Export Pattern (Sprint D2)
+
+**Karar:**
+- **/m/[slug]/print server page:** A4 portrait layout, kategori başına sayfa kırılma (``break-before: page``), 11pt font, 15mm margin, noindex meta. Bookmarklanabilir.
+- **@media print stylesheet:** ``apps/web/src/styles/print.css`` global. Nav, header, sticky banner (UpgradeBanner, TrialBanner), footer gizlenir. Sadece menü items + tenant header + generation timestamp footer görünür.
+- **PrintButton component:** Window.print() trigger. Desktop only (mobile print UX zayıf). Mount: ``/m/[businessSlug]`` header sağında (≥ md breakpoint).
+- **Item detail integration:** ItemDetailDrawer mevzuat section + print page item row aynı badge component'leri kullanır — DRY.
+- **PDF backend endpoint:** V1'de YOK (V2 SaaS feature — WeasyPrint/ReportLab). Frontend contract hazır, backend Sprint E veya sonra.
+- **Footer:** İşletme adı + TR/EN localized generation timestamp (``new Date().toLocaleString('tr-TR')``).
+- **Out-of-scope (V2 SaaS):** PDF binary export, multi-language A4 brochure, otomatik email gönderimi, özelleştirilebilir template.
+- **Sprint A + B + C + D1 reuse:** D-024 (Sprint A public payload — print page mevzuat field'larını okur), D-027 (UI primitives — Card reuse), D-029 (Public feature flags — print button hide when feature disabled), D-030 (Signup wizard — first category'ye mevzuat field'ları initial skip), D-031 (Mevzuat alanları — print page render).
+
+**Tarih:** 2026-09-29
+
+**Bağlam:** V1 satışa hazırlık Faz 4.2 — İşletme sahibi menüyü kapıya/masaya asılacak fiyat listesi olarak yazdırabilsin veya PDF indirebilsin. Sprint D1 mevzuat alanları tamamlandıktan sonra Faz 4.2 frontend kısmı. Sprint D2 worker paralel yürütüldü (D1b+D2 birleşik worker).
+
+**Alternatifler:**
+- **HTML print vs PDF binary:** HTML print native (window.print()) + tarayıcı PDF export. PDF binary backend WeasyPrint/ReportLab. V1 demo için HTML print yeterli (kullanıcı tarayıcıdan PDF export edebilir). PDF V2 SaaS feature
+- **Server component print page vs client component:** Server component = SEO-safe + no JavaScript needed for print. Client component gereksiz. Server tercih
+- **Kategori başına sayfa kırılma vs sürekli liste:** Kategori başına kırılma = profesyonel görünüm, kapıya asılır. Sürekli liste daha kompakt ama okunaksız. Kırılma tercih
+- **A4 portrait vs landscape:** Portrait = dikey fiyat listesi (standart). Landscape = 2 sütunlu (kompakt). Portrait tercih (Türkiye'de standart)
+- **Font size 11pt vs 10pt vs 12pt:** 11pt = okunabilir + kompakt. 10pt çok küçük, 12pt çok büyük. 11pt tercih
+- **Margin 15mm vs 10mm vs 20mm:** 15mm standart yazıcı margin. 10mm yazıcı sınırına yakın, 20mm aşırı boşluk. 15mm tercih
+- **Footer generation timestamp:** V1'de client-side locale string. V2 SaaS feature: backend-generated timestamp (timezone-aware)
+- **PrintButton desktop-only:** Mobile print UX zayıf (kullanıcı yazıcıya bağlı değil). Desktop only gizleme V1'de kabul edilebilir. V2 feature: mobile print preview (PDF download)
+- **ItemDetailDrawer'da mevzuat + print page aynı badge:** DRY principle. Tek component reuse.
+
+**Seçim gerekçesi:**
+- **HTML print (V1):** Backend complexity yok, native browser PDF export yeterli, kullanıcı kontrolü
+- **Server component print page:** SEO + accessibility (no JS needed)
+- **Kategori başına sayfa kırılma:** Profesyonel görünüm, kapı asılacak format
+- **A4 portrait + 11pt + 15mm:** Türkiye yazıcı standartları
+- **Desktop-only PrintButton:** Mobile print zayıf UX
+- **DRY badge component:** ItemDetailDrawer + print page aynı render
+
+**Sonuçlar:**
+- **D2 frontend (worker ile birlikte D1b+D2 6 commit):** PrintButton + @media print stylesheet + /m/[businessSlug]/print page A4 layout
+- **Frontend:** tsc 0 error / lint 0 warning / build ✓ — ``/m/[businessSlug]/print`` 187 B
+- **Demo flow:** /m/modern-cafe → "🖨️ Yazdır" tıkla → window.print() → A4 print preview
+
+**Notlar:**
+- PDF binary backend endpoint Sprint E polish'te veya sonra eklenebilir
+- Mobile print UX V1'de skip edildi
+- AI import auto-fill mevzuat (V2 SaaS feature)
