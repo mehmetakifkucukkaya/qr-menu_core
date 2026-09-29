@@ -185,6 +185,24 @@ MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 # ---------------------------------------------------------------------------
+# Sprint E1 — Media storage backend (D-033)
+# ---------------------------------------------------------------------------
+# Pluggable storage backend for ``MediaAsset`` (Sprint E1).
+#   * "local" (default) — writes to MEDIA_ROOT, served by Django dev server
+#     or nginx in prod.
+#   * "s3" — AWS S3 / Cloudflare R2 via django-storages[boto3]. Requires
+#     AWS_S3_BUCKET_NAME + AWS credentials + optional
+#     AWS_S3_ENDPOINT_URL (R2) + MEDIA_PUBLIC_BASE_URL (CDN).
+MEDIA_STORAGE_BACKEND = os.environ.get("MEDIA_STORAGE_BACKEND", "local")
+AWS_S3_BUCKET_NAME = os.environ.get("AWS_S3_BUCKET_NAME", "")
+AWS_S3_REGION = os.environ.get("AWS_S3_REGION", "")
+AWS_S3_ENDPOINT_URL = os.environ.get("AWS_S3_ENDPOINT_URL", "")
+MEDIA_PUBLIC_BASE_URL = os.environ.get("MEDIA_PUBLIC_BASE_URL", "")
+# AWS credentials — leave blank if using IAM role (ECS / EC2 instance profile).
+AWS_ACCESS_KEY_ID = os.environ.get("AWS_ACCESS_KEY_ID", "")
+AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY", "")
+
+# ---------------------------------------------------------------------------
 # Sprint 5A — public base URL + analytics salt
 # ---------------------------------------------------------------------------
 # PUBLIC_BASE_URL is the absolute origin the frontend uses to load menus.
