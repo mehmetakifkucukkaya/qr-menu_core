@@ -214,13 +214,21 @@ class SignupView(APIView):
         )
 
         # 4. PlanSettings(BASIC) — auto-assign per Sprint B1 default.
-        # Trial upgrade (Sprint C3) flips active_plan to 'ops' for 14 days.
+        # Sprint C3b trial hook: flip the freshly-created tenant into a
+        # 14-day OPS trial. ``start_trial`` is idempotent and re-uses the
+        # BASIC PlanSettings row we just inserted (no extra row). Runs
+        # inside the @transaction.atomic decorator so a rollback also
+        # unwinds the trial flip — the operator never sees a half-built
+        # tenant with an "in trial" plan + missing org.
         PlanSettings.objects.create(
             organization=organization,
             active_plan=BASIC,
             billing_notes="Self-serve signup — BASIC default.",
             **default_features(BASIC),
         )
+        from apps.onboarding import services as onboarding_services
+
+        onboarding_services.start_trial(organization)
 
         # 5. Audit — tenant_created (lazy migrate in Sprint C1 final commit).
         try:
