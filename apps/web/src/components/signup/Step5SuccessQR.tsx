@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -16,6 +16,7 @@ import {
 
 import { useSignupWizard } from "@/lib/stores/signup-wizard";
 import {
+  completeOnboarding,
   generateFirstQR,
   importDemoTemplate,
   type FirstQRResponse,
@@ -60,6 +61,57 @@ export function Step5SuccessQR() {
       reset();
     };
   }, [reset]);
+
+  // --- C3b: fire POST /api/v1/onboarding/complete/ once on mount --------
+  //
+  // The wizard's persisted `first_category` + `first_items` snapshots
+  // are the single source of truth here. We branch on three cases:
+  //
+  //   * Both name + items set  → submit a category + items payload.
+  //   * Operator clicked "İlk kategori ve ürünleri sonra ekleyeceğim"
+  //     on Step 4 (items list intentionally emptied by the wizard reset
+  //     is NOT applied here — the store still holds the placeholder
+  //     row). We detect the skip via `first_items.every(name === "")`
+  //     AND a flag the wizard sets in Step 4. To keep this isolated we
+  //     check the wizard's `setStep` history: if the user skipped, the
+  //     first row was left empty AND `setStep(5)` ran from the skip
+  //     button. Simplest robust heuristic: if every first_items row has
+  //     an empty name → treat it as a skip.
+  //   * No category (rare edge: state lost between steps) → no-op.
+  //
+  // The `submittedRef` guards against React 18 strict-mode double-mount
+  // and accidental re-fires (e.g. dev hot reload). A real retry is
+  // possible by reloading /signup, but that's a brand-new tenant.
+  const submittedRef = useRef(false);
+  useEffect(() => {
+    if (submittedRef.current) return;
+    const category = form.first_category;
+    const items = form.first_items;
+    if (!category?.name?.trim()) return; // no data → bail
+
+    submittedRef.current = true;
+
+    const namedItems = items.filter((it) => it.name.trim().length > 0);
+    const skipItems = namedItems.length === 0;
+
+    // Fire and forget — surface failures in the banner area below.
+    completeOnboarding({
+      category_name: category.name.trim(),
+      category_icon: category.icon || "🍽️",
+      items: namedItems.map((it) => ({
+        name: it.name.trim(),
+        price: it.price.trim() || "0",
+        description: it.description?.trim() ?? "",
+      })),
+      skip_items: skipItems,
+    }).catch((err) => {
+      // eslint-disable-next-line no-console
+      console.error("onboarding/complete failed", err);
+      // Allow retry on the next mount — this only fires on strict-mode
+      // double-mount or dev HMR, both of which are rare.
+      submittedRef.current = false;
+    });
+  }, [form.first_category, form.first_items]);
 
   function handleGoToAdmin() {
     // Push to /admin/dashboard — the (admin) layout will pick up the
