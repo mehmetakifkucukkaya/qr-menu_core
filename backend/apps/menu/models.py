@@ -344,6 +344,41 @@ class MenuItem(TimeStampedModel):
         blank=True,
     )
 
+    # Sprint D1 — Mevzuat uyum alanları (D-031 follow-up). Nullable + blank
+    # for backward-compatible migration. Türk Gıda Kodeksi uyumu için
+    # calories, portion_size, ingredients zorunlu bilgi; legal_notes
+    # alerjen uyarıları; contains_alcohol / is_halal opsiyonel işaretleme.
+    calories = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="kcal cinsinden enerji. Örn: 350. Türk Gıda Kodeksi uyumu.",
+    )
+    portion_size = models.CharField(
+        max_length=60,
+        blank=True,
+        default="",
+        help_text="Porsiyon miktarı. Örn: '250g', '1 porsiyon', '350ml'.",
+    )
+    ingredients = models.TextField(
+        blank=True,
+        default="",
+        help_text="Virgülle ayrılmış içerik listesi. Örn: 'domates, peynir, un'.",
+    )
+    legal_notes = models.TextField(
+        blank=True,
+        default="",
+        help_text="Alerjen uyarıları + yasal notlar. Örn: 'Buğday, süt, yumurta içerir.'",
+    )
+    contains_alcohol = models.BooleanField(
+        default=False,
+        help_text="Alkol var mı? (Vergi/yasal etiket zorunluluğu)",
+    )
+    is_halal = models.BooleanField(
+        null=True,
+        blank=True,
+        help_text="Helal sertifikası. None=belirtilmemiş, True/False.",
+    )
+
     objects = MenuItemQuerySet.as_manager()
 
     class Meta:
