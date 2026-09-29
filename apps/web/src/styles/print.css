@@ -1,0 +1,176 @@
+/* ---------------------------------------------------------------------------
+ * Print stylesheet — Sprint D2 (frontend export).
+ *
+ * Two roles:
+ *
+ *   1. Global `@media print` rules for the main public menu page
+ *      (`/m/[businessSlug]`) — when the customer / operator clicks the
+ *      🖨️ Yazdır button, the browser print dialog must render a clean
+ *      menu, not the interactive chrome. So we hide every UI surface
+ *      that doesn't belong on paper (header, footer, drawer trigger,
+ *      sticky UpgradeBanner, cart FAB, LocaleSelector, etc.) and let
+ *      only the menu content + the PrintButton-styled button survive.
+ *
+ *   2. Print-route helpers (`.print-root`, `.print-category`,
+ *      `.print-header`, `.print-footer`) used by the dedicated
+ *      `/m/[businessSlug]/print` server component. These are the
+ *      classes that the dedicated page applies; the main public page
+ *      uses them through `@media print` overrides below.
+ *
+ * The stylesheet is imported once in `app/globals.css` so the
+ * `@media print` rules apply site-wide. The print route ALSO imports
+ * it directly (defensive — it stays correct even if a future refactor
+ * drops the globals.css import).
+ * ------------------------------------------------------------------------- */
+
+/* ---------------------------------------------------------------------------
+ * Main public-menu page (@media print).
+ *
+ * We do NOT add a separate stylesheet import per page; this is global.
+ * Pages that are NOT meant to be printed (admin, signup, account)
+ * still pick up these rules — the cost is harmless because their
+ * own chrome sits inside the same DOM containers we'd hide here, and
+ * the operators never trigger the browser print dialog from those
+ * surfaces in V1.
+ * ------------------------------------------------------------------------- */
+@media print {
+  /* A4 portrait, 15mm margins, 11pt body font. Mirrors the print
+   * route's `.print-root` settings so both paths produce the same
+   * paper output. */
+  @page {
+    size: A4 portrait;
+    margin: 15mm;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+    color: #000 !important;
+    font-size: 11pt !important;
+    line-height: 1.45;
+  }
+
+  /* Hide all interactive chrome. */
+  header.sticky,
+  footer,
+  nav,
+  [data-no-print="true"],
+  .print-hide {
+    display: none !important;
+  }
+
+  /* Hide sticky billing banners specifically — they live outside the
+   * sticky-header element so the generic `header.sticky` selector
+   * above wouldn't catch them. */
+  [role="region"][aria-label*="Plan yükseltme"],
+  [role="region"][aria-label*="Deneme"],
+  [role="region"][aria-label*="Trial"],
+  [role="region"][aria-label*="Upgrade"] {
+    display: none !important;
+  }
+
+  /* Floating CTAs (mobile bottom bar) — hide in print. */
+  .fixed.bottom-6,
+  [aria-label*="Sepetim"] {
+    display: none !important;
+  }
+
+  /* The PrintButton itself — hide (its job is done). */
+  .print-button {
+    display: none !important;
+  }
+
+  /* Open drawers — never show on paper. */
+  [role="dialog"] {
+    display: none !important;
+  }
+
+  /* Make the menu content the only visible piece. Keep backgrounds
+   * transparent and remove shadows for crisp printing. */
+  .print-show,
+  main,
+  article,
+  section,
+  h1,
+  h2,
+  h3,
+  p,
+  ul,
+  li,
+  span {
+    color: #000 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  /* Avoid splitting items across pages. */
+  article,
+  li.print-row,
+  .break-inside-avoid {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Show link URLs after the link text — useful on paper where the
+   * customer can't hover. Skip if the link is just a navigation
+   * affordance (admin / cart) — those are hidden above. */
+  a[href^="http"]:not([href*="modern-cafe"])::after {
+    content: " (" attr(href) ")";
+    font-size: 9pt;
+    color: #555;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Print route helpers (`/m/[businessSlug]/print`).
+ *
+ * The dedicated route renders these classes directly, not just under
+ * @media print — so we expose them as regular CSS rules. The
+ * container constraints mirror the @page rule above.
+ * ------------------------------------------------------------------------- */
+.print-root {
+  width: 100%;
+  max-width: 210mm; /* A4 portrait width minus the @page margins. */
+  margin: 0 auto;
+  padding: 0;
+  background: #fff;
+  color: #000;
+}
+
+.print-header {
+  /* The header sits at the top of the first page. */
+  break-after: avoid;
+  page-break-after: avoid;
+}
+
+.print-footer {
+  /* Footer stays at the bottom of the last rendered page. */
+  margin-top: 1.5rem;
+  break-before: avoid;
+  page-break-before: avoid;
+}
+
+.print-category {
+  /* One category per printed page. The inline style="breakBefore: page"
+   * on the element provides the runtime fallback when CSS @media
+   * print isn't in effect (e.g. screen preview). */
+  break-before: page;
+  page-break-before: always;
+}
+
+.print-category:first-of-type {
+  /* The first category starts directly under the header, not on a
+   * new page. */
+  break-before: avoid;
+  page-break-before: avoid;
+}
+
+/* Hide the route-level wrapper chrome (header / footer already
+ * included inline) under @media print to keep paper output tidy if
+ * the operator triggers the print dialog from the print route itself. */
+@media print {
+  .print-root {
+    box-shadow: none;
+  }
+}
