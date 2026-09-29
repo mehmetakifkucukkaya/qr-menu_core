@@ -117,10 +117,18 @@ def require_feature(
     Used by view-level guards (``orders_enabled``, ``payments_enabled``
     etc.). Records an audit row on rejection with action=
     ``feature_disabled_access`` and target_type=``plan_settings``.
+
+    The ``actor`` kwarg is intentionally ignored — ``record_event``
+    pulls the actor from the thread-local set by
+    ``AuditContextMiddleware`` (D-016). Passing it explicitly would
+    shadow the middleware context, which is the wrong default for
+    HTTP-driven callers. Service-layer callers (no middleware) end
+    up with ``actor=None`` in the audit row, which is the standard
+    "system-initiated" mark.
     """
     if has_feature(organization, feature):
         return
-    _audit_feature_blocked(organization, feature, actor=actor)
+    _audit_feature_blocked(organization, feature)
     raise FeatureDisabled(
         message=f"'{feature}' özelliği planınızda kapalı.",
         feature=feature,
@@ -142,7 +150,11 @@ def enforce_limit(
 
     ``resource`` is one of :data:`RESOURCE_FIELDS`. ``None`` tier limit
     = unlimited, no audit, no raise. On rejection we audit
-    ``limit_exceeded_attempt`` and raise :class:`LimitExceeded`.
+    ``limit_exceeded_attempt`` and raise :class:`LimitExceeded``.
+
+    Like :func:`require_feature`, the ``actor`` kwarg is accepted for
+    API symmetry with view-level callers but is ignored — the audit
+    row picks up the actor from the middleware thread-local.
     """
     if resource not in RESOURCE_FIELDS:
         raise ValueError(
@@ -158,7 +170,7 @@ def enforce_limit(
     # ``>=`` not ``>`` so the 26th item creation at the BASIC 25-cap
     # fails cleanly. ``>=`` is the boundary the test plan wants.
     if current >= tier_limit:
-        _audit_limit_exceeded(organization, resource, current, tier_limit, actor=actor)
+        _audit_limit_exceeded(organization, resource, current, tier_limit)
         raise LimitExceeded(
             message=(
                 f"'{resource}' limiti doldu ({current}/{tier_limit}). "
@@ -401,6 +413,9 @@ def update_plan_settings(
     without changing the whole tier.
 
     ``billing_notes`` — operator-visible note.
+
+    Like the other audit-touching helpers, ``actor`` is accepted for
+    API symmetry but ignored — the middleware thread-local wins.
     """
     ps = get_plan_settings(organization)
     before = {
@@ -433,7 +448,6 @@ def update_plan_settings(
 
     record_event(
         organization=organization,
-        actor=actor,
         action="plan_changed",
         target_type="plan_settings",
         target_id=ps.id,
@@ -470,13 +484,10 @@ def reset_usage_for_org(organization: Organization) -> int:
 def _audit_feature_blocked(
     organization: Organization,
     feature: str,
-    *,
-    actor=None,
 ) -> None:
     """Record a ``feature_disabled_access`` audit row."""
     record_event(
         organization=organization,
-        actor=actor,
         action="feature_disabled_access",
         target_type="plan_settings",
         target_id=get_plan_settings(organization).id,
@@ -490,13 +501,10 @@ def _audit_limit_exceeded(
     resource: str,
     current: int,
     limit: int,
-    *,
-    actor=None,
 ) -> None:
     """Record a ``limit_exceeded_attempt`` audit row."""
     record_event(
         organization=organization,
-        actor=actor,
         action="limit_exceeded_attempt",
         target_type="plan_settings",
         target_id=get_plan_settings(organization).id,

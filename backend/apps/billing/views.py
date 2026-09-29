@@ -103,7 +103,6 @@ class BillingPlanAdminView(APIView):
 
         ps = services.update_plan_settings(
             organization=org,
-            actor=request.user,
             active_plan=data.get("active_plan"),
             feature_overrides=data.get("features"),
             billing_notes=data.get("billing_notes"),
@@ -181,7 +180,6 @@ class BillingPreviewUpgradeAdminView(APIView):
 
         record_event(
             organization=org,
-            actor=request.user,
             action="plan_upgraded_preview",
             target_type="plan_settings",
             target_id=services.get_plan_settings(org).id,
