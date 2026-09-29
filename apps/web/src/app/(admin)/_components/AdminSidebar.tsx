@@ -15,6 +15,7 @@ import {
   Users,
   Award,
   Banknote,
+  Image as ImageIcon,
   LogOut,
   type LucideIcon,
 } from "lucide-react";
@@ -40,6 +41,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/admin/billing", label: "Plan & Limitler", icon: Banknote },
   { href: "/admin/analytics", label: "Analitik", icon: BarChart3 },
   { href: "/admin/business", label: "İşletme", icon: Building2 },
+  { href: "/admin/media", label: "Medya Kütüphanesi", icon: ImageIcon },
   { href: "/admin/theme", label: "Tema", icon: Palette },
 ];
 

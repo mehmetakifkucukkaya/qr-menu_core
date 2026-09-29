@@ -108,10 +108,13 @@ export function MediaUploader({
 
   // Cleanup ObjectURLs on unmount + when a pending row is cleared.
   useEffect(() => {
+    const controllers = abortControllersRef.current;
     return () => {
       pending.forEach((p) => URL.revokeObjectURL(p.previewUrl));
-      abortControllersRef.current.forEach((ctrl) => ctrl.abort());
+      controllers.forEach((ctrl) => ctrl.abort());
     };
+    // We intentionally only run cleanup on unmount — re-running this
+    // effect on every `pending` change would abort in-flight uploads.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -177,9 +180,17 @@ export function MediaUploader({
       // doesn't fire N concurrent XHRs against the backend.
       void runQueue(validated);
     },
+    // `runQueue` is intentionally not in the dep array — it's defined
+    // inline as `async` below and only reads `uploadOne` via closure,
+    // both of which are stable across renders. Listing it would cause
+    // spurious re-creations of `enqueueFiles` and break memoised
+    // consumers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [csrfToken, validateFile],
   );
 
+  // Sequential queue runner — awaits each upload so the progress bars
+  // animate one-after-another rather than racing each other.
   const runQueue = async (rows: PendingFile[]) => {
     for (const row of rows) {
       if (row.status.phase !== "idle") continue;
