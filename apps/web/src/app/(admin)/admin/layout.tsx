@@ -4,6 +4,8 @@ import { cookies } from "next/headers";
 import { AdminHeader } from "../_components/AdminHeader";
 import { AdminSidebar } from "../_components/AdminSidebar";
 import { fetchCurrentOrganization, fetchCurrentUser, AdminApiError } from "@/lib/api-admin";
+import { fetchTrialStatus } from "@/lib/api-onboarding";
+import { TrialBanner } from "@/components/billing/TrialBanner";
 import { logoutAction } from "../_actions/auth";
 
 const DEFAULT_NEXT = "/admin/dashboard";
@@ -31,7 +33,9 @@ function readCookieHeader(): string {
  *      redirected if there's no session cookie; here we verify the
  *      session is actually valid (cookie could be stale).
  *   2. Fetch the current organization for the sidebar brand area.
- *   3. Render sidebar + header + children.
+ *   3. Fetch the trial status for the sticky TrialBanner (Sprint C3b).
+ *      Failure here is non-fatal — the banner just hides.
+ *   4. Render sidebar + header + children.
  *
  * Login lives at `/(admin)/login` and intentionally sits outside this
  * layout so it doesn't render the sidebar/header.
@@ -75,12 +79,27 @@ export default async function AdminLayout({
     // Best-effort; sidebar will show the default name.
   }
 
-  // ---- 3. Shell ---------------------------------------------------------
+  // ---- 3. Trial status (for the TrialBanner) ----------------------------
+  // Non-fatal: any failure (network, 403, etc.) → status stays null and
+  // the banner hides itself. The TrialBanner receives the cookie header
+  // we already read so the RSC fetch rides the same Django session.
+  let trialStatus = null;
+  try {
+    trialStatus = await fetchTrialStatus({
+      internal: true,
+      cookieHeader,
+    });
+  } catch {
+    // Banner hides; we keep the layout renderable.
+  }
+
+  // ---- 4. Shell ---------------------------------------------------------
   return (
     <div className="flex min-h-screen bg-background">
       <AdminSidebar businessName={businessName} logoutAction={logoutAction} />
 
       <div className="flex min-w-0 flex-1 flex-col">
+        <TrialBanner status={trialStatus} />
         <AdminHeader user={user} logoutAction={logoutAction} />
 
         <main
