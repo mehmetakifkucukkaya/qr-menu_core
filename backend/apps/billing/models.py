@@ -73,6 +73,14 @@ class PlanSettings(TimeStampedModel):
         help_text="Operator-visible note (coupon applied, manual override, …).",
     )
 
+    # Sprint C3 — Trial window (D-030 follow-up). When ``trial_ends_at``
+    # is in the future the tenant has OPS-full features regardless of
+    # ``active_plan`` (the gating logic lives in ``services.has_feature``
+    # which checks ``is_in_trial`` first). V2 SaaS feature: webhook-driven
+    # downgrade; V1 demo: TrialBanner-driven first-page check.
+    trial_started_at = models.DateTimeField(null=True, blank=True)
+    trial_ends_at = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         verbose_name = "Plan Ayarları"
         verbose_name_plural = "Plan Ayarları"
