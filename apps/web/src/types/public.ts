@@ -72,12 +72,16 @@ export interface PublicEnvelope<T> {
 /**
  * Value exposed by `FeatureFlagProvider`. `settings` may be `null` when
  * the tenant settings could not be loaded (e.g. 404 swallowed upstream);
- * `hasFeature` and `useFeatureFlag` both stay null-safe in that case.
+ * `hasFeature` (single-arg — settings come from the provider scope) and
+ * `useFeatureFlag` both stay null-safe in that case.
+ *
+ * For the standalone 2-arg helper used outside the provider (server
+ * components, pure logic), import `hasFeature` directly from
+ * `lib/feature-flags`.
  */
 export interface FeatureFlagContextValue {
   /** Loaded settings, or `null` if the fetch failed / was skipped. */
   settings: PublicSettings | null;
-  /** Pure helper — exported separately so server components can call
-   *  it without mounting the provider. */
+  /** Single-arg variant — closes over the provider's `settings`. */
   hasFeature: (feature: FeatureName) => boolean;
 }

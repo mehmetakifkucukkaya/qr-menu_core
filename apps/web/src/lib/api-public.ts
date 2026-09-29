@@ -124,7 +124,6 @@ export async function fetchPublicSettings(
 
   let res: Response;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     res = await fetch(url, {
       credentials: "include",
       headers,
@@ -132,9 +131,11 @@ export async function fetchPublicSettings(
       // `next` is only meaningful when `cache` allows the data cache;
       // Next 14 ignores it on `no-store`. We pass through verbatim so
       // future call sites can opt into caching with one option flag.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ...(next ? ({ next } as any) : {}),
-    });
+      // Cast via `unknown` to satisfy strict mode — Next 14's
+      // `RequestInit` overload doesn't list `next`, but it accepts it
+      // at runtime when `cache !== 'no-store'`.
+      ...(next ? { next } : {}),
+    } as RequestInit & { next?: { revalidate?: number; tags?: string[] } });
   } catch (err) {
     throw new PublicSettingsError(
       0,
