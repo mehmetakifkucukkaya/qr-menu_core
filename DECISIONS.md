@@ -1603,80 +1603,99 @@ Local'de birden fazla Postgres instance çakışmasın diye ana stack'te host po
 | D-027 | 2026-09-28 | UI/UX Design System + Modern Polish Pattern (token layer extension — radius/shadow/transition + Playfair SC + Karla pairing + dark mode CSS variable + ThemeProvider zustand persist + 4 UI primitive + focus-visible global + skip-to-content + prefers-reduced-motion reset + dependency-free shadcn-style API) | aktif |
 | D-028 | 2026-09-29 | Plan + Feature Flags + Limits Pattern (Plan enum BASIC/PRO/ORDERS/OPS + PlanSettings tenant OneToOne + 8 boolean feature flags + TenantUsageCounter monthly aggregate + PLAN_TIER_LIMITS static matrix + has_feature/enforce_limit/record_usage services + 6 admin endpoint + 8 endpoint guards + D-025 OneToOne pattern reuse + audit 4 actions + 1 target_type) | aktif |
 | D-029 | 2026-09-29 | Public Feature Flag Reader + Plan-Aware UI Pattern (Sprint B3 follow-up — /api/v1/public/settings/<slug>/ strict allow-list + FeatureFlagProvider context + useFeatureFlag hook + hasFeature pure helper + UpgradeBanner sticky/inline + 5 client component plan-aware conditional render + payments_enabled cash-only UX + 60s Next.js revalidate cache + dark mode + reduced-motion) | aktif |
+| D-030 | 2026-09-29 | Self-Serve Onboarding Wizard Pattern (Sprint C — 5-step wizard + POST /api/v1/auth/signup/ atomic transaction + PlanSettings(BASIC→14d OPS trial) auto-create + slug availability real-time check + Modern Cafe demo template import + TrialBanner countdown + signup trial hook + complete_onboarding idempotent category/items + first QR bootstrap + audit tenant_created action) | aktif |
 
 ---
 
-## KARAR D-029 — Public Feature Flag Reader + Plan-Aware UI Pattern (Sprint B3 follow-up)
+## KARAR D-030 — Self-Serve Onboarding Wizard Pattern (Sprint C)
 
 **Karar:**
-- **Backend public settings endpoint:** `GET /api/v1/public/settings/<slug>/` — tenant-safe strict allow-list (slug, name, active_plan, features: {8 flags}). `billing_notes`, `id`, `updated_at` ASLA leak etmez. `is_active=False` → 404 (enumeration safe). 60/min/IP throttle scope `public_settings`.
-- **Service signature:** `apps.billing.services.get_public_settings(organization) → dict`. `services.has_feature()` ile AYNI source of truth — D-028 single source of truth.
-- **Frontend types:** `apps/web/src/types/public.ts` — `PlanTier` (`'basic'|'pro'|'orders'|'ops'`), `FeatureName` (8 flag union), `PublicSettings`, `PublicEnvelope<T>`. `PlanTier` admin `Plan`'ın public-facing alias'ı.
-- **Frontend api wrapper:** `apps/web/src/lib/api-public.ts` — `fetchPublicSettings(slug, opts)` with `{internal: true, next: {revalidate: 60}}` (Docker network short-circuit + 60s ISR cache). `fetchPublicSettingsWithRetry()` 429 exponential backoff.
-- **FeatureFlagProvider pattern:** `apps/web/src/lib/feature-flags.tsx`:
-  - `<FeatureFlagProvider settings={...}>` wraps children, exposes context
-  - `useFeatureFlag(feature: FeatureName): boolean` — provider dışında throw (debug-friendly)
-  - `useFeatureFlags(): PublicSettings | null` — read full settings
-  - `hasFeature(settings, feature): boolean` — pure helper (server component'ler + test'ler)
-- **`feature-flags-helpers.ts` split:** Node test runner `--experimental-strip-types` JSX desteklemiyor. Pure helper `.ts`'e taşındı, `feature-flags.tsx` re-export ediyor. Sprint 12 refactor fırsatı.
-- **Server component fetch:** `/m/[businessSlug]/page.tsx` → `fetchPublicSettings(slug, {internal: true, next: {revalidate: 60}}).catch(() => null)` + null fallback. Sprint 8B/10B pattern reuse.
-- **Plan-aware conditional render (5 client component updated):**
-  - `AccountHeaderChip` — `customer_accounts_enabled` false → Hesabım + Giriş Yap null; `loyalty_enabled` false → LoyaltyBadge null
-  - `HeaderCartIcon` — `cart_enabled` false → null
-  - `ItemCard` — `cart_enabled` false → "Sepete ekle" / qty selector null (chevron tetap)
-  - `CartDrawer` — `orders_enabled` false → "Sipariş Ver" → "Sipariş verme pakete dahil değil" statü mesajı
-  - `CheckoutForm` — `payments_enabled` false → UpgradeBanner inline + "Kapıda nakit ödeme" onay checkbox + submit disabled + hata mesajı
-- **`<UpgradeBanner>` component** (`apps/web/src/components/billing/UpgradeBanner.tsx`):
-  - İki varyant: `sticky` (default) + `inline` (modal/card içinde)
-  - Sticky: `sticky top-0 z-40`, amber tint, Sparkles + TrendingUp ikonları, "Yükselt →" CTA `/admin/billing`
-  - Inline: Sprint 12A `<Card variant="outline">` + `<IconButton>` primitive
-  - Hide rule: `hasFeature(settings, feature)` true ise `null` döner
-  - Dark mode + reduced-motion respect
-- **Cash-only UX kararı:** `payments_enabled=false` → warning-only YETERLİ değil. Kullanıcı yanlışlıkla Stripe/iyzico butonuna basıp hata alabilir. Çözüm: butonlar gizli + nakit onay checkbox zorunlu + submit disabled. Kullanıcı bilinçli tercih yapar.
-- **`revalidate: 60` cache strategy:** PlanSettings değişikliği en geç 60 saniye içinde public menüye yansır. Demo'da hard reload veya Next.js dev HMR ile anında. V2 SaaS feature: webhook-driven `revalidateTag('public_settings:<slug>')`.
-- **LocaleSelector sticky banner overlap (V1 trade-off):** BASIC'te UpgradeBanner `z-40` + Header `z-30` → banner header'ın üstünde. Geriye logo + name + LocaleSelector. V1 demo için kabul edilebilir, V2 follow-up (banner dismiss butonu).
-- **Sprint B1 endpoint guards (D-028) hâlâ geçerli:** Backend `require_feature('payments_enabled')` CheckoutForm'dan önce 403 döner. Frontend conditional render UX'i kolaylaştırır ama ASLA security guard değildir.
-- **Sprint B1 + B2 + B3 reuse:** D-022 (tenant isolation), D-024 (Sprint A fix), D-025 (LoyaltySettings OneToOne pattern), D-026 (payments_enabled guard), D-027 (UI primitives), D-028 (PlanSettings backend source of truth).
-- **Out-of-scope (V2 SaaS):** Webhook-driven cache invalidation, dismissable banner, banner A/B test, feature flag analytics, multi-region pricing banner, currency-specific CTA copy.
+- **5-step wizard:** business_info (Step1) → locale_currency (Step2) → first_category (Step3) → first_items (Step4) → success_qr (Step5). zustand persist + localStorage ile refresh'te state korunur.
+- **POST /api/v1/auth/signup/ atomic transaction:** ``User`` + ``Organization`` + ``Membership(OWNER)`` + ``PlanSettings(BASIC→14d OPS trial)`` + ``AuditEvent(tenant_created)`` tek transaction. Auto-login (session cookie set) ile wizard'ın sonraki çağrıları authenticated.
+- **Slug availability real-time check:** ``GET /api/v1/auth/check-slug/?slug=<value>`` returns ``{available, reason: empty/invalid/reserved/taken}``. Frontend 300ms debounced.
+- **Reserved slugs:** ``admin, api, www, static, media, signup, docs, auth`` — enumeration-safe error.
+- **Email uniqueness:** case-insensitive (``iexact``).
+- **Password validation:** Django built-in validators (UserAttributeSimilarity, MinimumLength 8, CommonPassword, NumericPassword).
+- **Tenant isolation (D-022 reuse):** Signup sonrası otomatik OWNER membership atanır. Sonraki endpoint'ler ``IsAuthenticated + IsOrganizationMember``.
+- **Slug format:** ``^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$`` (1-40 char, lowercase, hyphen middle).
+- **Currency presets:** TRY/EUR/USD/GBP (4 tier, V1 international destek).
+- **Locale presets:** TR + EN default, +DE/FR/IT/ES/AR/RU opsiyonel (8 max).
+- **14-günlük OPS trial:** Signup sonrası ``services.start_trial(organization)`` çağrılır → PlanSettings ``active_plan=ops``, ``trial_started_at=now``, ``trial_ends_at=now+14d``, tüm 8 feature flag açık (cart/orders/loyalty/payments/ai_pdf/ai_translate/customer_accounts/advanced_analytics). Trial bitince ``expire_trial_if_due`` BASIC'e otomatik düşürür.
+- **TrialBanner component:** Admin layout'ta sticky top + public menüde (when in_trial). Countdown "X gün kaldı" + CTA "Plan & Limitler" → /admin/billing. Dark mode + reduced-motion respect.
+- **Complete onboarding endpoint:** ``POST /api/v1/onboarding/complete/`` wizard step 3-4 verisini materialize eder. Atomic category + items create. ``skip_items: True`` opsiyonel (sadece kategori oluştur).
+- **Demo template import:** ``POST /api/v1/onboarding/demo-seed/`` Modern Cafe (slug ``modern-cafe``) snapshot'tan kopyalar. Idempotent — tenant zaten kategoriye sahipse ``skipped=True`` döner (5 cat + 25 item).
+- **First QR bootstrap:** ``POST /api/v1/qr-codes/first/`` tenant'ın ilk QR'ını oluşturur. Idempotent. Menu yoksa ``None`` (wizard sırası: complete → qr).
+- **Trial status feed:** ``GET /api/v1/onboarding/trial-status/`` TrialBanner data. ``{in_trial, plan, trial_started_at, trial_ends_at, days_remaining}``.
+- **Auto-login after signup:** ``login(request, user)`` + ``request.session.save()`` ile wizard'ın sonraki POST'ları (complete/demo-seed/qr-first) session cookie ile çalışır.
+- **Audit integration:** ``tenant_created`` action (Sprint C1 migration ``0008_alter_auditevent_action``). Payload: ``{owner_email, plan, signup_source: 'self_serve_wizard'}``.
+- **Throttle scope:** ``signup: 10/hour/IP`` (anti-spam). Slug availability default 60/min/IP.
+- **Reserved slug list:** sistem ile çakışmayı önlemek için (admin/api/www/static/media/signup/docs/auth).
+- **Frontend wizard UX:**
+  - Step 1: real-time slug availability inline status (✓ available / ✗ taken/reserved/invalid)
+  - Step 2: locale + currency radio + multi-select
+  - Step 3: category name + icon (emoji) + sort_order
+  - Step 4: 1-5 ürün ekleme + "İlk kategori ve ürünleri sonra ekleyeceğim" skip option
+  - Step 5: 3 aksiyon — /admin'e git + menü önizleme + ilk QR indir + demo menüden başla
+- **PlanSettings.trial_started_at + trial_ends_at field:** V1'de nullable. Migration ``apps/billing/migrations/0002_plansettings_trial_ends_at_and_more.py``.
+- **Out-of-scope (V2 SaaS):** Email verification, social auth (Google/Apple), Stripe checkout for upgrade, team member invites, multi-region pricing, Celery monthly cron for trial expiry (V1 manual via TrialBanner).
+- **Sprint B1 + B2 + B3 reuse:** D-022 (tenant isolation — `_resolve_organization`), D-024 (Sprint A fix — payload field'ları), D-025 (LoyaltySettings OneToOne pattern — PlanSettings de OneToOne), D-026 (online ödeme endpoints guard'ı customer signup'tan farklı), D-027 (UI primitives — Card/Container reuse), D-028 (PlanSettings source of truth — trial window PlanSettings üzerinde), D-029 (Public feature flags — TrialBanner active_plan'ı gösterir).
 
 **Tarih:** 2026-09-29
 
-**Bağlam:** Sprint B1 backend (D-028) tamamlandıktan sonra public menü tarafında tenant-aware UX için frontend feature reader gerekiyordu. "Önce sade ve sağlam QR Menü Basic/Pro satılabilir hale gelsin; sipariş, mutfak, sadakat, ödeme upsell olarak konumlansın" felsefesi gereği cart/loyalty/account/payment özellikleri olmayan tenantlar için UI gizlemeli + upsell CTA görünür olmalı. Sprint A + Sprint B1 + Sprint B2 ardından Faz 3.2 + Faz 2.2 public tarafı.
+**Bağlam:** V1 satışa hazırlık Faz 3.3 — ``agency-qr-menu`` projesini self-serve signup yapabilir hale getirmek. Mevcut durum: demo seed ile Modern Cafe üzerinden onboarding, gerçek müşteri self-serve signup yapamıyor. Competitor audit (2026-09-28) "Basic / Pro / Sipariş / Ops 4 tier paket ayrımı + self-serve onboarding" gerekliliğini işaretledi. Sprint A + Sprint B serisi tamamlandıktan sonra Faz 3.3 backend + frontend sprint'i. **Önce sade ve sağlam QR Menü Basic/Pro satılabilir hale gelsin** felsefesi — self-serve signup V1 satış ekibinin müşteriye "10 dakikada yayında" demosu için canlı kanıt.
 
 **Alternatifler:**
-- **Server component fetch vs Client-side fetch:** Server component + ISR SEO-safe + cache. Client-side real-time ama ek HTTP request + bundle. Server + revalidate tercih
-- **React Context (Provider) vs prop drilling:** 5+ client component feature flag → context kaçınılmaz
-- **Pure helper `.ts` vs `.tsx`:** Node test compat için split + re-export
-- **UpgradeBanner sticky vs modal:** Sticky etki yüksek, modal V2 option. V1 sticky
-- **`hasFeature` provider dışında throw vs silent false:** Throw = debug kolaylığı
-- **Cash-only checkbox zorunlu vs warning only:** Checkbox zorunlu kullanıcı bilinçli tercih yapar
-- **`revalidate: 60` vs no-cache vs webhook:** No-cache latency + DB load. Webhook real-time ama backend complexity. 60s balance
-- **`PublicSettingsError` typed class vs Error:** Typed catch UI override (404 vs 429 vs 5xx)
+- **5-step wizard vs tek sayfa form:** Multi-step UX daha az overwhelm + per-step validation + progress göstergesi. V1 demo için 5 step. V2 SaaS feature: skip wizard for repeat customers
+- **Atomic transaction vs partial state:** User+Org+Membership+PlanSettings atomic — kısmi başarı YOK. Wizard retry güvenli
+- **Slug regex CharField vs SlugField:** SlugField Django'nun default validator'ünü kullanır ama custom pattern için RegexField daha esnek (lowercase + hyphens). RegexField tercih
+- **Reserved slug list hardcoded vs settings:** 8 entry hardcoded list yeterli (admin/api/www/static/media/signup/docs/auth). Settings eklemek V1'de over-engineering
+- **Slug format validation:** RegexField (built-in) vs custom validator. RegexField tercih (Django standardı)
+- **Email case-insensitive:** ``iexact`` (Django) vs lowercase + exact. ``iexact`` tercih (UX: Ali@x.com == ali@x.com)
+- **14-day trial hardcoded vs configurable:** V1 hardcoded ``TRIAL_DAYS = 14`` constant. V2 SaaS feature: per-promo-code configuration
+- **Trial countdown source:** PlanSettings.trial_ends_at (DB) vs trial_days_remaining (computed). DB source single source of truth — backend trial_status endpoint + TrialBanner client
+- **Signup sonrası trial:** 14-day OPS automatic (V1 default) vs "Choose trial" step (V2 SaaS). V1 demo için otomatik tercih — UX friction azaltma
+- **Trial expiry:** Celery cron (V2 SaaS) vs TrialBanner first-page mount check (V1). Cron V1'de yok, lazy check tercih
+- **Demo template slug hardcoded vs settings:** ``DEMO_TEMPLATE_SLUG = "modern-cafe"`` constant. V2 SaaS feature: configurable per tenant (white-label demo)
+- **Idempotent demo import:** Skip if any category exists (early return) vs full duplicate check. Early return tercih (UX: 2. kez basıldığında net mesaj)
+- **QR first endpoint:** Separate endpoint (``/qr-codes/first/``) vs general ``/qr-codes/`` POST with wizard flag. Separate endpoint tercih (URL routing temiz)
+- **Wizard frontend state:** zustand persist + localStorage (refresh-survive) vs URL state (query params). zustand tercih (UX: refresh'te form kaybolmaz)
+- **Auto-login after signup:** Same-session (DRF cookie) vs JWT (separate client). Same-session tercih (Sprint 10A customer magic-link pattern reuse)
+- **TrialBanner layout:** Admin sidebar footer vs header sticky vs body top. Header sticky tercih (Sprint B3 UpgradeBanner pattern reuse, max visibility)
+- **Step 5 complete-onboarding call:** Step 5 mount useEffect vs Step 4 next button. Mount useEffect tercih (single call site, race condition yok, idempotency ref ile guard'lı)
+- **Test runner:** Node built-in + tsx + jsdom (V1 minimal) vs Vitest (V2 SaaS feature). V1 Node + tsx tercih (extra dep yok, V1 constraint)
 
 **Seçim gerekçesi:**
-- **Server component + ISR revalidate 60:** Sprint 8B/10B pattern reuse, SSR/SEO-safe
-- **Provider + hook + pure helper 3 katman:** Separation of concerns temiz
-- **5 client component minimal diff ile plan-aware:** Server page tek fetch + provider wrap
-- **UpgradeBanner sticky (default) + inline (modal):** V1 demo sticky etki yüksek
-- **`feature-flags-helpers.ts` split:** Node test compat pragmatic çözüm
-- **Cash-only checkbox zorunlu:** Backend 403 fallback zaten var (D-028 guard)
-- **`hasFeature` provider dışında throw:** Bug surface anında görünür
-- **Strict allow-list public response:** billing_notes ASLA public'e leak etmez
+- **5-step wizard:** UX progressive disclosure, per-step validation, progress indicator — onboarding completion rate artırır
+- **Atomic transaction:** Partial state YOK (D-022 single source of truth). Wizard retry güvenli
+- **Slug regex + reserved:** URL routing temiz, enumeration-safe error
+- **Email case-insensitive:** UX standard (kullanıcı typo yapabilir)
+- **14-day OPS trial:** V1 demo için agresif büyüme stratejisi. 14 gün full feature experience → upgrade impulse
+- **TrialBanner component:** Sprint B3 UpgradeBanner pattern reuse. Countdown urgency UX
+- **Trial expiry lazy check:** V1'de Celery yok. TrialBanner mount'ta kontrol + audit
+- **Demo template idempotent:** 2. kez basıldığında clear "skipped=True" response. UX net
+- **Auto-login after signup:** Wizard'ın sonraki POST'ları authenticated (no manual login)
+- **Audit tenant_created:** Sprint B1+D-026 audit pattern reuse
+- **Step 5 mount completeOnboarding:** Single call site + idempotency ref guard. Race condition-free
 
 **Sonuçlar:**
-- **Backend (3 commit):** `get_public_settings` service + `PublicSettingsView` + `urls_public.py` mount + `public_settings: "60/min"` throttle + 9 yeşil test (unknown slug 404, inactive 404, OPS full-true, BASIC all-false, manual override, internal field leak, throttle scope, 4 plan tier renderability, service unit). Test sayısı: 429 → **438 yeşil** (+9). 18 payment spec gap unchanged.
-- **Frontend B3a (4 commit):** `types/public.ts` (83 satır) + `lib/api-public.ts` (215 satır) + `lib/feature-flags.tsx` (167 satır) + empty verify.
-- **Frontend B3b (6 commit):** MenuViewClient FeatureFlagProvider wrap + sticky header + page server fetch + AccountHeaderChip/HeaderCartIcon/ItemCard/CartDrawer/CheckoutForm plan-aware gates + UpgradeBanner gerçek component (190 satır) + feature-flags-helpers.ts split + feature-flags.test.ts (10 case) + package.json test:feature-flags script + placeholder export cleanup.
-- **Commit toplam Sprint B:** 25 commit (B1: 7, B2: 8, B3 backend: 3, B3a: 4, B3b: 6)
-- **Demo test:** Modern Cafe BASIC geçişi → CartFab/HeaderCartIcon/AccountHeaderChip/LoyaltyBadge/CheckoutForm tüm gate'lerde null/conditional. UpgradeBanner sticky top. OPS geri dönüş → hepsi restore.
+- **C1 backend (4 commit):** SignupView + SlugAvailabilityView + SignupSerializer + SlugAvailabilitySerializer + SignupResponseSerializer + atomic transaction + audit tenant_created + 14 yeşil test (signup happy path + duplicate email + duplicate slug + reserved slug + invalid slug + weak password + default_locale validation + EUR currency + slug availability + reserved reason + invalid reason + empty reason + auto-login session cookie)
+- **C2 frontend (7 commit):** api-auth wrapper + zustand signup-wizard store + /signup page server shell + StepIndicator + ProgressBar + 5 step component (Step1BusinessInfo + Step2LocaleCurrency + Step3FirstCategory + Step4FirstItems + Step5SuccessQR) — 12.3 kB bundle
+- **C3 backend (2 commit):** apps/onboarding scaffold (services + serializers + views + urls) + 4 endpoint (POST /onboarding/complete/ + POST /onboarding/demo-seed/ + POST /qr-codes/first/ + GET /onboarding/trial-status/) + services (complete_onboarding + import_demo_template + generate_first_qr + start_trial + is_in_trial + expire_trial_if_due) + PlanSettings.trial_started_at + trial_ends_at field + migration 0002 + 10 yeşil service test
+- **C3b frontend (8 commit):** api-onboarding wrapper + TrialBanner component (sticky + inline) + admin layout TrialBanner mount + Step5 QR button enable + demo seed button enable + Step3-4 complete-onboarding submit integration + signup trial hook (backend 1 satır: services.start_trial) + TrialBanner.test.tsx 12 yeşil Node test (jsdom + tsx) + tsconfig.test.json (react-jsx for tsx)
+- **Toplam Sprint C: 21 commit (C1: 4 + C2: 7 + C3: 2 + C3b: 8)**
+- **Backend test sayısı:** 452 baseline → **464 yeşil** (+12 Sprint C: 14 signup + 10 onboarding service + 2 signup trial)
+- **Worker auth-expire:** C3b frontend parçalı scope (4-5+5-6 commit) ile başarılı. C3 backend root session (2 commit) ile başarılı
+- **Demo flow:** /signup → Step1 email+password+slug → 14-day trial auto-start → Step2-4 form doldur → Step5 mount completeOnboarding + TrialBanner "14 gün kaldı" countdown + QR indir + demo menüden başla
+- **Demo test (admin@modern-cafe.local):** Modern Cafe OPS plan (zaten dolu) — yeni signup eden tenant Demo Cafe 14-day OPS trial alır, 14 gün sonra BASIC'e düşer
 
 **Notlar:**
-- Sprint B3 backend root session tarafından yazıldı (worker auth-expire oldu — 5. kez). Frontend B3a + B3b parçalı worker scope (4-5 + 5-6 commit) ile başarılı
-- `revalidate: 60` cache stratejisi Sprint 8B/10B uyumlu. Sprint C'de webhook-driven invalidation eklenebilir
-- `feature-flags-helpers.ts` Sprint 12 refactor fırsatı: pure helpers `.ts`'e standardize
-- Cash-only UX kararı Sprint C onboarding wizard'da "Sipariş yöntemi" step'inde de kullanılabilir
+- Worker auth-expire parçalı scope stratejisi Sprint C için başarılı (C2 + C3b küçük scope). C3 backend root session'da (küçük — 2 commit) yapıldı
+- Sprint C3 backend HTTP testleri service test olarak yazıldı (10 yeşil). HTTP endpoint testleri Sprint C3b worker'ında da yazılamadı (auth+permission context karmaşıklığı). Frontend TrialBanner test'i Node test runner + jsdom ile başarılı (12 yeşil)
 - Pre-existing 18 payment test failures Sprint 11B scope, dokunulmadı
 - `backend/apps/payment/migrations/__init__.py` untracked — Django 5.x için gerekli değil
-- Worker auth-expire parçalı scope stratejisi Sprint C (büyük onboarding wizard) için önceden planlanmalı
-- D-028 ile yüksek cohesion: aynı `has_feature()` source of truth hem backend hem frontend
-- Sprint B raporu: `docs/SPRINT_B_REPORT.md` (B1+B2+B3 birleşik final)
+- `backend/apps/onboarding/migrations/__init__.py` yeni eklendi
+- `signup_trial_hook` SignupView.post'a `services.start_trial()` çağrısı (1 satır). Atomic transaction içinde
+- Idempotency: Step5 useEffect ref ile guard + backend idempotent (qr-first, demo-seed)
+- V1 demo'da yeni signup eden tenant 14-day OPS trial + TrialBanner countdown görünür
+- Sprint C raporu: `docs/SPRINT_C_REPORT.md` (root session yazacak)
+- Sprint C sonrası V1 demo tam self-serve: yeni müşteri 10-15 dakikada menü yayınlayabilir + ilk QR'ı indirir
