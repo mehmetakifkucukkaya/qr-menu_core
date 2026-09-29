@@ -139,6 +139,24 @@ class MenuItemAdmin(admin.ModelAdmin):
                 )
             },
         ),
+        # Sprint D1 — Mevzuat uyum alanları (D-031).
+        (
+            "Mevzuat Bilgileri (Türk Gıda Kodeksi)",
+            {
+                "fields": (
+                    "calories",
+                    "portion_size",
+                    "ingredients",
+                    "legal_notes",
+                    "contains_alcohol",
+                    "is_halal",
+                ),
+                "description": (
+                    "Türk Gıda Kodeksi uyumu için kalori, porsiyon, içerik bilgileri. "
+                    "Alerjen uyarıları legal_notes alanına yazılır."
+                ),
+            },
+        ),
         ("Önemli tarihler", {"fields": ("created_at", "updated_at")}),
     )
 

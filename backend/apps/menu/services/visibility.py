@@ -175,6 +175,14 @@ def get_full_menu_payload(organization, locale: str = "tr", branch=None) -> dict
                                 "code", flat=True
                             )
                         ),
+                        # Sprint D1 — Mevzuat uyum alanları (D-031).
+                        # Türk Gıda Kodeksi uyumu + printable/PDF render.
+                        "calories": item.calories,
+                        "portion_size": item.portion_size,
+                        "ingredients": item.ingredients,
+                        "legal_notes": item.legal_notes,
+                        "contains_alcohol": item.contains_alcohol,
+                        "is_halal": item.is_halal,
                     }
                 )
             categories_payload.append(

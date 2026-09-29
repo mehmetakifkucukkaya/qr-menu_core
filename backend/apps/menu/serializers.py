@@ -272,6 +272,13 @@ class MenuItemSerializer(serializers.ModelSerializer):
             "sort_order",
             "allergen_ids",
             "dietary_tag_ids",
+            # Sprint D1 — Mevzuat uyum alanları (D-031). Public menüde render.
+            "calories",
+            "portion_size",
+            "ingredients",
+            "legal_notes",
+            "contains_alcohol",
+            "is_halal",
             "translations",
             "created_at",
             "updated_at",
