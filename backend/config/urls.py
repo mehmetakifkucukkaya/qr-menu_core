@@ -68,6 +68,11 @@ urlpatterns = [
     # Sprint B1 — Plan + Feature Flags + Limits (D-026). Admin-only,
     # under /api/v1/admin/billing/. No public endpoints.
     path("api/v1/admin/billing/", include("apps.billing.urls")),
+    # Sprint C3 — Self-serve onboarding (D-030). Wizard steps 3-5 +
+    # demo seed + trial-status under /api/v1/onboarding/. First-QR
+    # helper under /api/v1/qr-codes/first/.
+    path("api/v1/onboarding/", include("apps.onboarding.urls")),
+    path("api/v1/qr-codes/", include("apps.onboarding.urls", namespace="qr-codes")),
 ]
 
 if settings.DEBUG:

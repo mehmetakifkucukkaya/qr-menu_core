@@ -101,6 +101,8 @@ LOCAL_APPS = [
     "apps.payment",
     # Sprint B1 — Plan + Feature Flags + Limits (D-026).
     "apps.billing",
+    # Sprint C3 — Self-serve onboarding wizard (D-030).
+    "apps.onboarding",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
