@@ -34,9 +34,9 @@ export function PremiumHero({ business, theme }: BusinessHeroProps) {
   const hasRealCover =
     business.cover_image && !business.cover_image.startsWith("data:");
 
-  const coverSrc = hasRealCover
-    ? business.cover_image
-    : getBusinessCoverPlaceholder(business.slug);
+  const coverSrc: string =
+    (hasRealCover ? business.cover_image : null) ??
+    getBusinessCoverPlaceholder(business.slug);
 
   const logoSrc =
     business.logo && !business.logo.startsWith("data:")
@@ -51,11 +51,11 @@ export function PremiumHero({ business, theme }: BusinessHeroProps) {
 
   const themeStyle: React.CSSProperties = theme
     ? {
-        "--color-primary": hexToRgbTriplet(theme.primary_color),
-        "--color-secondary": hexToRgbTriplet(theme.secondary_color),
-        "--color-accent": hexToRgbTriplet(theme.accent_color),
-        "--color-background": hexToRgbTriplet(theme.background_color),
-        "--color-text": hexToRgbTriplet(theme.text_color),
+        "--color-primary": hexToRgbTriplet(theme.primary_color ?? undefined),
+        "--color-secondary": hexToRgbTriplet(theme.secondary_color ?? undefined),
+        "--color-accent": hexToRgbTriplet(theme.accent_color ?? undefined),
+        "--color-background": hexToRgbTriplet(theme.background_color ?? undefined),
+        "--color-text": hexToRgbTriplet(theme.text_color ?? undefined),
       } as React.CSSProperties
     : {};
 

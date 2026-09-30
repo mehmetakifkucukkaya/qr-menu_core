@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 
-import { BusinessHero } from "@/components/public/BusinessHero";
+import { PremiumHero } from "@/components/public/PremiumHero";
 import { FloatingCtas } from "@/components/public/FloatingCtas";
 import { EmptyState } from "@/components/public/EmptyState";
 import { MenuViewClient } from "@/components/public/MenuViewClient";
@@ -310,7 +310,7 @@ function MenuView({
       >
         {/* Server-rendered chrome sits between the sticky header and
             the menu grid — preserves the pre-B3b visual order. */}
-        <BusinessHero business={business} theme={theme} />
+        <PremiumHero business={business} theme={theme} />
 
         {menu ? (
           <p className="px-4 pt-3 text-center text-xs text-muted sm:text-sm">
