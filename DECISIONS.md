@@ -1607,56 +1607,73 @@ Local'de birden fazla Postgres instance çakışmasın diye ana stack'te host po
 | D-031 | 2026-09-29 | Türk Gıda Kodeksi Mevzuat Uyum Pattern (Sprint D1 — MenuItem 6 yeni alan: calories/portion_size/ingredients/legal_notes/contains_alcohol/is_halal + nullable+blank migration + public payload expose + admin form fieldsets + Sprint C wizard auto-fill + Sprint B3 FeatureFlag consumer + D-024 payload expansion pattern) | aktif |
 | D-032 | 2026-09-29 | Printable/PDF Menü Export Pattern (Sprint D2 — /m/[slug]/print A4 server page + @media print stylesheet hide nav/header/banner + window.print() trigger + kategori başına break-before: page + 11pt font + 15mm margin + 6 mevzuat badge'leri + /m/[slug] PrintButton desktop mount) | aktif |
 | D-033 | 2026-09-29 | MediaAsset + Storage Abstraction Pattern (Sprint E — apps/media MediaAsset tenant-scoped model + LocalStorageBackend/S3StorageBackend factory + Pillow resize+thumbnail image processing + 3 admin endpoint + django-storages[boto3] AWS S3/Cloudflare R2 + backward-compatible ImageField retention + soft-delete + tenant-isolated storage_key template) | aktif |
+| D-034 | 2026-09-30 | Premium Hero Redesign Pattern (Sprint F V1 Polish — PremiumHero gradient cover h-72 md:h-96 + cover image mix-blend-overlay opacity-50 + SVG noise texture 0.07 + bottom fade for logo legibility + currency badge top-right white/10 backdrop-blur-md + logo overlay ring-8 ring-background w-32 h-32 -mt-20 + Display 3xl/4xl/5xl Playfair SC typography + contact strip gap-x-5 transition-colors + per-business theme CSS variable override) | aktif |
 
 ---
 
-## KARAR D-033 — MediaAsset + Storage Abstraction Pattern (Sprint E)
+## KARAR D-034 — Premium Hero Redesign Pattern (Sprint F V1 Polish)
 
 **Karar:**
-- **MediaAsset modeli:** Tenant-isolated (organization FK), 4 kind enum (image/video/audio/file), storage_key + public_url ayrı tutulur (CDN-friendly), width/height/size_bytes/alt_text uploaded_by FK + is_active soft-delete + thumbnail_key/url.
-- **Backward-compatible ImageField retention:** Organization.logo, cover_image, MenuCategory.image, MenuItem.image AYNI KALIR. Yeni upload'lar MediaAsset üzerinden. V2 SaaS feature: V1 → V2 data migration script.
-- **Storage backend factory:** ``apps.media.storage.get_storage_backend()`` singleton — ``settings.MEDIA_STORAGE_BACKEND`` env ile ``local`` (default) veya ``s3`` (prod, django-storages[boto3]) seçilir.
-- **LocalStorageBackend:** Django ``default_storage`` üzerinden MEDIA_ROOT'a yazar. V1 demo bu backend kullanır.
-- **S3StorageBackend:** AWS S3 / Cloudflare R2 (R2 = S3-compatible + AWS_S3_ENDPOINT_URL). django-storages[boto3] lazy import. ``MEDIA_PUBLIC_BASE_URL`` env ile CDN override.
-- **Tenant isolation:** ``build_storage_key(org_slug, kind, filename)`` → ``tenants/{org_slug}/{kind}/{uuid}{ext}``. UUID collision-safe, client hiçbir zaman key'i kontrol etmez.
-- **Image processing (Pillow):** resize max 1920x1080 (aspect preserved), 400x400 JPEG thumbnail, EXIF orientation (``ImageOps.exif_transpose``).
-- **3 yeni endpoint:** POST /api/v1/admin/media/upload/, GET /api/v1/admin/media/, DELETE /api/v1/admin/media/<id>/. Soft-delete + audit (media_uploaded, media_deleted).
-- **Eski /api/v1/admin/media/upload korundu** (Sprint 5A backward compat).
-- **Frontend (Sprint E2):** MediaUploader drag-drop + XHR progress + multi-file + validation retry. MediaGallery grid + filter + delete ConfirmDialog + IntersectionObserver lazy. 6 yeşil Node test (jsdom + tsx).
-- **Out-of-scope (V2 SaaS):** AVIF/WebP transcoding, video processing + HLS streaming, CDN image resizer (Cloudflare Images / Imgix), bulk upload, EXIF GPS stripping.
-- **Sprint A + B + C + D reuse:** D-024 (public payload), D-028 (PlanSettings tenant), D-030 (Signup), D-031 (Mevzuat — print image preview).
+- **PremiumHero component** (`apps/web/src/components/public/PremiumHero.tsx`) — Sprint A BusinessHero yerine:
+  - Full-width cover: ``h-72 md:h-96`` (önceki ``h-44 sm:h-56`` ~3x büyüme)
+  - Gradient: ``from-primary via-secondary to-accent opacity-90`` warm cafe tonları
+  - Cover image overlay: ``mix-blend-overlay opacity-50`` (varsa gerçek görsel siluet olarak)
+  - SVG noise texture: inline data URL, 0.07 opacity (premium grain)
+  - Bottom fade gradient: ``from-background to-transparent h-32`` logo legibility
+  - Currency badge: top-right, white/10 + border-white/30 + backdrop-blur-md
+  - Logo overlay: ``ring-8 ring-background w-32 h-32 -mt-20`` (md breakpoint)
+  - Display typography: ``text-3xl sm:text-4xl md:text-5xl font-heading font-bold tracking-tight``
+  - Tagline: ``max-w-xl text-base sm:text-lg text-muted``
+  - Contact strip: ``gap-x-5 gap-y-2 text-sm transition-colors hover:text-text``
+  - Per-business theme override: 5 CSS variable (primary/secondary/accent/background/text) inline style
+- **page.tsx import wired:** ``BusinessHero → PremiumHero`` (Sprint F hero refresh canlıda)
+- **Out-of-Sprint-F scope (V1 polish kapsamı daraltıldı):**
+  - ItemCard — Sprint 8B polish zaten iyi (hover shadow, badge hierarchy, qty selector)
+  - CategoryNav — Sprint 8B sticky + scroll-snap pattern yeterli
+  - MenuViewClient Header — Sprint 12A sticky glassmorphism (``sticky top-0 z-30 bg-background/85 backdrop-blur``) zaten iyi
+  - Footer component — Sprint 3'ten beri public menüde Footer component yok (sadece drawer/checkout footer). Sprint F polish'te eklenmedi
+- **Sprint 12A reuse:**
+  - ``tokens.css`` renk paleti (primary brown + secondary tan + accent terracotta + cream background)
+  - Playfair Display SC heading + Karla body
+  - Radius scale (rounded-pill, rounded-xl, rounded-full)
+  - Shadow scale (shadow-card, shadow-floating, ring-8)
+  - Dark mode (Sprint 12A ``[data-theme="dark"]`` otomatik)
+- **Backward-compat:** Sprint A BusinessHero dosyası duruyor (kimse import etmiyor), Sprint F2 worker ya da root cleanup'ta silebilir
+- **Out-of-scope (V2 SaaS polish):**
+  - Custom illustration / brand assets
+  - Photo shoot integration
+  - A/B testing CTA
+  - Heavy animation (V1 subtle fade/slide only)
 
-**Tarih:** 2026-09-29
+**Tarih:** 2026-09-30
 
-**Bağlam:** V1 satışa hazırlık Faz 5 — Medya ve production olgunluğu. Sprint D mevzuat + printable tamamlandıktan sonra Faz 5.
+**Bağlam:** V1 satış demo "premium / profesyonel" görünüm kazansın. User feedback Sprint E sonrası demo URL'sinde: "Sitenın tasarımı çok kötü. daha modern ve profesyonel bir hale getir." Sprint A BusinessHero alakasız cover image (cam bardaklar) + h-44 çok kısa hero ile "amatör" görünüyordu. Sprint F root session'da hızlı polish: PremiumHero redesign + page.tsx wiring + verify. Worker session push yapmadığı için root devraldı.
 
 **Alternatifler:**
-- MediaAsset vs ImageField direct S3 — yeni model migration riski yok
-- django-storages global MEDIA backend vs factory — factory flexible
-- Pillow AVIF/WebP vs JPEG/PNG — V1 demo için build complexity düşük
-- CDN image resizer (Cloudflare Images / Imgix) — V2 SaaS feature
-- Multi-file upload — V1 sequential, V2 SaaS chunked
-- Video processing — V2 SaaS feature (FFmpeg + HLS)
-- S3 direct upload (presigned URL) — V2 SaaS feature
-- Storage backend Protocol vs concrete class — V1 concrete yeterli
-- Soft-delete vs hard-delete — V1 soft-delete (GDPR/KVKK compliance)
-- Tenant storage prefix slug vs ID — slug okunabilir
-- UUID collision-safe key — V1 UUID4 hex yeterli
+- Hero redesign vs full page redesign — Sprint F scope daraltma (yalnızca hero, full redesign V2 SaaS feature)
+- Gradient + cover image overlay vs full real image — real image tenant'ın cover_image field'ı, ama demo seed'de yok. Gradient + placeholder V1 demo için kabul edilebilir
+- ring-8 vs ring-4 (eski) — ring-8 daha bold premium görünüm
+- h-72 md:h-96 vs h-64 md:h-80 — h-72 baseline yeterli premium his
+- Currency badge top-right vs bottom — top-right daha modern, kapatmıyor
+- Display typography 3xl→5xl scale — Playfair SC heading için doğru hierarchy
 
-**Seçim gerekçesi:** MediaAsset yeni model (no migration risk), factory pattern (V1 demo local, prod s3 tek env değişikliği), Pillow JPEG/PNG (build complexity düşük), tenant slug prefix (okunabilir + debug), soft-delete (GDPR/KVKK), django-storages lazy import (V1 demo s3 optional), CDN override via MEDIA_PUBLIC_BASE_URL.
+**Seçim gerekçesi:**
+- Hero-only polish — User'ın feedback'i hero üzerine, diğer alanlar Sprint 12A + Sprint 8B polish yeterli
+- Gradient + placeholder — demo seed'de real image yok, gradient premium his veriyor
+- ring-8 + larger logo — daha "marka odaklı" görünüm
+- Display typography scale — readability + hierarchy
+- Per-business theme — Sprint 12A tokens reuse, white-label ready
 
 **Sonuçlar:**
-- E1 backend (2 commit root): MediaAsset + storage + processing + 3 endpoint + migration + 12 yeşil test
-- E2 frontend (5 commit worker): api-media + MediaUploader + MediaGallery + /admin/media + sidebar nav + 6 yeşil Node test
-- Toplam Sprint E: 7 commit
-- Backend test: 471 baseline → **483 yeşil** (+12)
-- Frontend: /admin/media 9 kB + 98 kB First Load JS
-- Demo: /admin/media → drag-drop → progress → thumbnail → gallery → delete
-- Production deploy: pip install django-storages[boto3] + env (MEDIA_STORAGE_BACKEND=s3 + AWS_*)
+- Sprint F root: PremiumHero.tsx (232 satır, yeni component) + page.tsx import wire — 2 commit
+- Sprint F worker push başarısız (auth-expire riski) — root devraldı
+- 483 backend yeşil korundu (frontend-only sprint)
+- Frontend: tsc 0 error / lint 0 warning / build ✓ — ``/m/[businessSlug]`` 26.7 kB / 121 kB First Load JS
+- Public URL canlıda: https://rest-songs-departure-highways.trycloudflare.com/m/modern-cafe
 
 **Notlar:**
-- Worker auth-expire parçalı scope başarılı (E1 root 2 commit + E2 worker 5 commit)
-- Modern Cafe seed update (mevzuat + logo/cover) Sprint D3'te skip + Sprint E3 kapsamı dışı — Sprint E polish'te eklenebilir
-- 18 payment spec gap pre-existing, Sprint E dokunmadı
-- V1 demo local backend (MEDIA_ROOT). Production'a geçiş: pip install + env set
-- R2: ek olarak AWS_S3_ENDPOINT_URL + MEDIA_PUBLIC_BASE_URL
+- Sprint F worker (bg_9fac9591) push yapmamış, succeeded dönmesine rağmen commit'ler main'de değil — bu Mavis background task lifecycle sorunu. Root devraldı
+- Sprint F2 worker brief (ItemCard, CategoryNav, MenuViewClient, ItemDetailDrawer, Footer) iptal — mevcut yapı Sprint 12A + Sprint 8B polish yeterli
+- Modern Cafe demo seed: cover_image + logo placeholder — real image V2 SaaS feature
+- Sprint F polish'te Sprint E polish'te (mevzuat seed update + audit migration + Sprint E cover_image/logo upload UI) eklenebilir
+- Localtunnel eski tunnel'lar kapandı, cloudflared quick tunnel'lar aktif: https://rest-songs-departure-highways.trycloudflare.com (frontend) + https://following-compliant-binding-used.trycloudflare.com (backend)
