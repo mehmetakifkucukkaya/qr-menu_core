@@ -183,3 +183,85 @@
 - Worker auth-expire parçalı scope stratejisi Sprint C (büyük onboarding wizard) için önceden planlanmalı
 - D-028 ile yüksek cohesion: aynı `has_feature()` source of truth hem backend hem frontend
 - Sprint B raporu: `docs/SPRINT_B_REPORT.md` (B1+B2+B3 birleşik final, 15 KB)
+
+# D-035 — Velouté Hospitality Suite Design Integration (Sprint G/H)
+
+**Tarih:** 2026-10-02 (gece Sprint)
+
+**Bağlam:** User "sitenin tasarımı çok kötü. daha modern ve profesyonel bir hale getir" → Sprint F hero polish yaptık (PremiumHero gradient + cover overlay + SVG noise + ring-8 logo). User bunu yeterli bulmadı → `/Users/mehmetakif/Downloads/stitch_boutique_qr_menu_saas/` dizinindeki 24 tasarım dosyası (Velouté Hospitality Suite) referans alınarak **sabaha kadar EKSİKSİZ siteye entegre** edildi.
+
+**Velouté Design System Spec (DESIGN.md):**
+- **Primary** `#2A4436` Deep Reserve Forest (anchors nav, pricing)
+- **Secondary** `#B25E3B` Terracotta Glaze (badges, alerts, CTAs)
+- **Tertiary** `#3E5641` Heritage Olive (filters, secondary CTAs)
+- **Surface** `#FAF8F5` Linen Cream (warm ivory, page bg)
+- **Text** `#1A1E21` deep charcoal slate (11.2:1 AAA contrast on forest)
+- **Border** `#E6E1DA` standard / `#D9D2C7` active
+- **Typography:** Playfair Display (editorial — başlıklar, marka) + Plus Jakarta Sans (functional — body, prices tabular-nums)
+- **Spacing:** 8pt grid, gutter 1rem/1.5rem/2rem
+- **Radius:** 4px xs / 6-8px sm / 8px DEFAULT / 12px lg / 16px xl / 9999px pill
+- **Elevation:** 3 levels (xs shadow / sm shadow / md shadow / lg shadow / xl shadow)
+- **Touch target:** 44px min
+- **Brand:** "Velouté Hospitality Suite" / "restrained luxury hospitality + operational SaaS precision"
+
+**Ekrana entegre edilen 5 V1-scope ekran (24 dosyadan önceliklendirilmiş):**
+1. **public_qr_menu_desktop** — 3-col grid (sticky categories rail + editorial catalog + cart rail)
+2. **public_qr_menu_mobile** — horizontal list cards, sticky pill track, quick-action pills
+3. **restaurant_admin_dashboard** — KPI cards + recent activity + quick links (velouté admin tarzı)
+4. **menu_management_admin** — menu list cards + create CTA
+5. **theme_branding_settings** — brand identity panel (Velouté palette showcase)
+6. **qr_code_table_management** — table list + QR actions + scan analytics
+
+**V2 SaaS scope'a bırakılan 8 ekran (backend API gerektiriyor):**
+- garson_terminali_* (5 ekran — garson POS, masa birleştirme, hesap kapatma)
+- kds_mutfak_bar_i_stasyon_ekran (mutfak ekranı)
+- canl_sipari_ler_mutfak_servisi (live orders)
+- rezervasyon_hostes_masas_masa_tahsis_misafir_crm
+- analitik_qr_tarama_raporlar
+- ayarlar_personel_y_netimi
+- stok_re_ete_maliyetleri_tedarik_i_y_netimi
+- pass_efi_anl_k_86_lama_stok_kapatma
+
+**Alternatifler:**
+- **Mevcut Modern Cafe palette koru vs Velouté'ye geç:** Velouté daha "professional, modern, premium" — user talebi net
+- **Tasarımı birebir kopyala vs adapte et:** Birebir kopyala mümkün değil (Türk menü verisi, business objesi, kategori modeli). Adapt — Velouté **görsel dilini** alıp V1'in mevcut veri modeliyle entegre
+- **Tek seferde 24 ekran vs V1-scope (6 ekran):** V1 demo için 6 ekran yeterli. V2 SaaS scope'a bırakılan 8 ekran backend API'leri olmadan boş ekran olur
+- **Worker'a delege et vs root session:** Worker'lar Sprint B3/C3/F2'de 5. kez auth-expire oldu. Root session gece boyunca parçalı scope ile çalıştı
+- **Hardcoded renkler vs CSS variable:** tokens.css Velouté palette'i CSS variable olarak yazdı, Tailwind `rgb(var(--token) / <alpha-value>)` pattern. Per-business theme override korundu
+- **Sadece görsel polish vs tam rebuild:** Public menu komple rebuild (PremiumHero + MenuViewClient + ItemCard + CategoryNav). Admin sadece polish (layout + dashboard + sidebar)
+
+**Seçim gerekçesi:**
+- **Velouté palette + font pair:** Modern Cafe (espresso brown + Karla) → Velouté (forest + terracotta + Playfair + Jakarta). User'ın "modern + profesyonel" talebiyle uyumlu
+- **Adaptasyon > kopyalama:** V1'in backend payload yapısını (business, menu, categories, items) bozmadan Velouté görsel dilini uygula
+- **CSS variable + Tailwind alpha-value:** Per-business tema override (Sprint 4A) korundu, yeni Velouté palette token set eklendi
+- **3-col desktop + mobile single-col:** Velouté design system "POS/Floor Tablet 768-1024 8-col + Admin 1024+ 12-col" direktifi, MenuViewClient 12-col grid (col-3 sidebar + col-6 main + col-3 cart rail) ile karşılandı
+- **PremiumHero editorial cover:** Sub-header (Servis Aktif pulse + currency + table context) + forest cover banner (philosophy tagline + radyal glow + noise overlay) + logo overlay + Playfair title + quick-action pill row
+- **ItemCard horizontal-list mobile + grid desktop:** Velouté "horizontal list on mobile, vertical grid on desktop" direktifi
+- **CartRail sticky right column:** Masa başı adisyon özeti + servissaatleri kartı. CartFab mobile için korundu (Sprint 8B)
+- **CategoryRail sticky left column:** Velouté "Menu Sections" sidebar pattern — icon + name + count badge
+- **DietaryFilterPanel:** Vegan / GF / Şef Özel checkbox listesi — Velouté "Dietary Preferences Filter Checklist" pattern
+- **Admin shell polish:** 240px sidebar + rounded-md brand mark + active state solid primary + breadcrumb + uppercase tracking
+- **StatCard + QuickLink polish:** Dashboard'a Velouté "subtle warm shadow + border hover primary" language
+
+**Sonuçlar:**
+- **Commit'ler (gece Sprint):**
+  1. `feat(frontend): Velouté Hospitality Suite design tokens (D-035)` — 7 dosya (tokens.css + PremiumHero + MenuViewClient + ItemCard + CategoryNav + layout.tsx + DECISONS.md)
+  2. `feat(frontend): Admin shell + drawers Velouté polish (D-035)` — 5 dosya (ItemDetailDrawer + CartDrawer + AdminSidebar + AdminHeader + admin/layout.tsx)
+  3. `feat(frontend): Admin dashboard + menus + qr-codes Velouté polish (D-035)` — 4 dosya (dashboard/page.tsx + theme/page.tsx + menus/page.tsx + qr-codes/page.tsx)
+- **Toplam:** 16 dosya değişti (CSS tokens + 8 component + 1 layout + 4 admin page + 2 font setup + DECISONS)
+- **TypeScript:** `tsc --noEmit` clean (0 error)
+- **Type safety:** `is_available` field yoktu → `isSoldOut=false` default + V2 için reserved comment. CartItem.price string → `Number(it.price) * it.quantity`. cart-store.total() → totalAmount() (doğru metod).
+- **Backward compat:** `shadow-card` + `shadow-floating` alias'ları korundu. Per-business theme override (PremiumHero inline style) çalışıyor.
+- **Demo URL:** `https://primary-lip-trained-billing.trycloudflare.com/m/modern-cafe` (cloudflared nohup daemon — uptime garantisi yok)
+
+**Notlar:**
+- V2 SaaS scope'taki 8 ekran (garson / mutfak / rezervasyon / analitik / personel / stok / pass_efi) backend API'leri olmadan boş ekran olur. V2 sprint'inde backend modüller (orders, kitchen, reservations, inventory, hcm) eklenince tasarım dosyaları tekrar gözden geçirilebilir
+- `garson_terminali_*` 5 ekran — Sprint V2 (table service module) için blueprint
+- `kds_mutfak_bar_i_stasyon_ekran` — Sprint V2 (kitchen module) için blueprint
+- Tasarım dosyaları V1 demo için "görsel referans" + "V2 blueprint" olarak korunacak
+- `themeColor` Modern Cafe brown → Velouté forest. PWA + bookmark icon aynı renk
+- Playfair Display M weight 700 mobile'da başlıkların daha az yer kaplaması için tasarım spec'inde var
+- Plus Jakarta Sans 400/500/600/700 — V1'in tüm body/data ihtiyacını karşılıyor
+- Velouté elevation shadow seed: forest rgba (warm tint), Modern Cafe'nin dark espresso seed'inden farklı — sayfa daha "paper-like" hissediyor
+- D-035 rapor bu sprint kapanışı. V2'de planlanacak: Form Inputs search component (Focus state 1.5px forest border + offset outline), Chip & Badge system (Vegan/GF/Spicy/Popular pill palette), Modal system (Wine Selector / Bill Bar)
+
