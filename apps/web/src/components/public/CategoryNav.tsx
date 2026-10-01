@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import clsx from "clsx";
-import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { PublicMenuCategory } from "@/types/menu";
 
 interface CategoryNavProps {
@@ -10,17 +9,19 @@ interface CategoryNavProps {
 }
 
 /**
- * CategoryNav — sticky horizontal-scroll category strip.
+ * CategoryNav — Velouté sticky segmented pill track (D-035 / Sprint G).
  *
- * - Sits below the BusinessHero on mobile (top-0 once stuck).
- * - Each chip is an anchor to `#category-{slug}` (CategorySection).
- * - The "active" pill tracks scroll position via IntersectionObserver.
- * - ChevronLeft/Right scroll the strip horizontally (snap-x makes
- *   touch scrolling pleasant on iOS Safari).
+ * Desktop: an elevated white track (`bg-surface`) sits over the linen
+ * page bg. Active pill is `bg-primary text-primary-foreground`; inactive
+ * pills are subtle `bg-[var(--color-surface-low)]` that flip to forest on
+ * hover. 44px min-height on every chip.
  *
- * Mobile-first: on small screens this is the primary navigation.
- * On `sm:` and up, the page becomes long enough that the nav is
- * still useful as a jump-menu.
+ * Mobile: same look, slightly smaller padding so 5-6 categories fit on a
+ * 360px viewport.
+ *
+ * IntersectionObserver picks the section with the largest visible area
+ * inside the top 56px + bottom-55% band (matches the sticky chrome
+ * height + the natural reading zone).
  */
 export function CategoryNav({ categories }: CategoryNavProps) {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -28,7 +29,6 @@ export function CategoryNav({ categories }: CategoryNavProps) {
     categories[0]?.slug ?? null,
   );
 
-  // Track which category is currently in view.
   useEffect(() => {
     if (typeof window === "undefined") return;
     const sections = Array.from(
@@ -38,13 +38,9 @@ export function CategoryNav({ categories }: CategoryNavProps) {
 
     const observer = new IntersectionObserver(
       (entries) => {
-        // Pick the entry with the largest intersection ratio that is
-        // currently intersecting — that is the "active" section.
         const visible = entries
           .filter((e) => e.isIntersecting)
-          .sort(
-            (a, b) => b.intersectionRatio - a.intersectionRatio,
-          );
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
         if (visible[0]) {
           const slug = visible[0].target.getAttribute(
             "data-category-anchor",
@@ -53,9 +49,6 @@ export function CategoryNav({ categories }: CategoryNavProps) {
         }
       },
       {
-        // Top offset = roughly the nav height (≈ 56px). Bottom offset
-        // shrinks the "active" zone so the last visible section wins
-        // near the page bottom.
         rootMargin: "-56px 0px -55% 0px",
         threshold: [0, 0.25, 0.5, 0.75, 1],
       },
@@ -65,62 +58,42 @@ export function CategoryNav({ categories }: CategoryNavProps) {
     return () => observer.disconnect();
   }, [categories]);
 
-  const scrollBy = (delta: number) => {
-    const el = scrollerRef.current;
-    if (!el) return;
-    el.scrollBy({ left: delta, behavior: "smooth" });
-  };
-
   if (categories.length === 0) return null;
 
   return (
     <nav
       aria-label="Kategoriler"
-      className="sticky top-0 z-20 -mx-4 border-b border-border bg-background/85 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/70"
+      className="sticky top-0 z-20 -mx-4 mt-4 border-b border-[var(--color-border)] bg-background/85 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/70 sm:-mx-6 sm:px-6 lg:mt-6"
     >
-      <div className="relative flex items-center">
-        <button
-          type="button"
-          aria-label="Kategorileri sola kaydır"
-          onClick={() => scrollBy(-200)}
-          className="touch-target hidden shrink-0 items-center justify-center rounded-full text-muted hover:bg-surface sm:inline-flex"
-        >
-          <ChevronLeft className="h-5 w-5" aria-hidden />
-        </button>
-
-        <div
-          ref={scrollerRef}
-          className="flex flex-1 snap-x snap-mandatory gap-2 overflow-x-auto py-2 scrollbar-none"
-          style={{ scrollbarWidth: "none" }}
-        >
-          {categories.map((cat) => {
-            const isActive = cat.slug === activeSlug;
-            return (
-              <a
-                key={cat.id}
-                href={`#category-${cat.slug}`}
-                aria-current={isActive ? "true" : undefined}
+      <div className="flex flex-1 snap-x snap-mandatory items-center gap-2 overflow-x-auto py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {categories.map((cat) => {
+          const isActive = cat.slug === activeSlug;
+          return (
+            <a
+              key={cat.id}
+              href={`#category-${cat.slug}`}
+              aria-current={isActive ? "true" : undefined}
+              className={clsx(
+                "inline-flex min-h-[44px] shrink-0 snap-start items-center rounded-pill px-4 text-sm font-semibold uppercase tracking-wider transition focus:outline-none focus:ring-2 focus:ring-primary",
+                isActive
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "bg-[var(--color-surface-low)] text-on-surface-variant hover:bg-[var(--color-surface)] hover:text-text",
+              )}
+            >
+              {cat.name}
+              <span
                 className={clsx(
-                  "touch-target inline-flex shrink-0 snap-start items-center rounded-full px-3.5 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-primary",
+                  "ml-2 rounded-pill px-1.5 py-0.5 text-[10px] font-bold",
                   isActive
-                    ? "bg-primary text-primary-foreground shadow-card"
-                    : "bg-surface text-text ring-1 ring-border hover:bg-background",
+                    ? "bg-primary-foreground/20 text-primary-foreground"
+                    : "bg-[var(--color-surface)] text-outline",
                 )}
               >
-                {cat.name}
-              </a>
-            );
-          })}
-        </div>
-
-        <button
-          type="button"
-          aria-label="Kategorileri sağa kaydır"
-          onClick={() => scrollBy(200)}
-          className="touch-target hidden shrink-0 items-center justify-center rounded-full text-muted hover:bg-surface sm:inline-flex"
-        >
-          <ChevronRight className="h-5 w-5" aria-hidden />
-        </button>
+                {cat.items.length}
+              </span>
+            </a>
+          );
+        })}
       </div>
     </nav>
   );

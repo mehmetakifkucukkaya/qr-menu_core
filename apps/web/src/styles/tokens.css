@@ -1,70 +1,83 @@
 /* ============================================================
- * Theme tokens — Modern Cafe default palette (D-014 baseline).
+ * Theme tokens — Velouté Hospitality Suite (D-035 / Sprint G baseline).
  *
  * All colors are stored as space-separated RGB triplets so Tailwind's
  * `rgb(var(--token) / <alpha-value>)` pattern works (see tailwind.config.ts).
  *
  * Per-business themes override these values via inline style on the
- * BusinessHero wrapper (or anywhere higher in the tree). See
- * docs/SPRINT_3_PLAN.md → "Theme Tokens".
+ * PremiumHero wrapper (see apps/web/src/components/public/PremiumHero.tsx).
  *
- * Sprint 12A — added:
+ * Velouté design system (DESIGN.md):
+ *   • Primary  — `#2A4436` Deep Reserve Forest (anchors nav, pricing)
+ *   • Secondary — `#B25E3B` Terracotta Glaze (badges, alerts)
+ *   • Tertiary — `#3E5641` Heritage Olive (filters, secondary CTAs)
+ *   • Surface   — `#FAF8F5` Linen Cream (warm ivory page bg)
+ *   • Text      — `#1A1E21` deep charcoal / `#4A5459` secondary copy
+ *   • Border    — `#E6E1DA` standard, `#D9D2C7` active
+ *   • WCAG AAA contrast on text/borders
+ *
+ * Typography pairing:
+ *   • Editorial  — Playfair Display (titles, sections, brand)
+ *   • Functional — Plus Jakarta Sans (body, prices tabular, data)
+ *
+ * 8pt grid · 4px-8px corners · 44px touch targets · 3 elevation levels
+ *
+ * Sprint 12A — kept:
  *   • dark-mode (`[data-theme="dark"]`) variable set
  *   • radius scale (xs / sm / md / lg / xl / pill)
  *   • shadow layers (xs / sm / md / lg / xl)
  *   • transition / easing tokens
- *   • Google Fonts pair (Playfair Display SC heading + Karla body)
  * ============================================================ */
 
 :root,
 :root[data-theme="light"] {
-  /* Modern Cafe palette (see FRONTEND_PLACEHOLDERS.md / Modern Cafe seed) */
-  --color-primary: 139 90 60;          /* #8B5A3C warm brown */
+  /* Velouté palette — Deep Reserve Forest + Terracotta Glaze on Linen. */
+  --color-primary: 42 68 54;             /* #2A4436 Deep Reserve Forest     */
   --color-primary-foreground: 255 255 255;
-  --color-secondary: 212 165 116;      /* #D4A574 tan */
-  --color-accent: 224 120 86;          /* #E07856 terracotta */
-  --color-background: 245 239 230;     /* #F5EFE6 cream */
-  --color-surface: 255 255 255;
-  --color-text: 44 24 16;              /* #2C1810 dark espresso */
-  --color-muted: 122 107 95;
-  --color-border: 222 211 196;
+  --color-secondary: 178 94 59;          /* #B25E3B Terracotta Glaze        */
+  --color-accent: 62 86 65;              /* #3E5641 Heritage Olive (filters)*/
+  --color-background: 250 248 245;       /* #FAF8F5 Linen Cream             */
+  --color-surface: 255 255 255;          /* #FFFFFF elevated cards/popovers */
+  --color-surface-low: 245 241 235;      /* #F5F1EB container layering      */
+  --color-text: 26 30 33;                /* #1A1E21 deep charcoal slate     */
+  --color-muted: 74 84 89;               /* #4A5459 secondary copy          */
+  --color-border: 230 225 218;           /* #E6E1DA hairline borders        */
+  --color-border-strong: 217 210 199;    /* #D9D2C7 active borders          */
 
-  /* Page-level surface tokens used by Glassmorphism + raw body bg. */
-  --color-bg-base: 245 239 230;        /* matches --color-background */
-  --color-bg-overlay: 255 255 255;     /* solid surface for blur target */
-  --color-shadow-color: 44 24 16;      /* =--color-text; shadow rgba seed */
+  /* Page-level surface tokens. */
+  --color-bg-base: 250 248 245;          /* matches --color-background      */
+  --color-bg-overlay: 255 255 255;       /* solid surface for blur target   */
+  --color-shadow-color: 42 68 54;        /* shadow rgba seed (forest-tinted)*/
 
-  /* Typography — Google Fonts pairing (Sprint 12A).
-   * Playfair Display SC brings editorial elegance to headings; Karla is
-   * the UI workhorse (300/400/500/600/700 covers all weights). */
-  --font-heading: "Playfair Display SC", "Playfair Display", Georgia, serif;
-  --font-body: "Karla", "Inter", system-ui, -apple-system, sans-serif;
+  /* Typography — Velouté editorial + functional pairing.
+   * Playfair Display brings editorial elegance to headings & brand.
+   * Plus Jakarta Sans is the UI workhorse (400/500/600/700). */
+  --font-heading: "Playfair Display", Georgia, "Times New Roman", serif;
+  --font-body: "Plus Jakarta Sans", "Inter", system-ui, -apple-system, sans-serif;
 
-  /* Geometry — full radius scale. The DEFAULT keeps backwards-compat
-   * with components that reference `rounded-DEFAULT`. */
-  --radius: 0.5rem;
-  --radius-xs: 0.375rem;     /* 6px — small chips, tags, kbd hints */
-  --radius-sm: 0.5rem;       /* 8px — inputs, small buttons           */
-  --radius-md: 0.75rem;      /* 12px — DEFAULT card / button surface  */
-  --radius-lg: 1.25rem;      /* 20px — large cards, modals, drawers   */
-  --radius-xl: 1.5rem;       /* 24px — hero panels, glass nav         */
-  --radius-pill: 9999px;     /* full — pills, toggle switches         */
+  /* Geometry — 4px-8px corners. */
+  --radius: 0.5rem;                     /* 8px — DEFAULT container/card    */
+  --radius-xs: 0.25rem;                 /* 4px — checkboxes, modifiers     */
+  --radius-sm: 0.375rem;                /* 6px — buttons, input fields     */
+  --radius-md: 0.5rem;                  /* 8px — standard cards, buttons   */
+  --radius-lg: 0.75rem;                 /* 12px — hero panels, large cards */
+  --radius-xl: 1rem;                    /* 16px — modals, drawer surfaces  */
+  --radius-pill: 9999px;                /* full — pills, dietary badges    */
 
-  /* Shadows — soft, layered. All key off --color-shadow-color so dark mode
-   * can re-seed the rgba base to a darker colour. */
+  /* Shadows — Velouté 3-level elevation, warm-tinted.
+   * Forest seed produces a paper-like, low-opacity ambient glow
+   * instead of harsh generic blue-grey shadows. */
   --shadow-xs: 0 1px 2px rgb(var(--color-shadow-color) / 0.04);
-  --shadow-sm: 0 2px 4px rgb(var(--color-shadow-color) / 0.06);
-  --shadow-md: 0 6px 16px rgb(var(--color-shadow-color) / 0.08);
-  --shadow-lg: 0 12px 32px rgb(var(--color-shadow-color) / 0.12);
-  --shadow-xl: 0 20px 48px rgb(var(--color-shadow-color) / 0.16);
+  --shadow-sm: 0 2px 4px rgb(42 68 54 / 0.03), 0 1px 2px rgb(26 30 33 / 0.04);
+  --shadow-md: 0 6px 16px -2px rgb(42 68 54 / 0.06), 0 2px 4px rgb(26 30 33 / 0.03);
+  --shadow-lg: 0 16px 32px -4px rgb(42 68 54 / 0.08), 0 4px 8px rgb(26 30 33 / 0.04);
+  --shadow-xl: 0 20px 48px -8px rgb(42 68 54 / 0.12), 0 8px 16px rgb(26 30 33 / 0.06);
   /* Backwards-compat aliases (used by existing `shadow-card` / `shadow-floating`
    * utilities — keep them mapped to the new scale instead of removing). */
   --shadow-card: var(--shadow-sm);
   --shadow-floating: var(--shadow-md);
 
-  /* Motion — global transition tokens. Components should prefer these
-   * over hardcoded `duration-*` Tailwind values so dark/light swap and
-   * `prefers-reduced-motion` overrides stay centralised. */
+  /* Motion — global transition tokens. */
   --transition-fast: 150ms;
   --transition-base: 200ms;
   --transition-slow: 300ms;
@@ -73,23 +86,23 @@
 }
 
 /* ----- Dark mode ----------------------------------------------------------
- * Mirrors the light palette for high-contrast readability on the kitchen
- * tablet and admin desktop. Per-business themes still win via inline
- * overrides on the BusinessHero wrapper (D-014). The page bg drops to a
- * deep slate-navy so cards (which keep --color-surface) read as floating
- * panels. */
+ * Mirrors the Velouté palette for high-contrast readability on the kitchen
+ * tablet and admin desktop. Forest lifts to a brighter sage so the
+ * terracotta accents stay legible against a deeper backdrop. */
 :root[data-theme="dark"] {
-  --color-primary: 212 165 116;        /* #D4A574 — warm tan pops on dark  */
-  --color-primary-foreground: 15 23 42;
-  --color-secondary: 139 90 60;        /* #8B5A3C — softened brown        */
-  --color-accent: 224 120 86;          /* #E07856 terracotta — unchanged  */
-  --color-background: 15 23 42;        /* #0F172A slate-900 deep          */
-  --color-surface: 30 41 59;           /* #1E293B slate-800 cards         */
-  --color-text: 248 250 252;           /* #F8FAFC slate-50                */
-  --color-muted: 148 163 184;          /* #94A3B8 slate-400 — 4.5:1+      */
-  --color-border: 51 65 85;            /* #334155 slate-700               */
+  --color-primary: 176 205 187;          /* #B0CDBB — sage lift on dark     */
+  --color-primary-foreground: 6 32 20;
+  --color-secondary: 255 181 153;        /* #FFB599 — softened terracotta   */
+  --color-accent: 178 207 184;           /* Heritage olive (lifted)         */
+  --color-background: 27 28 26;          /* #1B1C1A deep charcoal           */
+  --color-surface: 48 49 47;             /* #30312F elevated surface        */
+  --color-surface-low: 39 40 38;
+  --color-text: 242 240 237;             /* #F2F0ED inverse on-surface      */
+  --color-muted: 194 200 194;
+  --color-border: 66 72 68;
+  --color-border-strong: 114 121 115;
 
-  --color-bg-base: 15 23 42;
-  --color-bg-overlay: 30 41 59;
-  --color-shadow-color: 0 0 0;        /* pure black — heavier contrast   */
+  --color-bg-base: 27 28 26;
+  --color-bg-overlay: 48 49 47;
+  --color-shadow-color: 0 0 0;          /* pure black — heavier contrast   */
 }

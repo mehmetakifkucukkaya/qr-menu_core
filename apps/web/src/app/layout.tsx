@@ -72,7 +72,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 5,
-  themeColor: "#8B5A3C",
+  themeColor: "#2A4436",
 };
 
 /** Read the persisted theme preference from the cookie that the
@@ -109,8 +109,11 @@ export default function RootLayout({
           href="https://fonts.gstatic.com"
           crossOrigin="anonymous"
         />
+        {/* Velouté design system pairing (D-035 / Sprint G):
+         *   • Playfair Display — editorial headings, brand titles
+         *   • Plus Jakarta Sans — functional UI body, prices (tabular) */}
         <link
-          href="https://fonts.googleapis.com/css2?family=Karla:wght@300;400;500;600;700&family=Playfair+Display+SC:wght@400;700&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
           rel="stylesheet"
         />
       </head>

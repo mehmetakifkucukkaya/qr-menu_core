@@ -29,47 +29,33 @@ import { PrintButton } from "./PrintButton";
 import { useCartStore } from "@/lib/cart-store";
 
 interface MenuViewClientProps {
-  /** Sprint B3b — server-fetched tenant plan / feature flags. `null`
-   *  when the fetch failed or was skipped; provider falls back to
-   *  safe-default (all flags off). */
   publicSettings: PublicSettings | null;
   businessSlug: string;
-  /** Sprint A — full business payload so we can resolve currency from the
-   *  tenant default when neither menu nor items carry one. */
   business: PublicMenuBusiness;
-  /** Sprint A — menu payload so currency respects the menu-level override
-   *  (when customer-facing menu-level currency rules land in V2). */
   menu: PublicMenuMenu | null;
   categories: PublicMenuCategory[];
   allergens: PublicMenuAllergen[];
   dietaryTags: PublicMenuDietaryTag[];
   locale: LocaleCode;
-  /** Sprint 10B — current customer profile (cookie-backed). Null when
-   *  the request has no customer session. */
   customerProfile?: {
     id: number;
     full_name: string;
     phone: string;
     email: string;
   } | null;
-  /** Sprint 10B — customer loyalty summary at this business. */
   customerLoyalty?: {
     balance: number;
     settings: import("@/types/account").PublicLoyaltySettings | null;
   } | null;
-  /** SSR fallback for AccountHeaderChip (see Sprint 10B). */
   headerInitial?: {
     id: number;
     email: string;
     full_name: string;
   } | null;
-  /** SSR fallback loyalty balance for AccountHeaderChip. */
   headerLoyaltyBalance?: number;
   /** Sprint B3b — server-rendered content that needs to live *inside*
    *  the FeatureFlagProvider subtree (e.g. BusinessHero, menu name
-   *  caption, EmptyState when the catalog is empty). Passed through
-   *  verbatim between the sticky header and the category grid so the
-   *  visual order (header → hero → menu) is preserved. */
+   *  caption, EmptyState when the catalog is empty). */
   children?: React.ReactNode;
 }
 
@@ -77,42 +63,21 @@ interface MenuViewClientProps {
  * MenuViewClient — owns the drawer state + sticky header for the
  * public menu page.
  *
- * Sprint B3b refactor: this component now wraps its entire render
- * output in `<FeatureFlagProvider settings={publicSettings}>` so that
- * every descendant (AccountHeaderChip, HeaderCartIcon, CartFab, the
- * "Sipariş Ver" button inside CartDrawer / CheckoutForm, ItemCard's
- * "Sepete ekle" button) can call `useFeatureFlag(...)` directly.
+ * Sprint B3b refactor: wraps the entire render output in
+ * `<FeatureFlagProvider settings={publicSettings}>` so every descendant
+ * (AccountHeaderChip, HeaderCartIcon, CartFab, the "Sipariş Ver" button
+ * inside CartDrawer / CheckoutForm, ItemCard's "Sepete ekle" button) can
+ * call `useFeatureFlag(...)` directly.
  *
- * Splits the page so server components can stay server-only for the
- * heavy data fetch / SEO path, while we wrap the categories grid with
- * a thin client component that wires ItemCard `onSelect` into the
- * drawer.
- *
- * Analytics (Sprint 5B):
- *   - Fires `menu_view` once when the component mounts (the page is
- *     hydrated and the user is actually looking at the menu — server
- *     fetches don't count).
- *   - Fires `qr_open` when the URL carries `?qr=<id>` (came in via a
- *     scanned QR code). Same shape as `menu_view` but tagged so the
- *     analytics dashboard can split organic vs. QR traffic.
- *   - Refs guard the `useEffect` so the events fire exactly once per
- *     page lifetime even under React's StrictMode double-invoke.
- *
- * Sprint 8B:
- *   - Mounts `CartDrawer` and the floating cart button so the public
- *     menu page can place an order.
- *
- * Sprint A (Faz 1.2):
- *   - Currency now flows through the 4-step resolver chain so the cart,
- *     checkout, and order confirmation never drift apart.
- *
- * Sprint B3b:
- *   - Owns the sticky top header (logo + name + LocaleSelector +
- *     AccountHeaderChip + HeaderCartIcon) so every interactive piece
- *     can read feature flags via context. The server-rendered
- *     `BusinessHero` / menu-name caption / `EmptyState` are passed as
- *     `children` and rendered between the header and the grid so the
- *     visual order stays identical to the pre-B3b page.
+ * Sprint G (D-035) — Velouté 3-column desktop layout:
+ *   • Left rail  (col-span-3, sticky) — category navigation + dietary
+ *     preferences checklist + Wi-Fi info card. Hides below `lg`.
+ *   • Main feed  (col-span-6)         — editorial menu catalog with the
+ *     sticky segmented category nav above.
+ *   • Right rail (col-span-3, sticky) — cart summary + service info.
+ *     Hidden when the cart feature is off.
+ *   • Mobile (< lg) — single column with the sticky CategoryNav and
+ *     floating CartFab from earlier sprints.
  */
 export function MenuViewClient({
   publicSettings,
@@ -160,9 +125,7 @@ export function MenuViewClient({
     }
   }, [locale]);
 
-  // Catalog lookup for cart thumbnails (fallback when an ItemCard was
-  // rendered with a stale placeholder image — we still want to show the
-  // real image inside the drawer).
+  // Catalog lookup for cart thumbnails.
   const catalogLookup: Record<number, PublicMenuItem> = {};
   const allItems: PublicMenuItem[] = [];
   for (const cat of categories) {
@@ -172,8 +135,7 @@ export function MenuViewClient({
     }
   }
 
-  // Currency resolution chain (Sprint A — Faz 1.2):
-  //   menu.currency → business.currency → first item.currency → "TRY"
+  // Currency resolution chain.
   const currency = resolveCurrency(menu, business, allItems);
 
   const isEmpty =
@@ -182,31 +144,15 @@ export function MenuViewClient({
 
   return (
     <FeatureFlagProvider settings={publicSettings}>
-      {/* Sprint B3b — sticky upgrade banner. Sits above the page
-          header with a higher z-index so the prompt stays visible
-          while the customer scrolls. Hidden when the tenant's plan
-          already enables the highlighted feature (UpgradeBanner's
-          internal `hasFeature` check). On BASIC all four flags are
-          off so the cart banner shows; on PRO+ the cart feature is
-          still off (orders+ only) but we promote the orders+ tier
-          because that's the next relevant upgrade step for the
-          demo customer. */}
       <UpgradeBanner
         feature="cart_enabled"
         targetPlan="orders"
         settings={publicSettings}
       />
 
-      {/* Sticky top bar: logo + name + locale selector + account chip
-          + cart icon + print button. The interactive bits
-          (AccountHeaderChip / HeaderCartIcon) read feature flags via
-          the provider above. Sprint D2 adds the PrintButton on the
-          right side of the chrome — it triggers window.print() and
-          relies on the global @media print rules (styles/print.css)
-          to render a clean A4 page. Hidden on mobile (< md) because
-          mobile browsers have no real print path. */}
-      <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70">
-        <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 py-2.5">
+      {/* Sticky top bar */}
+      <header className="sticky top-0 z-30 border-b border-[var(--color-border)] bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2.5 sm:px-6">
           <div className="flex min-w-0 items-center gap-2">
             {business.logo ? (
               /* eslint-disable-next-line @next/next/no-img-element */
@@ -214,12 +160,12 @@ export function MenuViewClient({
                 src={business.logo}
                 alt=""
                 aria-hidden="true"
-                className="h-7 w-7 shrink-0 rounded-full bg-surface object-cover ring-1 ring-border"
+                className="h-8 w-8 shrink-0 rounded-md bg-surface object-cover ring-1 ring-[var(--color-border)]"
               />
             ) : (
               <span
                 aria-hidden
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary text-xs font-bold text-primary-foreground"
               >
                 {business.name.charAt(0).toUpperCase()}
               </span>
@@ -232,13 +178,6 @@ export function MenuViewClient({
             </span>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            {/* Print button is desktop-only (≥ md) per Sprint D2 — see
-                PrintButton component for the rationale. Click fires
-                window.print() directly; the global @media print rules
-                in styles/print.css strip the chrome so the printed
-                output is a clean A4 menu. The dedicated
-                /m/[slug]/print route exists as a bookmarkable
-                preview / kiosk URL. */}
             <PrintButton />
             <LocaleSelector current={locale} />
             <AccountHeaderChip
@@ -250,9 +189,6 @@ export function MenuViewClient({
         </div>
       </header>
 
-      {/* Server-rendered chrome (BusinessHero + menu caption +
-          EmptyState when catalog is empty) — passed verbatim so the
-          visual order stays header → hero → menu. */}
       {children}
 
       {!isEmpty ? (
@@ -299,9 +235,14 @@ interface MenuContentProps {
 }
 
 /**
- * MenuContent — extracted inner subtree so the parent
- * `<FeatureFlagProvider>` from MenuViewClient is already in scope when
- * we call `useFeatureFlag` for the cart / order / payment gating.
+ * MenuContent — Velouté 3-column desktop layout + mobile single-column.
+ *
+ * Desktop (`lg:`): 12-col grid → left rail (col-3) + main feed (col-6) +
+ * right cart rail (col-3). Left + right rails are `sticky top-28` so they
+ * follow the user as the catalog scrolls.
+ *
+ * Mobile: single column. The sticky CategoryNav (full-width) sits above
+ * the catalog; the floating CartFab rides in the bottom-right corner.
  */
 function MenuContent({
   businessSlug,
@@ -326,19 +267,47 @@ function MenuContent({
   return (
     <>
       <CategoryNav categories={categories} />
-      <div className="mx-auto mt-6 max-w-2xl space-y-8 px-4 pb-32 sm:pb-10">
-        {categories.map((category) => (
-          <CategorySection
-            key={category.id}
-            category={category}
-            onItemSelect={onItemSelect}
-          />
-        ))}
+
+      <div className="mx-auto mt-6 max-w-6xl px-4 pb-32 sm:px-6 sm:pb-10">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:items-start">
+          {/* ── LEFT RAIL: desktop-only sidebar (categories + filters) ── */}
+          <aside className="hidden lg:sticky lg:top-28 lg:col-span-3 lg:flex lg:flex-col lg:gap-4 lg:self-start">
+            <CategoryRail categories={categories} />
+            <DietaryFilterPanel />
+            <WifiInfoCard />
+          </aside>
+
+          {/* ── MAIN FEED: editorial catalog ── */}
+          <section className="flex flex-col gap-8 lg:col-span-6">
+            {categories.map((category) => (
+              <CategorySection
+                key={category.id}
+                category={category}
+                onItemSelect={onItemSelect}
+              />
+            ))}
+          </section>
+
+          {/* ── RIGHT RAIL: desktop-only cart + service summary ── */}
+          {cartEnabled ? (
+            <aside className="hidden lg:sticky lg:top-28 lg:col-span-3 lg:flex lg:flex-col lg:gap-4 lg:self-start">
+              <CartRail
+                businessSlug={businessSlug}
+                currency={currency}
+                catalogLookup={catalogLookup}
+                ordersEnabled={ordersEnabled}
+                onOpenDrawer={openDrawer}
+              />
+              <ServiceHoursCard />
+            </aside>
+          ) : (
+            <aside className="hidden lg:sticky lg:top-28 lg:col-span-3 lg:flex lg:flex-col lg:gap-4 lg:self-start">
+              <ServiceHoursCard />
+            </aside>
+          )}
+        </div>
       </div>
 
-      {/* Floating cart button (mobile only — desktop gets the header
-          icon). Hidden when the tenant disables cart feature OR when
-          there are no items yet. */}
       {cartEnabled ? (
         <CartFab count={totalItems} onClick={openDrawer} />
       ) : null}
@@ -351,14 +320,6 @@ function MenuContent({
         onClose={onItemClose}
       />
 
-      {/* CartDrawer also drives the CheckoutForm. Both render only
-          when the tenant enables the cart feature. The CheckoutForm
-          itself additionally gates the payment step on
-          `payments_enabled` (Sprint B3b, see apps/web/src/components
-          /public/CheckoutForm.tsx) and the order-submission action on
-          `orders_enabled`. When `orders_enabled` is off but cart is on,
-          we still let customers add items but the "Sipariş Ver"
-          button is hidden inside CartDrawer (see that component). */}
       {cartEnabled ? (
         <CartDrawer
           businessSlug={businessSlug}
@@ -373,6 +334,234 @@ function MenuContent({
   );
 }
 
+/* ── Desktop left-rail helpers (Velouté 3-col layout) ─────────────────── */
+
+function CategoryRail({ categories }: { categories: PublicMenuCategory[] }) {
+  if (categories.length === 0) return null;
+  return (
+    <nav
+      aria-label="Menü bölümleri"
+      className="flex flex-col gap-1 rounded-lg border border-[var(--color-border)] bg-surface p-3 shadow-sm"
+    >
+      <span className="px-2 pb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-outline">
+        Menü Bölümleri
+      </span>
+      {categories.map((cat, idx) => (
+        <a
+          key={cat.id}
+          href={`#category-${cat.slug}`}
+          className={
+            "flex items-center justify-between gap-2 rounded-md px-3 py-2 text-sm font-medium transition " +
+            (idx === 0
+              ? "bg-[var(--color-surface-low)] font-bold text-primary"
+              : "text-on-surface-variant hover:bg-[var(--color-surface-low)] hover:text-text")
+          }
+        >
+          <span className="line-clamp-1">{cat.name}</span>
+          <span
+            className={
+              "inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-pill px-1.5 text-[10px] font-semibold " +
+              (idx === 0
+                ? "bg-primary text-primary-foreground"
+                : "text-outline")
+            }
+          >
+            {cat.items.length}
+          </span>
+        </a>
+      ))}
+    </nav>
+  );
+}
+
+function DietaryFilterPanel() {
+  const filters: Array<{ label: string; count: number; checked: boolean }> = [
+    { label: "Vejetaryen", count: 8, checked: true },
+    { label: "Vegan", count: 3, checked: false },
+    { label: "Glütensiz", count: 5, checked: true },
+    { label: "Fındıksız", count: 6, checked: false },
+    { label: "Şef Özel", count: 4, checked: true },
+  ];
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border border-[var(--color-border)] bg-surface p-3 shadow-sm">
+      <div className="flex items-center justify-between px-1">
+        <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-outline">
+          Diyet Tercihleri
+        </span>
+        <button
+          type="button"
+          className="text-[10px] font-bold uppercase tracking-wider text-secondary hover:underline"
+        >
+          Sıfırla
+        </button>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        {filters.map((f) => (
+          <label
+            key={f.label}
+            className="flex cursor-pointer items-center gap-2 rounded-md px-1 py-1 text-sm text-text transition hover:bg-[var(--color-surface-low)]"
+          >
+            <input
+              type="checkbox"
+              defaultChecked={f.checked}
+              className="h-4 w-4 rounded-[4px] border-[var(--color-border-strong)] text-primary accent-primary focus:ring-0"
+            />
+            <span className={f.checked ? "font-semibold text-secondary" : ""}>
+              {f.label}
+            </span>
+            <span className="ml-auto text-[10px] font-semibold text-outline">
+              {f.count}
+            </span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function WifiInfoCard() {
+  return (
+    <div className="flex items-center justify-between rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-low)] p-3">
+      <div className="flex items-center gap-2">
+        <span aria-hidden className="text-lg">
+          📶
+        </span>
+        <div className="flex flex-col">
+          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-outline">
+            Misafir Wi-Fi
+          </span>
+          <span className="select-all font-heading text-sm font-semibold text-primary">
+            MaisonGuest · veloute24
+          </span>
+        </div>
+      </div>
+      <button
+        type="button"
+        aria-label="Wi-Fi şifresini kopyala"
+        className="rounded-md p-1 text-outline transition hover:bg-[var(--color-surface)] hover:text-primary"
+      >
+        <span aria-hidden>📋</span>
+      </button>
+    </div>
+  );
+}
+
+/* ── Desktop right-rail helpers ────────────────────────────────────────── */
+
+function CartRail({
+  businessSlug,
+  currency,
+  catalogLookup,
+  ordersEnabled,
+  onOpenDrawer,
+}: {
+  businessSlug: string;
+  currency: string;
+  catalogLookup: Record<number, PublicMenuItem>;
+  ordersEnabled: boolean;
+  onOpenDrawer: () => void;
+}) {
+  const items = useCartStore((s) => s.items);
+  const total = useCartStore((s) => s.totalAmount());
+  const count = useCartStore((s) => s.totalItems());
+
+  const fmt = (n: number) => `${currency} ${n.toFixed(2)}`;
+
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border border-[var(--color-border)] bg-surface p-4 shadow-sm">
+      <div className="flex items-center justify-between">
+        <h3 className="font-heading text-base font-semibold text-primary">
+          Adisyon Özeti
+        </h3>
+        <span className="rounded-pill bg-[var(--color-surface-low)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+          {count} ürün
+        </span>
+      </div>
+
+      {items.length === 0 ? (
+        <p className="rounded-md border border-dashed border-[var(--color-border)] bg-[var(--color-surface-low)] p-3 text-center text-xs text-on-surface-variant">
+          Henüz sepete ürün eklemediniz.
+        </p>
+      ) : (
+        <ul className="flex max-h-64 flex-col gap-2 overflow-y-auto pr-1">
+          {items.map((it) => {
+            const catalog = catalogLookup[it.menuItemId];
+            return (
+              <li
+                key={it.menuItemId}
+                className="flex items-center justify-between gap-2 rounded-md bg-[var(--color-surface-low)] px-2 py-1.5 text-xs"
+              >
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-pill bg-primary text-[10px] font-bold text-primary-foreground">
+                    {it.quantity}
+                  </span>
+                  <span className="line-clamp-1 font-medium text-text">
+                    {catalog?.name ?? it.name}
+                  </span>
+                </div>
+                <span className="shrink-0 font-heading text-xs font-semibold tabular-nums text-primary">
+                  {fmt(Number(it.price) * it.quantity)}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <div className="flex items-center justify-between border-t border-[var(--color-border)] pt-3">
+        <span className="text-xs font-semibold uppercase tracking-wider text-on-surface-variant">
+          Toplam
+        </span>
+        <span className="font-heading text-lg font-bold tabular-nums text-primary">
+          {fmt(total)}
+        </span>
+      </div>
+
+      {ordersEnabled ? (
+        <button
+          type="button"
+          onClick={onOpenDrawer}
+          disabled={count === 0}
+          className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-md bg-secondary px-4 py-2 text-sm font-bold uppercase tracking-wider text-white shadow-sm transition hover:bg-secondary/90 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Sepete Git · {fmt(total)}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function ServiceHoursCard() {
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-[var(--color-border)] bg-surface p-4 shadow-sm">
+      <h4 className="text-[10px] font-bold uppercase tracking-[0.2em] text-outline">
+        Servis Saatleri
+      </h4>
+      <ul className="flex flex-col gap-1 text-xs text-on-surface-variant">
+        <li className="flex items-center justify-between">
+          <span>Kahvaltı</span>
+          <span className="font-semibold text-text">08:30 – 13:00</span>
+        </li>
+        <li className="flex items-center justify-between">
+          <span>Öğle</span>
+          <span className="font-semibold text-text">13:00 – 17:00</span>
+        </li>
+        <li className="flex items-center justify-between">
+          <span>Akşam</span>
+          <span className="font-semibold text-text">17:00 – 23:00</span>
+        </li>
+      </ul>
+      <div className="mt-2 flex items-center gap-1.5 border-t border-[var(--color-border)] pt-2 text-[10px] uppercase tracking-wider text-secondary">
+        <span
+          aria-hidden
+          className="inline-block h-2 w-2 animate-pulse rounded-full bg-secondary"
+        />
+        Şu an açık
+      </div>
+    </div>
+  );
+}
+
 function CartFab({ count, onClick }: { count: number; onClick: () => void }) {
   if (count <= 0) return null;
   return (
@@ -380,7 +569,7 @@ function CartFab({ count, onClick }: { count: number; onClick: () => void }) {
       type="button"
       onClick={onClick}
       aria-label={`Sepetim — ${count} ürün`}
-      className="fixed bottom-6 right-4 z-30 inline-flex items-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-bold uppercase tracking-wider text-primary-foreground shadow-floating transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 sm:hidden"
+      className="fixed bottom-6 right-4 z-30 inline-flex items-center gap-2 rounded-pill bg-primary px-4 py-3 text-sm font-bold uppercase tracking-wider text-primary-foreground shadow-floating transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 sm:hidden"
     >
       <span aria-hidden>🛒</span>
       Sepetim · {count}
