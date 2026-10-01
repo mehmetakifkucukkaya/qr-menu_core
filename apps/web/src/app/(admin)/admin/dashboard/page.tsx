@@ -114,12 +114,12 @@ export default async function DashboardPage() {
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-6">
       {/* Welcome */}
-      <header className="rounded-xl border border-border bg-surface p-6 shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted">
-          Hoş geldin
+      <header className="rounded-lg border border-[var(--color-border)] bg-surface p-6 shadow-sm">
+        <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-secondary">
+          Hoş Geldin
         </p>
-        <h1 className="mt-1 font-heading text-2xl font-bold text-text">
-          Admin paneli
+        <h1 className="mt-1 font-heading text-3xl font-semibold tracking-tight text-primary">
+          Admin Paneli
         </h1>
         <p className="mt-1 text-sm text-muted">
           {summary?.organization ? (
@@ -137,7 +137,7 @@ export default async function DashboardPage() {
       {fetchError ? (
         <div
           role="alert"
-          className="rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-900"
+          className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-900"
         >
           Özet yüklenirken bir hata oluştu. Sayfayı yenilemeyi deneyin. ({fetchError})
         </div>
@@ -147,7 +147,7 @@ export default async function DashboardPage() {
       {summary ? (
         <section
           aria-label="Hızlı istatistikler"
-          className="grid grid-cols-2 gap-4 sm:grid-cols-5"
+          className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5"
         >
           <StatCard label="Menü" value={summary.menu_count} hint="Yayında" />
           <StatCard label="Kategori" value={summary.category_count} hint="Toplam" />
@@ -165,12 +165,12 @@ export default async function DashboardPage() {
       {summary ? (
         <section
           aria-label="Son aktiviteler"
-          className="rounded-xl border border-border bg-surface p-5 shadow-sm"
+          className="rounded-lg border border-[var(--color-border)] bg-surface p-5 shadow-sm"
         >
           <header className="mb-3 flex items-center justify-between">
             <h2 className="flex items-center gap-2 font-heading text-base font-semibold text-text">
               <Activity className="h-4 w-4 text-primary" aria-hidden />
-              Son aktiviteler
+              Son Aktiviteler
             </h2>
             <span className="text-xs text-muted">
               son {summary.recent_events.length} olay
@@ -183,7 +183,7 @@ export default async function DashboardPage() {
               icon={<ChefHat className="h-8 w-8" aria-hidden />}
             />
           ) : (
-            <ul className="divide-y divide-border">
+            <ul className="divide-y divide-[var(--color-border)]">
               {summary.recent_events.map((event) => (
                 <EventRow key={event.id} event={event} />
               ))}
@@ -230,12 +230,14 @@ function StatCard({
   hint?: string;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-surface p-4 shadow-sm">
-      <p className="text-xs font-semibold uppercase tracking-wider text-muted">
+    <div className="rounded-lg border border-[var(--color-border)] bg-surface p-4 shadow-sm transition hover:border-primary/40 hover:shadow-md">
+      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-outline">
         {label}
       </p>
-      <p className="mt-2 font-heading text-3xl font-bold text-text">{value}</p>
-      {hint ? <p className="mt-1 text-xs text-muted">{hint}</p> : null}
+      <p className="mt-2 font-heading text-3xl font-bold tabular-nums text-primary">
+        {value}
+      </p>
+      {hint ? <p className="mt-1 text-xs text-on-surface-variant">{hint}</p> : null}
     </div>
   );
 }
@@ -280,10 +282,10 @@ function QuickLink({
   return (
     <Link
       href={href}
-      className="block rounded-xl border border-border bg-surface p-4 shadow-sm transition hover:border-primary/40 hover:shadow-card focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+      className="block rounded-lg border border-[var(--color-border)] bg-surface p-4 shadow-sm transition hover:border-primary/40 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
     >
       <div className="flex items-start gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
           {icon}
         </span>
         <div className="min-w-0 flex-1">
