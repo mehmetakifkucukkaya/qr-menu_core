@@ -100,12 +100,12 @@ export function CartDrawer({
         onClick={closeDrawer}
       >
         <div
-          className="flex max-h-[85vh] w-full flex-col overflow-hidden rounded-t-2xl bg-surface shadow-floating sm:max-h-full sm:h-full sm:w-96 sm:rounded-none"
+          className="flex max-h-[85vh] w-full flex-col overflow-hidden rounded-t-xl bg-surface shadow-lg ring-1 ring-[var(--color-border)] sm:max-h-full sm:h-full sm:w-96 sm:rounded-none sm:ring-0"
           onClick={(e) => e.stopPropagation()}
           style={{ animation: "slideup 0.22s ease-out" }}
         >
           {/* Header */}
-          <header className="sticky top-0 flex items-center justify-between gap-2 border-b border-border bg-surface px-4 py-3">
+          <header className="sticky top-0 flex items-center justify-between gap-2 border-b border-[var(--color-border)] bg-surface px-4 py-3">
             <div className="flex items-center gap-2">
               <ShoppingBag className="h-5 w-5 text-primary" aria-hidden />
               <h2
@@ -223,7 +223,7 @@ export function CartDrawer({
 
           {/* Footer */}
           {items.length > 0 ? (
-            <footer className="sticky bottom-0 border-t border-border bg-surface/95 px-4 py-3 backdrop-blur">
+            <footer className="sticky bottom-0 border-t border-[var(--color-border)] bg-surface/95 px-4 py-3 backdrop-blur">
               <div className="mb-3 flex items-end justify-between">
                 <span className="text-xs uppercase tracking-wider text-muted">
                   Toplam
@@ -241,7 +241,7 @@ export function CartDrawer({
                 <button
                   type="button"
                   onClick={() => setCheckoutOpen(true)}
-                  className="flex w-full items-center justify-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-bold uppercase tracking-wider text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+                  className="flex w-full min-h-[44px] items-center justify-center gap-2 rounded-md bg-primary px-4 py-3 text-sm font-bold uppercase tracking-wider text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
                 >
                   <Receipt className="h-4 w-4" aria-hidden />
                   Sipariş Ver

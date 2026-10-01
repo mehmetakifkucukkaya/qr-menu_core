@@ -109,13 +109,13 @@ export function ItemDetailDrawer({
       onClick={onClose}
     >
       <div
-        className="flex max-h-[90vh] w-full flex-col overflow-hidden rounded-t-2xl bg-surface shadow-floating sm:max-w-md sm:rounded-2xl animate-[slideup_0.22s_ease-out]"
+        className="flex max-h-[90vh] w-full flex-col overflow-hidden rounded-t-xl bg-surface shadow-lg ring-1 ring-[var(--color-border)] sm:max-w-lg sm:rounded-xl animate-[slideup_0.22s_ease-out]"
         onClick={(e) => e.stopPropagation()}
         style={{
           animation: "slideup 0.22s ease-out",
         }}
       >
-        <header className="sticky top-0 flex items-start justify-between gap-2 border-b border-border bg-surface/95 px-4 py-3 backdrop-blur">
+        <header className="sticky top-0 flex items-start justify-between gap-2 border-b border-[var(--color-border)] bg-surface/95 px-4 py-3 backdrop-blur">
           <h2
             id="drawer-item-title"
             className="font-heading text-lg font-bold text-text sm:text-xl"
@@ -296,7 +296,7 @@ export function ItemDetailDrawer({
           ) : null}
         </div>
 
-        <footer className="sticky bottom-0 flex items-center justify-between border-t border-border bg-surface/95 px-4 py-3 backdrop-blur">
+        <footer className="sticky bottom-0 flex items-center justify-between border-t border-[var(--color-border)] bg-surface/95 px-4 py-3 backdrop-blur">
           <span className="font-heading text-xl font-bold text-primary sm:text-2xl">
             {formatPrice(item.price, item.currency)}
           </span>

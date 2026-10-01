@@ -53,20 +53,27 @@ interface AdminSidebarProps {
 }
 
 /**
- * AdminSidebar — left rail with brand + primary nav + logout. The logout
- * is rendered as a server-action form (not a client-side fetch) so the
- * CSRF token is handled by the Next.js server, not the browser.
+ * AdminSidebar — left rail with brand + primary nav + logout.
+ *
+ * Velouté Hospitality Suite polish (D-035 / Sprint G):
+ *   • 240px width with rounded-md brand mark, Playfair Display name.
+ *   • Active nav item: solid `bg-primary text-primary-foreground` for
+ *     clear contrast (was `bg-primary/10 text-primary`).
+ *   • Inactive items: `text-text hover:bg-[var(--color-surface-low)]`.
+ *   • Bottom logout card uses terracotta accent on hover.
+ *   • All borders moved to `--color-border` for consistent hairline
+ *     edges with the public-side polish.
  */
 export function AdminSidebar({ businessName, logoutAction }: AdminSidebarProps) {
   const pathname = usePathname() ?? "";
 
   return (
-    <aside className="hidden w-60 shrink-0 flex-col border-r border-border bg-surface md:flex">
+    <aside className="hidden w-60 shrink-0 flex-col border-r border-[var(--color-border)] bg-surface md:flex">
       {/* Brand */}
-      <div className="flex items-center gap-2 border-b border-border px-5 py-4">
+      <div className="flex items-center gap-2.5 border-b border-[var(--color-border)] px-5 py-4">
         <span
           aria-hidden
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground"
+          className="flex h-9 w-9 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground"
         >
           {businessName.charAt(0).toUpperCase()}
         </span>
@@ -77,8 +84,8 @@ export function AdminSidebar({ businessName, logoutAction }: AdminSidebarProps) 
           >
             {businessName}
           </p>
-          <p className="text-[10px] uppercase tracking-wider text-muted">
-            Admin paneli
+          <p className="font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-secondary">
+            Admin Paneli
           </p>
         </div>
       </div>
@@ -97,18 +104,18 @@ export function AdminSidebar({ businessName, logoutAction }: AdminSidebarProps) 
               aria-disabled={item.comingSoon || undefined}
               tabIndex={item.comingSoon ? -1 : undefined}
               className={clsx(
-                "group flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition",
+                "group flex min-h-[44px] items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition",
                 isActive
-                  ? "bg-primary/10 text-primary"
-                  : "text-text hover:bg-background",
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-text hover:bg-[var(--color-surface-low)] hover:text-primary",
                 item.comingSoon &&
                   "cursor-not-allowed opacity-50 hover:bg-transparent",
               )}
             >
-              <Icon className="h-4 w-4 shrink-0" />
+              <Icon className="h-4 w-4 shrink-0" aria-hidden />
               <span className="flex-1 truncate">{item.label}</span>
               {item.comingSoon ? (
-                <span className="rounded-full bg-muted/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted">
+                <span className="rounded-pill bg-muted/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted">
                   yakında
                 </span>
               ) : null}
@@ -118,13 +125,13 @@ export function AdminSidebar({ businessName, logoutAction }: AdminSidebarProps) 
       </nav>
 
       {/* Logout */}
-      <div className="border-t border-border p-3">
+      <div className="border-t border-[var(--color-border)] p-3">
         <form action={logoutAction}>
           <button
             type="submit"
-            className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-text transition hover:bg-accent/10 hover:text-accent"
+            className="flex min-h-[44px] w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-text transition hover:bg-secondary/10 hover:text-secondary"
           >
-            <LogOut className="h-4 w-4 shrink-0" />
+            <LogOut className="h-4 w-4 shrink-0" aria-hidden />
             <span>Çıkış yap</span>
           </button>
         </form>

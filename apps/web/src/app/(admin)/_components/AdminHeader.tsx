@@ -50,8 +50,8 @@ export function AdminHeader({ user, logoutAction }: AdminHeaderProps) {
   const crumbs = buildBreadcrumbs(pathname);
 
   return (
-    <header className="sticky top-0 z-20 border-b border-border bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70">
-      <div className="flex items-center justify-between gap-4 px-4 py-3 sm:px-6">
+    <header className="sticky top-0 z-20 border-b border-[var(--color-border)] bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70">
+      <div className="flex items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
         {/* Breadcrumb */}
         <nav aria-label="Breadcrumb" className="min-w-0 flex-1">
           {crumbs.length > 0 ? (
@@ -91,20 +91,20 @@ export function AdminHeader({ user, logoutAction }: AdminHeaderProps) {
             <p className="text-sm font-medium text-text" title={user.email}>
               {user.full_name || user.email}
             </p>
-            <p className="text-[10px] uppercase tracking-wider text-muted">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-secondary">
               {user.role}
             </p>
           </div>
           <span
             aria-hidden
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground"
+            className="flex h-9 w-9 items-center justify-center rounded-md bg-primary text-xs font-bold text-primary-foreground"
           >
             {(user.full_name || user.email).charAt(0).toUpperCase()}
           </span>
           <form action={logoutAction}>
             <button
               type="submit"
-              className="rounded-md px-3 py-1.5 text-xs font-semibold text-text transition hover:bg-accent/10 hover:text-accent"
+              className="rounded-md px-3 py-1.5 text-xs font-semibold text-text transition hover:bg-secondary/10 hover:text-secondary"
             >
               Çıkış
             </button>
