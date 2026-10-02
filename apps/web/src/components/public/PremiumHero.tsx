@@ -95,17 +95,14 @@ export function PremiumHero({ business, theme }: BusinessHeroProps) {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Currency switcher — segmented pill */}
-            <div
-              role="group"
-              aria-label="Para birimi"
-              className="inline-flex items-center rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-0.5 text-[10px] font-semibold uppercase tracking-wider"
-            >
-              <span className="rounded bg-primary px-2 py-1 text-primary-foreground">
-                {currency}
-              </span>
-              <span className="px-2 py-1 text-on-surface-variant">€ EUR</span>
-              <span className="px-2 py-1 text-on-surface-variant">$ USD</span>
+            {/* Currency display — single business currency, no switcher.
+             * Per brand spec (D-035) the QR-menu is a Turkish business
+             * product, so we always render TL. `currency` is still read
+             * from the API so a tenant that picked USD/EUR upstream is
+             * shown that code, but the user never sees a selector. */}
+            <div className="inline-flex items-center gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-primary shadow-sm">
+              <span aria-hidden>₺</span>
+              <span>Para Birimi · {currency}</span>
             </div>
             {/* Table context chip */}
             <div className="hidden items-center gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-xs font-semibold text-primary shadow-sm sm:inline-flex">
