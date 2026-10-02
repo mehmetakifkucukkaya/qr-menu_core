@@ -106,8 +106,13 @@ export default async function BillingPage() {
   const plan = planResult.status === "fulfilled" ? planResult.value : null;
   const usage = usageResult.status === "fulfilled" ? usageResult.value : null;
   const matrix = limitsResult.status === "fulfilled" ? limitsResult.value : null;
-  const isSuperuser =
-    userResult.status === "fulfilled" ? userResult.value.is_superuser : false;
+  const currentUser =
+    userResult.status === "fulfilled" ? userResult.value : null;
+  const isSuperuser = currentUser?.is_superuser ?? false;
+  // Mirrors backend `User.is_platform_admin` (role=admin or superuser). The
+  // backend only lets platform admins PUT the plan (V1 has no subscription
+  // billing, so a tenant-writable plan would be a free upgrade).
+  const canEditPlan = isSuperuser || currentUser?.role === "admin";
 
   const csrfToken = cookies().get("qr_csrftoken")?.value ?? null;
 
@@ -169,7 +174,9 @@ export default async function BillingPage() {
             <div>
               <CardTitle>Aktif paket & özellikler</CardTitle>
               <CardDescription>
-                Plan değişikliği veya tek tek özellik bayrağı override&apos;ı.
+                {canEditPlan
+                  ? "Plan değişikliği veya tek tek özellik bayrağı override'ı."
+                  : "Hesabınızın aktif paketi ve açık özellikler."}
               </CardDescription>
             </div>
           </div>
@@ -178,7 +185,17 @@ export default async function BillingPage() {
         {plan ? (
           <div className="flex flex-col gap-5">
             <PlanCard plan={plan.active_plan} isActive />
-            <PlanSettingsForm initial={plan} csrfToken={csrfToken} />
+            {canEditPlan ? (
+              <PlanSettingsForm initial={plan} csrfToken={csrfToken} />
+            ) : (
+              <p
+                data-testid="plan-change-contact"
+                className="rounded-lg border border-border bg-primary/5 px-4 py-3 text-sm text-muted"
+              >
+                Paket veya özellik değişikliği için bizimle iletişime geçin;
+                değişikliği hesabınıza biz uygularız.
+              </p>
+            )}
           </div>
         ) : (
           <AdminErrorState

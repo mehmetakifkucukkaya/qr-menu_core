@@ -60,6 +60,18 @@ if not ALLOWED_HOSTS:
         "DJANGO_ALLOWED_HOSTS must list at least one domain (e.g. menu.example.com)."
     )
 
+# Hosts that only exist on the private docker network: the Next.js server calls
+# the API as ``backend:8000`` and the container healthcheck as ``localhost``.
+# Without them Django answers those requests with 400 DisallowedHost
+# (ANALYSIS_1 F-03c/d). They are unreachable from the internet - Caddy only
+# forwards requests whose Host header is the public DOMAIN.
+_INTERNAL_HOSTS = [
+    h.strip()
+    for h in os.environ.get("DJANGO_INTERNAL_HOSTS", "backend,localhost,127.0.0.1").split(",")
+    if h.strip()
+]
+ALLOWED_HOSTS = list(dict.fromkeys(ALLOWED_HOSTS + _INTERNAL_HOSTS))
+
 
 # ---------------------------------------------------------------------------
 # CORS / CSRF
@@ -86,6 +98,24 @@ if not CORS_ALLOWED_ORIGINS:
 # on every request.
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
+# DRF keys per-client throttles on REMOTE_ADDR, or on X-Forwarded-For when
+# present. With NUM_PROXIES unset it uses the WHOLE header value, so a client
+# can rotate the header and never hit a limit (ANALYSIS_1 F-05). Caddy is the
+# single trusted hop and appends the real client address, so DRF must use
+# exactly that last entry. Override with TRUSTED_PROXY_COUNT if the topology
+# changes (0 = ignore X-Forwarded-For entirely).
+REST_FRAMEWORK = {
+    **REST_FRAMEWORK,  # noqa: F405
+    "NUM_PROXIES": int(os.environ.get("TRUSTED_PROXY_COUNT", "1")),
+}
+
+# Internal callers (Next.js server -> backend:8000, the container healthcheck)
+# speak plain HTTP over the docker network and set no X-Forwarded-Proto, so the
+# blanket redirect below answered them with 301 -> https://backend:8000, which
+# nothing can follow. Public traffic always arrives through Caddy, which does
+# its own http -> https redirect at the edge (ANALYSIS_1 F-03c/d).
+SECURE_REDIRECT_EXEMPT = [r"^api/", r"^health$"]
+
 # Redirect http → https unconditionally. Local-only debug runs use
 # ``DJANGO_DEBUG=1`` and proxy header preservation; in real prod this is on.
 SECURE_SSL_REDIRECT = True
@@ -107,6 +137,9 @@ SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"
+# End-customer session cookie (apps.account): never over plain HTTP. base.py
+# defaults this to False for local dev, which must not leak into production.
+AUTH_COOKIE_SECURE = True
 
 
 # ---------------------------------------------------------------------------
@@ -120,6 +153,31 @@ MEDIA_ROOT = BASE_DIR / "media"
 # In production we serve /static and /media through Caddy (see Caddyfile
 # reverse_proxy directives). Django still needs the folders to exist so
 # ``collectstatic`` + image uploads land somewhere persistent.
+
+
+# ---------------------------------------------------------------------------
+# Required business settings (ANALYSIS_1 F-04)
+# ---------------------------------------------------------------------------
+# PUBLIC_BASE_URL is baked into every printed QR code. base.py defaults it to
+# http://localhost:3000, so forgetting it produced QR codes that pointed at the
+# printer's own computer. Fail at startup instead.
+_public_base_url = os.environ.get("PUBLIC_BASE_URL", "").strip()
+if not _public_base_url or "localhost" in _public_base_url or "127.0.0.1" in _public_base_url:
+    raise RuntimeError(
+        "PUBLIC_BASE_URL must be set to the public origin customers scan "
+        "(e.g. https://menu.example.com), not localhost."
+    )
+PUBLIC_BASE_URL = _public_base_url.rstrip("/")
+
+# Fernet key for the payment credentials stored in the database. Unset, the
+# payment app invents a random key per *process*: with 3 gunicorn workers each
+# one encrypts with a different key and cannot decrypt what the others wrote,
+# and every restart loses them all. Generate once and keep it:
+#   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+if not os.environ.get("PAYMENT_FERNET_KEY", "").strip():
+    raise RuntimeError(
+        "PAYMENT_FERNET_KEY must be set in production (a stable Fernet key shared by all workers)."
+    )
 
 
 # ---------------------------------------------------------------------------

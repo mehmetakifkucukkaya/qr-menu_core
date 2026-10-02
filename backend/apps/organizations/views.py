@@ -6,7 +6,7 @@ from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 
-from apps.accounts.permissions import IsOrganizationMember
+from apps.accounts.permissions import IsOrganizationMember, IsPlatformAdmin
 
 from .models import Organization
 from .serializers import OrganizationSerializer
@@ -16,13 +16,21 @@ class OrganizationViewSet(viewsets.ModelViewSet):
     """CRUD for organizations the current user is a member of.
 
     - list / retrieve: filtered via ``Organization.objects.for_user(request.user)``
-    - create: any authenticated user can create (they become owner via Membership)
+    - create: platform admins only. Tenants are created by the signup /
+      onboarding flow; an open endpoint let any logged-in user mint
+      unlimited OPS-plan tenants (ANALYSIS_1 F-09). The creator still
+      becomes owner via Membership.
     - update / partial_update / destroy: scoped to user's organizations;
       admins can act on any org.
     """
 
     serializer_class = OrganizationSerializer
     permission_classes = [IsAuthenticated, IsOrganizationMember]
+
+    def get_permissions(self):
+        if self.action == "create":
+            return [IsAuthenticated(), IsPlatformAdmin()]
+        return super().get_permissions()
 
     def get_queryset(self):
         return Organization.objects.for_user(self.request.user).order_by("name")

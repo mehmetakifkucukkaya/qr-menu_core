@@ -25,7 +25,7 @@ from django.test import override_settings
 from rest_framework.test import APIClient
 
 from apps.account.models import Customer, MagicLinkToken
-from apps.account.tests.factories import make_customer
+from apps.account.tests.factories import customer_id_from_cookie, make_customer
 
 pytestmark = pytest.mark.django_db
 
@@ -146,8 +146,10 @@ def test_verify_magic_link_valid_token_sets_cookie(api_client):
     cookies = response.cookies
     # The cookie name lives in settings.AUTH_COOKIE_NAME — keep
     # the test robust by inspecting the CookieJar generically.
-    found = any(c.value == str(customer.id) for c in cookies.values())
-    assert found, "expected _auth_customer_id cookie to be set"
+    found = any(
+        customer_id_from_cookie(c.value) == customer.id for c in cookies.values()
+    )
+    assert found, "expected a signed _auth_customer_id cookie to be set"
 
     # Token is consumed.
     token.refresh_from_db()
@@ -263,7 +265,7 @@ def test_session_cookie_has_httponly_flag(api_client):
     cookies = response.cookies
     matched = [
         c for c in cookies.values()
-        if c.value == str(customer.id)
+        if customer_id_from_cookie(c.value) == customer.id
     ]
     assert matched, "customer cookie not present in response"
     assert all(c["httponly"] for c in matched)
@@ -279,7 +281,7 @@ def test_session_cookie_secure_flag_prod(api_client):
     cookies = response.cookies
     matched = [
         c for c in cookies.values()
-        if c.value == str(customer.id)
+        if customer_id_from_cookie(c.value) == customer.id
     ]
     assert matched
     assert all(c["secure"] for c in matched)
@@ -294,7 +296,7 @@ def test_session_cookie_secure_flag_local(api_client):
     )
     cookies = response.cookies
     matched = [
-        c for c in cookies.values() if c.value == str(customer.id)
+        c for c in cookies.values() if customer_id_from_cookie(c.value) == customer.id
     ]
     assert matched
     assert not any(c["secure"] for c in matched)
@@ -386,3 +388,31 @@ def test_csrf_required_for_logout_when_admin_session_present(api_client):
     # If 200, CSRF was bypassed (env-dependent). The point of the
     # test is that the cookie is no longer carrying secrets —
     # thus the assert is informational, not strict.
+
+
+# ---------------------------------------------------------------------------
+# Delivery failures must be visible to the operator (ANALYSIS_1 F-04)
+# ---------------------------------------------------------------------------
+def test_magic_link_email_failure_is_logged_but_the_response_stays_uniform(
+    no_throttle, api_client, caplog
+):
+    """The endpoint answers 200 whether or not the mail went out (no account
+    enumeration), but the failure must reach the logs: it used to be
+    `fail_silently=True`, so a wrong SMTP host looked like success."""
+    import smtplib
+    import logging
+
+    with patch(
+        "django.core.mail.message.EmailMessage.send",
+        side_effect=smtplib.SMTPException("relay denied"),
+    ), caplog.at_level(logging.ERROR, logger="apps.account.services"):
+        response = api_client.post(
+            "/api/v1/account/auth/request-link",
+            data={"email": "someone@example.com"},
+            format="json",
+        )
+
+    assert response.status_code == 200
+    assert any(
+        "Magic-link email" in r.getMessage() and r.exc_info for r in caplog.records
+    ), "SMTP failure must be logged with its traceback"

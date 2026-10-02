@@ -281,6 +281,19 @@ DEFAULT_FROM_EMAIL = os.environ.get(
     "DEFAULT_FROM_EMAIL", "noreply@qrmenu.local"
 )
 
+# SMTP transport (ANALYSIS_1 F-04). Only EMAIL_BACKEND used to be configurable,
+# so production could never reach a mail server and magic-link mails vanished.
+# Port 587 + STARTTLS is the default; for implicit TLS (port 465) set
+# EMAIL_USE_TLS=0 and EMAIL_USE_SSL=1. EMAIL_TIMEOUT stops a dead mail server
+# from pinning a gunicorn worker (Django's default is to wait forever).
+EMAIL_HOST = os.environ.get("EMAIL_HOST", "localhost")
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = _env_bool("EMAIL_USE_TLS", default=True)
+EMAIL_USE_SSL = _env_bool("EMAIL_USE_SSL", default=False)
+EMAIL_TIMEOUT = int(os.environ.get("EMAIL_TIMEOUT", "10"))
+
 # End-customer session cookie. Distinct from ``SESSION_COOKIE_NAME`` so
 # the platform admin session and the customer session can coexist on
 # the same browser without one invalidating the other (V1 keeps admin
@@ -320,6 +333,12 @@ PAYMENT_DEFAULT_TEST_MODE = _env_bool(
     "PAYMENT_DEFAULT_TEST_MODE", default=True
 )
 
+# Platform-wide kill switch for the payment API (ANALYSIS_1 F-06). The module
+# has no checkout UI yet, so its endpoints stay dark (404) and the
+# ``payments_enabled`` plan flag reports False for every tenant until this is
+# switched on. Set PAYMENTS_ENABLED=1 only once the payment step ships.
+PAYMENTS_ENABLED = _env_bool("PAYMENTS_ENABLED", default=False)
+
 # Public hostname advertised to Stripe for ``success_url`` / ``cancel_url``
 # when the PaymentIntent is created. Production overrides this via env.
 PAYMENT_WEBHOOK_BASE_URL = os.environ.get(
@@ -338,6 +357,16 @@ BILLING_DEFAULT_PLAN = os.environ.get("BILLING_DEFAULT_PLAN", "ops")
 # SaaS uses a positive value (e.g. 10) to send a warning email at
 # 90 % before 402-ing on 100 %.
 BILLING_LIMIT_GRACE_PCT = int(os.environ.get("BILLING_LIMIT_GRACE_PCT", "0"))
+
+# ---------------------------------------------------------------------------
+# Server-to-server trust (ANALYSIS_1 F-05)
+# ---------------------------------------------------------------------------
+# Shared secret the Next.js server sends as ``X-Internal-Token`` on its
+# server-side calls so they are not rate limited as one anonymous visitor.
+# Empty (default) disables the exemption. Set the same random value in the
+# backend and frontend environments (never NEXT_PUBLIC_*):
+#   python -c "import secrets; print(secrets.token_urlsafe(32))"
+INTERNAL_API_TOKEN = os.environ.get("INTERNAL_API_TOKEN", "")
 
 # ---------------------------------------------------------------------------
 # DRF
@@ -360,7 +389,9 @@ REST_FRAMEWORK = {
     # reasonable V1 default; Sprint 5A adds a stricter 30/min bucket on
     # /api/v1/public/events (PublicEventsThrottle.scope = "public_events").
     "DEFAULT_THROTTLE_CLASSES": [
-        "rest_framework.throttling.AnonRateThrottle",
+        # AnonRateThrottle + exemption for the trusted Next.js SSR caller
+        # (X-Internal-Token == INTERNAL_API_TOKEN). See apps/core/throttling.py.
+        "apps.core.throttling.InternalExemptAnonRateThrottle",
     ],
     "DEFAULT_THROTTLE_RATES": {
         "anon": "60/min",
@@ -398,6 +429,14 @@ CORS_ALLOWED_ORIGINS = _env_list(
     default=["http://localhost:3000", "http://127.0.0.1:3000"],
 )
 CORS_ALLOW_CREDENTIALS = True
+
+# Django's CSRF middleware compares a request's Origin header with the host it
+# was sent to. With the web app and the API on different ports (the documented
+# local layout: :3000 and :8000) every browser write from the admin panel
+# (POST/PATCH/DELETE) failed with "Origin checking failed" because only
+# production.py trusted the frontend origin. The origins that may call the API
+# with credentials are exactly the ones that may send CSRF-protected requests.
+CSRF_TRUSTED_ORIGINS = list(CORS_ALLOWED_ORIGINS)
 
 # ---------------------------------------------------------------------------
 # Sessions / Cookies

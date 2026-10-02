@@ -43,5 +43,10 @@ LOGGING = {
     "root": {"handlers": ["null"], "level": "WARNING"},
 }
 
+# The payment module's own tests exercise the live API; the kill switch itself
+# is tested with ``settings.PAYMENTS_ENABLED = False`` (apps/payment/tests/
+# test_kill_switch.py).
+PAYMENTS_ENABLED = True
+
 # Don't try to send emails in tests.
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"

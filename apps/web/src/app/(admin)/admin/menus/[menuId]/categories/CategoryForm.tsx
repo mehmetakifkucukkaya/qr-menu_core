@@ -28,8 +28,6 @@ interface CategoryFormProps {
   parentOptions: AdminMenuCategory[];
   /** CSRF token (admin POST/PATCH requires it). */
   csrfToken: string | null;
-  /** Called after a successful save. */
-  onSaved: (category: AdminMenuCategory) => void;
 }
 
 /**
@@ -50,7 +48,6 @@ export function CategoryForm({
   category,
   parentOptions,
   csrfToken,
-  onSaved,
 }: CategoryFormProps) {
   const router = useRouter();
   const isEdit = Boolean(category);
@@ -111,8 +108,9 @@ export function CategoryForm({
           image: imageUrl ?? "",
           translations: translationsArray,
         };
-        const updated = await updateCategory(category.id, payload, { csrfToken });
-        onSaved(updated);
+        await updateCategory(category.id, payload, { csrfToken });
+        router.push(`/admin/menus/${menu.id}/categories/${category.id}/items`);
+        router.refresh();
       } else {
         const payload: CreateCategoryPayload = {
           menu_id: menu.id,
@@ -126,7 +124,8 @@ export function CategoryForm({
           translations: translationsArray,
         };
         const created = await createCategory(payload, { csrfToken });
-        onSaved(created);
+        router.push(`/admin/menus/${menu.id}/categories/${created.id}/items`);
+        router.refresh();
       }
     } catch (err) {
       const msg =

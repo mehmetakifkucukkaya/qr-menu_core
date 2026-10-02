@@ -26,6 +26,8 @@ from rest_framework.test import APIClient
 
 from apps.account.models import Customer, MagicLinkToken
 from apps.account.tests.factories import (
+    customer_cookie_value,
+    customer_id_from_cookie,
     make_customer,
     make_earn_txn,
     make_loyalty_settings,
@@ -48,7 +50,7 @@ def _admin_login(client: APIClient, email: str, password: str = "x") -> None:
 
 def _customer_login(client: APIClient, customer: Customer) -> None:
     """Stub-set the customer cookie on ``client`` for subsequent requests."""
-    client.cookies["_auth_customer_id"] = str(customer.id)
+    client.cookies["_auth_customer_id"] = customer_cookie_value(customer)
 
 
 # Patch the magic-link throttle in tests where many requests happen.
@@ -93,7 +95,7 @@ def test_verify_endpoint_with_valid_token_sets_session(no_throttle, api_client):
     assert response.status_code == 200
     cookies = response.cookies
     assert any(
-        c.value == str(customer.id) for c in cookies.values()
+        customer_id_from_cookie(c.value) == customer.id for c in cookies.values()
     ), "customer session cookie missing"
 
 
@@ -108,7 +110,7 @@ def test_logout_response_deletes_cookie(no_throttle, api_client):
     """Logout response sets the customer cookie to expired."""
     customer = make_customer(email="logout@example.com")
     MagicLinkToken.generate(customer=customer, ttl_minutes=15)
-    api_client.cookies["_auth_customer_id"] = str(customer.id)
+    api_client.cookies["_auth_customer_id"] = customer_cookie_value(customer)
     response = api_client.post("/api/v1/account/auth/logout")
     # The cookie should be deleted (response.cookies carries a
     # delete directive — value empty + max-age=0 OR expires in the

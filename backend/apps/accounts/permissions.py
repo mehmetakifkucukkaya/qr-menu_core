@@ -43,6 +43,26 @@ class IsOrganizationMember(permissions.BasePermission):
         return organization.is_member(user)
 
 
+class IsPlatformAdmin(permissions.BasePermission):
+    """Platform operators only (``User.is_platform_admin``: role=admin or superuser).
+
+    Use for tenant-lifecycle and commercial actions a tenant must never perform
+    on itself: creating organizations through the CRUD API, changing its own
+    plan or feature overrides (there is no subscription billing in V1, so a
+    tenant-writable plan is a free upgrade to the unlimited OPS tier).
+    """
+
+    message = "Bu işlem yalnızca platform yöneticileri içindir."
+
+    def has_permission(self, request: Request, view: APIView) -> bool:
+        user = request.user
+        return bool(
+            user
+            and user.is_authenticated
+            and getattr(user, "is_platform_admin", False)
+        )
+
+
 def _resolve_organization(obj: Any):
     """Find the organization for any object that exposes one of these attrs."""
     if hasattr(obj, "organization"):

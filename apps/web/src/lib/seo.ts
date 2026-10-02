@@ -183,6 +183,37 @@ export interface JsonLdGraph {
   "@graph": JsonLdNode[];
 }
 
+// ---------------------------------------------------------------------------
+// Safe inlining of JSON-LD into a <script> tag
+// ---------------------------------------------------------------------------
+
+// Characters that are significant to the HTML parser (`<` and `>` can end the
+// script element, `&` starts entities in some embedding contexts) plus U+2028 /
+// U+2029, which are legal in JSON but were line terminators in JavaScript
+// before ES2019. Built from char codes so the source stays free of invisible
+// characters.
+const JSON_LD_UNSAFE = new RegExp(
+  `[<>&${String.fromCharCode(0x2028)}${String.fromCharCode(0x2029)}]`,
+  "g",
+);
+
+/**
+ * Serialise a JSON-LD graph for `<script type="application/ld+json">`.
+ *
+ * `JSON.stringify` does NOT escape `<`, so a business, category or item name
+ * such as `</script><script>…</script>` would close the tag and run as markup
+ * on the public menu page (stored XSS, ANALYSIS_1 F-12). Names are tenant
+ * input, and AI/PDF import and the demo-menu template copy them in as well.
+ * Every unsafe character is emitted as a JSON unicode escape, which parses
+ * back to exactly the same value, so crawlers see identical data.
+ */
+export function serializeJsonLd(value: unknown): string {
+  return JSON.stringify(value).replace(
+    JSON_LD_UNSAFE,
+    (ch) => "\\u" + ch.charCodeAt(0).toString(16).padStart(4, "0"),
+  );
+}
+
 /**
  * Build the Schema.org JSON-LD graph for the public menu page.
  *

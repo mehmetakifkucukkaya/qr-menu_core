@@ -709,7 +709,7 @@ export async function fetchDietaryTags(
 export async function fetchAdminSummary(
   options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
 ): Promise<AdminSummary> {
-  return adminFetch<AdminSummary>("/api/v1/admin/summary/", { ...options });
+  return adminFetch<AdminSummary>("/api/v1/admin/summary", { ...options });
 }
 
 // ---------------------------------------------------------------------------
@@ -1247,7 +1247,7 @@ export async function fetchOrderDetail(
   id: number,
   options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
 ): Promise<AdminOrderDetail> {
-  return adminFetch<AdminOrderDetail>(`/api/v1/admin/orders/${id}/`, {
+  return adminFetch<AdminOrderDetail>(`/api/v1/admin/orders/${id}`, {
     ...options,
   });
 }
@@ -1264,7 +1264,7 @@ export async function updateOrderStatus(
   options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader" | "csrfToken"> = {},
 ): Promise<AdminOrderStatusResponse> {
   return adminFetch<AdminOrderStatusResponse>(
-    `/api/v1/admin/orders/${id}/status/`,
+    `/api/v1/admin/orders/${id}/status`,
     {
       method: "POST",
       csrfToken: options.csrfToken,
@@ -1342,7 +1342,7 @@ export async function fetchKitchenTickets(
   }
   const query = params.toString();
   const payload = await adminFetch<KitchenTicket[] | { data: KitchenTicket[] }>(
-    `/api/v1/admin/kitchen/tickets/${query ? `?${query}` : ""}`,
+    `/api/v1/admin/kitchen/tickets${query ? `?${query}` : ""}`,
     { ...options },
   );
   if (Array.isArray(payload)) return payload;
@@ -1517,7 +1517,7 @@ export async function fetchCustomers(
   if (filters.page) params.set("page", String(filters.page));
   const qs = params.toString();
   return adminFetch<CustomerAdminListResponse>(
-    `/api/v1/account/admin/customers/${qs ? `?${qs}` : ""}`,
+    `/api/v1/account/admin/customers${qs ? `?${qs}` : ""}`,
     { ...options },
   );
 }
@@ -1534,7 +1534,7 @@ export async function fetchCustomerDetail(
   options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
 ): Promise<CustomerAdminDetail> {
   return adminFetch<CustomerAdminDetail>(
-    `/api/v1/account/admin/customers/${id}/`,
+    `/api/v1/account/admin/customers/${id}`,
     { ...options },
   );
 }
@@ -1553,7 +1553,7 @@ export async function adjustLoyaltyPoints(
   options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
 ): Promise<LoyaltyAdjustResponse> {
   return adminFetch<LoyaltyAdjustResponse>(
-    `/api/v1/account/admin/customers/${id}/loyalty-adjust/`,
+    `/api/v1/account/admin/customers/${id}/loyalty-adjust`,
     {
       method: "POST",
       csrfToken,
@@ -1576,7 +1576,7 @@ export async function fetchLoyaltySettings(
 ): Promise<LoyaltySettingsAdmin | null> {
   try {
     return await adminFetch<LoyaltySettingsAdmin>(
-      "/api/v1/account/admin/loyalty/settings/",
+      "/api/v1/account/admin/loyalty/settings",
       { ...options },
     );
   } catch (err) {
@@ -1598,7 +1598,7 @@ export async function updateLoyaltySettings(
   options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
 ): Promise<LoyaltySettingsAdmin> {
   return adminFetch<LoyaltySettingsAdmin>(
-    "/api/v1/account/admin/loyalty/settings/",
+    "/api/v1/account/admin/loyalty/settings",
     {
       method: "PUT",
       csrfToken,

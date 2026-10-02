@@ -121,9 +121,6 @@ export default async function EditQRCodePage({ params }: PageProps) {
             menus={menus}
             branches={[]}
             csrfToken={csrfToken}
-            onSaved={() => {
-              redirect(`/admin/qr-codes/${qr!.id}`);
-            }}
           />
         </div>
       ) : (

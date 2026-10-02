@@ -27,6 +27,7 @@ import {
   buildAlternates,
   buildOgMetadata,
   buildJsonLdRestaurant,
+  serializeJsonLd,
 } from "./seo.ts";
 
 // ---------------------------------------------------------------------------
@@ -387,4 +388,57 @@ test("buildJsonLdRestaurant still emits valid graph when categories empty", () =
     (menuNode as unknown as { hasMenuSection: unknown[] }).hasMenuSection,
     [],
   );
+});
+
+// ---------------------------------------------------------------------------
+// serializeJsonLd — stored-XSS guard (ANALYSIS_1 F-12)
+// ---------------------------------------------------------------------------
+
+test("serializeJsonLd keeps tenant-controlled names from closing the script tag", () => {
+  const evil = "</script><script>alert(document.cookie)</script>";
+  const payload: PublicMenuPayload = {
+    ...SAMPLE_PAYLOAD,
+    business: { ...SAMPLE_PAYLOAD.business, name: evil },
+    categories: SAMPLE_PAYLOAD.categories.map((cat) => ({
+      ...cat,
+      name: evil,
+      items: cat.items.map((item) => ({ ...item, name: evil, description: evil })),
+    })),
+  };
+  const graph = buildJsonLdRestaurant({
+    host: SAMPLE_HOST,
+    basePath: SAMPLE_PATH,
+    payload,
+    locale: "tr",
+  });
+
+  // The vulnerable form: plain JSON.stringify leaves the closing tag intact.
+  assert.ok(JSON.stringify(graph).includes("</script>"), "fixture must be hostile");
+
+  const safe = serializeJsonLd(graph);
+  assert.ok(!safe.includes("<"), "no raw '<' may reach the HTML parser");
+  assert.ok(!safe.includes(">"), "no raw '>' may reach the HTML parser");
+  assert.ok(!safe.toLowerCase().includes("</script"));
+  // Escaping must not change the data a crawler parses.
+  assert.deepEqual(JSON.parse(safe), JSON.parse(JSON.stringify(graph)));
+});
+
+test("serializeJsonLd also escapes '&' and the JS line separators", () => {
+  const value = { a: "Tom & Jerry", b: "x" + String.fromCharCode(0x2028) + "y" + String.fromCharCode(0x2029) };
+  const safe = serializeJsonLd(value);
+  assert.ok(!safe.includes("&"));
+  assert.ok(!safe.includes(String.fromCharCode(0x2028)));
+  assert.ok(!safe.includes(String.fromCharCode(0x2029)));
+  assert.deepEqual(JSON.parse(safe), value);
+});
+
+test("serializeJsonLd leaves ordinary output byte-for-byte unchanged", () => {
+  const graph = buildJsonLdRestaurant({
+    host: SAMPLE_HOST,
+    basePath: SAMPLE_PATH,
+    payload: SAMPLE_PAYLOAD,
+    locale: "tr",
+  });
+  // Sample data has no <, >, & or separators, so nothing may be rewritten.
+  assert.equal(serializeJsonLd(graph), JSON.stringify(graph));
 });

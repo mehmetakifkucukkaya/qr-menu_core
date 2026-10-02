@@ -99,7 +99,7 @@ def test_admin_payment_settings_put_updates(
 def test_admin_payment_settings_requires_authentication(organization_a):
     client = APIClient()
     res = client.get("/api/v1/payment/admin/payment/settings/")
-    assert res.status_code == 401
+    assert res.status_code in {401, 403}  # session auth: no 401 challenge here
 
 
 def test_admin_refund_create(

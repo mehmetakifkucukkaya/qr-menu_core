@@ -10,11 +10,11 @@
 #     Referrer-Policy). These are applied to BOTH the proxied and direct
 #     responses, so they're set globally on the site block.
 #
-# The DOMAIN and EMAIL placeholders are pulled from the .env.production file
-# (via docker-compose.production.yml → Caddy env_file). When you run the
-# stack locally for a smoke test, both default to ``localhost`` /
-# ``[email protected]`` and Caddy will serve plain HTTP on :80 — fine for
-# local checks, never deploy that to prod.
+# The DOMAIN placeholder is pulled from the .env.production file (via
+# docker-compose.production.yml → Caddy env_file). When you run the stack
+# locally for a smoke test it defaults to ``localhost`` and Caddy serves with
+# its internal CA / plain HTTP — fine for local checks, never deploy that to
+# prod.
 #
 # To add a second domain later (e.g. api.menu.example.com pointing at the
 # backend), add a second site block here and the matching entry to
@@ -42,18 +42,49 @@
         -Server
     }
 
-    # ---- Backend routes (API + health + admin + media + static) ----
-    # Order matters: more specific paths first. The catch-all at the end
-    # sends everything else to the frontend.
-    reverse_proxy /health backend:8000
-    reverse_proxy /api/* backend:8000
-    reverse_proxy /admin/* backend:8000
-    reverse_proxy /media/* backend:8000
-    reverse_proxy /static/* backend:8000
+    # ---- Routing ----
+    # Every route is a `handle` block so exactly one of them answers a request
+    # (Caddy otherwise orders bare directives by its own precedence list, not
+    # by position). The last block is the frontend catch-all.
 
-    # ---- Frontend catch-all ----
-    # Next.js handles its own routing (App Router, route groups).
-    reverse_proxy frontend:3000
+    # Backend: health probe, JSON API, and Django's own admin.
+    #
+    # Django's admin lives under /django-admin/ (config/urls.py) because the
+    # Next.js operator panel owns /admin/*. Routing /admin/* to Django, as this
+    # file used to, made the panel and the post-login redirect to
+    # /admin/dashboard unreachable.
+    handle /health {
+        reverse_proxy backend:8000
+    }
+    handle /api/* {
+        reverse_proxy backend:8000
+    }
+    handle /django-admin/* {
+        reverse_proxy backend:8000
+    }
+
+    # Uploaded media and collected static files are served by Caddy straight
+    # from the volumes the backend writes to (docker-compose.production.yml
+    # mounts them read-only at /srv/media and /srv/static). Django only serves
+    # /media and /static when DEBUG is on, so proxying them to the backend
+    # answered every logo, product photo and admin stylesheet with a 404.
+    handle_path /media/* {
+        root * /srv/media
+        # Uploads come from tenants: even if a script slipped into an image
+        # file, the browser must not execute it from our origin.
+        header Content-Security-Policy "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox"
+        file_server
+    }
+    handle_path /static/* {
+        root * /srv/static
+        file_server
+    }
+
+    # Frontend catch-all: Next.js handles its own routing (App Router,
+    # route groups), including the /admin/* operator panel.
+    handle {
+        reverse_proxy frontend:3000
+    }
 }
 
 # ---- Optional: api subdomain (commented out — single-domain is enough for V1) ----

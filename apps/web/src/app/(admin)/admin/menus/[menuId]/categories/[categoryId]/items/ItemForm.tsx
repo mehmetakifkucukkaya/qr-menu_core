@@ -45,8 +45,6 @@ interface ItemFormProps {
   dietaryTags: DietaryTag[];
   /** CSRF token. */
   csrfToken: string | null;
-  /** Called after a successful save. */
-  onSaved: (item: AdminMenuItem) => void;
 }
 
 /**
@@ -60,7 +58,8 @@ interface ItemFormProps {
  *   - is_active / is_available / is_featured / is_popular / is_new
  *   - spice_level (0-3 dropdown) + sort_order
  *
- * On submit we POST/PATCH and the parent redirects.
+ * On submit we POST/PATCH and then navigate (router.push + refresh):
+ * create → the new item's edit page, edit → the category's item list.
  */
 export function ItemForm({
   menu,
@@ -69,7 +68,6 @@ export function ItemForm({
   allergens,
   dietaryTags,
   csrfToken,
-  onSaved,
 }: ItemFormProps) {
   const router = useRouter();
   const isEdit = Boolean(item);
@@ -197,8 +195,9 @@ export function ItemForm({
           image: imageUrl ?? "",
           translations: translationsArray,
         };
-        const updated = await updateItem(item.id, payload, { csrfToken });
-        onSaved(updated);
+        await updateItem(item.id, payload, { csrfToken });
+        router.push(`/admin/menus/${menu.id}/categories/${category.id}/items`);
+        router.refresh();
       } else {
         const payload: CreateItemPayload = {
           menu_id: menu.id,
@@ -221,7 +220,10 @@ export function ItemForm({
           translations: translationsArray,
         };
         const created = await createItem(payload, { csrfToken });
-        onSaved(created);
+        router.push(
+          `/admin/menus/${menu.id}/categories/${category.id}/items/${created.id}/edit`,
+        );
+        router.refresh();
       }
     } catch (err) {
       const msg =

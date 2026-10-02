@@ -12,13 +12,14 @@
  *    cookie round-trip
  *  - `csrfToken` for unsafe methods
  *
- * The customer account session is a plain unsigned cookie
- * (`_auth_customer_id`) — distinct from the admin `qr_sessionid` so the
+ * The customer account session is a signed cookie
+ * (`_auth_customer_id`, opaque to the frontend) — distinct from the admin `qr_sessionid` so the
  * two sessions can coexist on the same browser without invalidating
  * each other. CSRF is enforced only on `POST /auth/logout`; the magic
  * link endpoints are exempt (D-025).
  */
 
+import { internalApiHeaders } from "@/lib/internal-api";
 import type {
   CustomerLoyaltySummary,
   CustomerOrderHistoryResult,
@@ -103,6 +104,7 @@ async function accountFetch<T>(
 
   const headers: Record<string, string> = {
     Accept: "application/json",
+    ...(internal ? internalApiHeaders() : {}),
     ...extraHeaders,
   };
   if (body !== undefined) headers["Content-Type"] = "application/json";
@@ -184,7 +186,7 @@ export async function requestMagicLink(
   options: Pick<AccountFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
 ): Promise<MagicLinkRequestResponse> {
   return accountFetch<MagicLinkRequestResponse>(
-    "/api/v1/account/auth/request-link/",
+    "/api/v1/account/auth/request-link",
     {
       method: "POST",
       body: { email },
@@ -211,7 +213,7 @@ export async function verifyMagicLink(
   options: Pick<AccountFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
 ): Promise<MagicLinkVerifyResponse> {
   return accountFetch<MagicLinkVerifyResponse>(
-    `/api/v1/account/auth/verify/?token=${encodeURIComponent(token)}`,
+    `/api/v1/account/auth/verify?token=${encodeURIComponent(token)}`,
     { ...options },
   );
 }
@@ -228,7 +230,7 @@ export async function logoutCustomer(
   csrfToken: string,
   options: Pick<AccountFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
 ): Promise<LogoutResponse> {
-  return accountFetch<LogoutResponse>("/api/v1/account/auth/logout/", {
+  return accountFetch<LogoutResponse>("/api/v1/account/auth/logout", {
     method: "POST",
     csrfToken,
     ...options,
@@ -249,7 +251,7 @@ export async function logoutCustomer(
 export async function fetchCustomerProfile(
   options: Pick<AccountFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
 ): Promise<CustomerProfile> {
-  return accountFetch<CustomerProfile>("/api/v1/account/me/", { ...options });
+  return accountFetch<CustomerProfile>("/api/v1/account/me", { ...options });
 }
 
 /**
@@ -278,7 +280,7 @@ export async function updateCustomerProfile(
   csrfToken: string,
   options: Pick<AccountFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
 ): Promise<CustomerProfile> {
-  return accountFetch<CustomerProfile>("/api/v1/account/me/", {
+  return accountFetch<CustomerProfile>("/api/v1/account/me", {
     method: "PATCH",
     body: payload,
     csrfToken,
@@ -306,7 +308,7 @@ export async function fetchCustomerOrders(
   if (filters.page) params.set("page", String(filters.page));
   const qs = params.toString();
   return accountFetch<CustomerOrderHistoryResult>(
-    `/api/v1/account/me/orders/${qs ? `?${qs}` : ""}`,
+    `/api/v1/account/me/orders${qs ? `?${qs}` : ""}`,
     { ...options },
   );
 }
@@ -322,7 +324,7 @@ export async function fetchCustomerLoyalty(
 ): Promise<CustomerLoyaltySummary | null> {
   try {
     return await accountFetch<CustomerLoyaltySummary>(
-      `/api/v1/account/me/loyalty/?organization=${encodeURIComponent(organizationSlug)}`,
+      `/api/v1/account/me/loyalty?organization=${encodeURIComponent(organizationSlug)}`,
       { ...options },
     );
   } catch (err) {
@@ -345,7 +347,7 @@ export async function fetchPublicLoyaltySettings(
 ): Promise<PublicLoyaltySettings | null> {
   try {
     return await accountFetch<PublicLoyaltySettings>(
-      `/api/v1/account/loyalty/settings/?organization=${encodeURIComponent(organizationSlug)}`,
+      `/api/v1/account/loyalty/settings?organization=${encodeURIComponent(organizationSlug)}`,
       { ...options },
     );
   } catch (err) {

@@ -470,7 +470,14 @@ def _send_magic_link_email(
         to=[customer.email],
     )
     msg.attach_alternative(html_body, "text/html")
-    msg.send(fail_silently=True)
+    # The endpoint must answer the same way whether or not the address exists
+    # (no account enumeration), so a delivery failure is never reported to the
+    # caller - but it must not be invisible to the operator either. It used to
+    # be `fail_silently=True`: a wrong SMTP host looked exactly like success.
+    try:
+        msg.send(fail_silently=False)
+    except Exception:
+        logger.exception("Magic-link email to customer id=%s failed", customer.pk)
 
 
 def _audit_customer_registered(

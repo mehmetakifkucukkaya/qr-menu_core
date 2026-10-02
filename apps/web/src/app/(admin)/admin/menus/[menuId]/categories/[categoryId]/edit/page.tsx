@@ -134,9 +134,6 @@ export default async function EditCategoryPage({ params }: PageProps) {
             category={category}
             parentOptions={parents}
             csrfToken={csrfToken}
-            onSaved={() => {
-              redirect(`/admin/menus/${menu.id}/categories/${category.id}/items`);
-            }}
           />
         </div>
       )}

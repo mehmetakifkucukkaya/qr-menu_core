@@ -19,7 +19,7 @@ APP_VERSION = "1.0.0"
 class HealthView(APIView):
     """GET /health — application/json.
 
-    Returns:
+    Returns 200 when healthy and 503 when the database check fails:
         {
           "status": "ok" | "degraded",
           "database": "ok" | "error",
@@ -49,7 +49,7 @@ class HealthView(APIView):
             "version": APP_VERSION,
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
-        # 200 always — the body communicates status. Some uptimes prefer
-        # 503 when degraded, but Docker healthcheck / load balancers are
-        # happier with 200 + JSON.
-        return Response(body, status=200)
+        # 503 when the database is unreachable so `curl -f` (the Docker
+        # healthcheck), load balancers and uptime monitors actually notice;
+        # the JSON body still says which dependency failed.
+        return Response(body, status=200 if db_ok else 503)

@@ -6,7 +6,10 @@ from django.contrib import admin
 from django.urls import include, path
 
 urlpatterns = [
-    path("admin/", admin.site.urls),
+    # Django's own admin. It lives under /django-admin/ because the Next.js
+    # operator panel owns /admin/* (Caddy sends only /django-admin/* to
+    # Django, see Caddyfile). Mounted at /admin/ it shadowed the panel.
+    path("django-admin/", admin.site.urls),
     # Health check (no auth, application/json).
     path("health", include("apps.health.urls")),
     # API v1 — auth, current user, organization/branches/theme/menu admin.

@@ -17,7 +17,6 @@ import {
   FeatureFlagProvider,
   useFeatureFlag,
 } from "@/lib/feature-flags";
-import { UpgradeBanner } from "@/components/billing/UpgradeBanner";
 import { CategoryNav } from "./CategoryNav";
 import { CategorySection } from "./CategorySection";
 import { ItemDetailDrawer } from "./ItemDetailDrawer";
@@ -69,14 +68,19 @@ interface MenuViewClientProps {
  * call `useFeatureFlag(...)` directly.
  *
  * Sprint G (D-035) — Velouté 3-column desktop layout:
- *   • Left rail  (col-span-3, sticky) — category navigation + dietary
- *     preferences checklist + Wi-Fi info card. Hides below `lg`.
+ *   • Left rail  (col-span-3, sticky) — category navigation. Hides below `lg`.
  *   • Main feed  (col-span-6)         — editorial menu catalog with the
- *     sticky segmented category nav above.
- *   • Right rail (col-span-3, sticky) — cart summary + service info.
- *     Hidden when the cart feature is off.
+ *     sticky segmented category nav above (col-span-9 when there is no
+ *     right rail).
+ *   • Right rail (col-span-3, sticky) — cart summary. Hidden when the cart
+ *     feature is off.
  *   • Mobile (< lg) — single column with the sticky CategoryNav and
  *     floating CartFab from earlier sprints.
+ *
+ * Only tenant data is rendered here. The earlier mock panels (dietary
+ * filter with invented counts, a shared Wi-Fi password, fixed service
+ * hours / "open now") were removed: they showed the same made-up values
+ * on every tenant's public page (ANALYSIS_1 F-13).
  */
 export function MenuViewClient({
   publicSettings,
@@ -143,12 +147,6 @@ export function MenuViewClient({
 
   return (
     <FeatureFlagProvider settings={publicSettings}>
-      <UpgradeBanner
-        feature="cart_enabled"
-        targetPlan="orders"
-        settings={publicSettings}
-      />
-
       {/* Sticky top bar — mobile-first: 48px chrome, account chip hidden
        *  on phones (moved to AccountHeaderChip's mobile sheet) */}
       <header className="sticky safe-top top-0 z-30 border-b border-[var(--color-border)] bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70">
@@ -271,15 +269,18 @@ function MenuContent({
 
       <div className="mx-auto mt-6 max-w-6xl px-4 pb-32 sm:px-6 sm:pb-10">
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:items-start">
-          {/* ── LEFT RAIL: desktop-only sidebar (categories + filters) ── */}
+          {/* ── LEFT RAIL: desktop-only sidebar (category list) ── */}
           <aside className="hidden lg:sticky lg:top-28 lg:col-span-3 lg:flex lg:flex-col lg:gap-4 lg:self-start">
             <CategoryRail categories={categories} />
-            <DietaryFilterPanel />
-            <WifiInfoCard />
           </aside>
 
           {/* ── MAIN FEED: editorial catalog ── */}
-          <section className="flex flex-col gap-8 lg:col-span-6">
+          <section
+            className={
+              "flex flex-col gap-8 " +
+              (cartEnabled ? "lg:col-span-6" : "lg:col-span-9")
+            }
+          >
             {categories.map((category) => (
               <CategorySection
                 key={category.id}
@@ -289,7 +290,7 @@ function MenuContent({
             ))}
           </section>
 
-          {/* ── RIGHT RAIL: desktop-only cart + service summary ── */}
+          {/* ── RIGHT RAIL: desktop-only cart summary (when ordering is on) ── */}
           {cartEnabled ? (
             <aside className="hidden lg:sticky lg:top-28 lg:col-span-3 lg:flex lg:flex-col lg:gap-4 lg:self-start">
               <CartRail
@@ -299,13 +300,8 @@ function MenuContent({
                 ordersEnabled={ordersEnabled}
                 onOpenDrawer={openDrawer}
               />
-              <ServiceHoursCard />
             </aside>
-          ) : (
-            <aside className="hidden lg:sticky lg:top-28 lg:col-span-3 lg:flex lg:flex-col lg:gap-4 lg:self-start">
-              <ServiceHoursCard />
-            </aside>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -372,78 +368,6 @@ function CategoryRail({ categories }: { categories: PublicMenuCategory[] }) {
         </a>
       ))}
     </nav>
-  );
-}
-
-function DietaryFilterPanel() {
-  const filters: Array<{ label: string; count: number; checked: boolean }> = [
-    { label: "Vejetaryen", count: 8, checked: true },
-    { label: "Vegan", count: 3, checked: false },
-    { label: "Glütensiz", count: 5, checked: true },
-    { label: "Fındıksız", count: 6, checked: false },
-    { label: "Şef Özel", count: 4, checked: true },
-  ];
-  return (
-    <div className="flex flex-col gap-3 rounded-lg border border-[var(--color-border)] bg-surface p-3 shadow-sm">
-      <div className="flex items-center justify-between px-1">
-        <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-outline">
-          Diyet Tercihleri
-        </span>
-        <button
-          type="button"
-          className="text-[10px] font-bold uppercase tracking-wider text-secondary hover:underline"
-        >
-          Sıfırla
-        </button>
-      </div>
-      <div className="flex flex-col gap-1.5">
-        {filters.map((f) => (
-          <label
-            key={f.label}
-            className="flex cursor-pointer items-center gap-2 rounded-md px-1 py-1 text-sm text-text transition hover:bg-[var(--color-surface-low)]"
-          >
-            <input
-              type="checkbox"
-              defaultChecked={f.checked}
-              className="h-4 w-4 rounded-[4px] border-[var(--color-border-strong)] text-primary accent-primary focus:ring-0"
-            />
-            <span className={f.checked ? "font-semibold text-secondary" : ""}>
-              {f.label}
-            </span>
-            <span className="ml-auto text-[10px] font-semibold text-outline">
-              {f.count}
-            </span>
-          </label>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function WifiInfoCard() {
-  return (
-    <div className="flex items-center justify-between rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-low)] p-3">
-      <div className="flex items-center gap-2">
-        <span aria-hidden className="text-lg">
-          📶
-        </span>
-        <div className="flex flex-col">
-          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-outline">
-            Misafir Wi-Fi
-          </span>
-          <span className="select-all font-heading text-sm font-semibold text-primary">
-            MaisonGuest · veloute24
-          </span>
-        </div>
-      </div>
-      <button
-        type="button"
-        aria-label="Wi-Fi şifresini kopyala"
-        className="rounded-md p-1 text-outline transition hover:bg-[var(--color-surface)] hover:text-primary"
-      >
-        <span aria-hidden>📋</span>
-      </button>
-    </div>
   );
 }
 
@@ -528,37 +452,6 @@ function CartRail({
           Sepete Git · {fmt(total)}
         </button>
       ) : null}
-    </div>
-  );
-}
-
-function ServiceHoursCard() {
-  return (
-    <div className="flex flex-col gap-2 rounded-lg border border-[var(--color-border)] bg-surface p-4 shadow-sm">
-      <h4 className="text-[10px] font-bold uppercase tracking-[0.2em] text-outline">
-        Servis Saatleri
-      </h4>
-      <ul className="flex flex-col gap-1 text-xs text-on-surface-variant">
-        <li className="flex items-center justify-between">
-          <span>Kahvaltı</span>
-          <span className="font-semibold text-text">08:30 – 13:00</span>
-        </li>
-        <li className="flex items-center justify-between">
-          <span>Öğle</span>
-          <span className="font-semibold text-text">13:00 – 17:00</span>
-        </li>
-        <li className="flex items-center justify-between">
-          <span>Akşam</span>
-          <span className="font-semibold text-text">17:00 – 23:00</span>
-        </li>
-      </ul>
-      <div className="mt-2 flex items-center gap-1.5 border-t border-[var(--color-border)] pt-2 text-[10px] uppercase tracking-wider text-secondary">
-        <span
-          aria-hidden
-          className="inline-block h-2 w-2 animate-pulse rounded-full bg-secondary"
-        />
-        Şu an açık
-      </div>
     </div>
   );
 }

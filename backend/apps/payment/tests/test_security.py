@@ -12,32 +12,57 @@ import pytest
 from rest_framework.test import APIClient
 
 from apps.payment.crypto import decrypt, encrypt
+from apps.payment.services import create_payment_for_order
+from apps.payment.tests.conftest import stripe_event, stripe_signature
 
 
 pytestmark = pytest.mark.django_db
 
 
-def test_webhook_endpoint_csrf_exempt(client):
-    """Webhook must be reachable without a CSRF token (signature is the auth)."""
-    res = client.post(
+def test_webhook_endpoint_csrf_exempt():
+    """Webhook must be reachable without a CSRF token (signature is the auth).
+
+    Uses a client that ENFORCES CSRF - the default Django test client skips the
+    check, which made this test pass for any view."""
+    from django.test import Client
+
+    strict = Client(enforce_csrf_checks=True)
+    res = strict.post(
         "/api/v1/payment/webhooks/stripe/",
         data=b"{}",
         content_type="application/json",
     )
-    # Either 200 (no settings) or some other non-403 — never a CSRF reject.
-    assert res.status_code != 403
+    # 200 (no settings configured) - and above all not a CSRF 403.
+    assert res.status_code == 200, res.content
 
 
 def test_webhook_invalid_signature_returns_401(
-    mock_stripe_payment_intent, make_payment_settings, organization_a
+    mock_stripe_api, make_payment_settings, organization_a
 ):
+    """Real signature verification (the permissive fake would accept anything)."""
     make_payment_settings(organization_a, webhook_secret="whsec_real_xyz")
     client = APIClient()
+    body = stripe_event("evt_x", "payment_intent.succeeded", id="pi_x", amount_received=100)
     res = client.post(
         "/api/v1/payment/webhooks/stripe/",
-        data=b'{"id":"evt_x","type":"payment_intent.succeeded","data":{"object":{"id":"pi_x","amount_received":100}}}',
+        data=body,
         content_type="application/json",
         HTTP_STRIPE_SIGNATURE="bad-sig",
+    )
+    assert res.status_code == 401
+    assert res.json()["code"] == "payment.invalid_signature"
+
+
+def test_webhook_signature_made_with_a_different_secret_returns_401(
+    mock_stripe_api, make_payment_settings, organization_a
+):
+    make_payment_settings(organization_a, webhook_secret="whsec_real_xyz")
+    body = stripe_event("evt_x", "payment_intent.succeeded", id="pi_x")
+    res = APIClient().post(
+        "/api/v1/payment/webhooks/stripe/",
+        data=body,
+        content_type="application/json",
+        HTTP_STRIPE_SIGNATURE=stripe_signature(body, "whsec_attacker"),
     )
     assert res.status_code == 401
 
@@ -132,10 +157,16 @@ def test_cross_tenant_admin_refund_returns_404(
     assert res.status_code == 404
 
 
-def test_admin_refund_requires_org_member(organization_a, user_b):
-    """User_b without membership cannot access admin endpoints."""
+def test_admin_refund_requires_org_member(organization_a, django_user_model):
+    """A logged-in user WITHOUT any membership cannot use the admin endpoints.
+
+    (The old version used ``user_b``, who owns org_b, so the request was
+    legitimately allowed and the assertion could never hold.)"""
+    outsider = django_user_model.objects.create_user(
+        email="no-membership@example.com", password="x", role="staff"
+    )
     client = APIClient()
-    client.force_authenticate(user=user_b)
+    client.force_authenticate(user=outsider)
     res = client.get("/api/v1/payment/admin/payment/settings/")
     assert res.status_code == 403
 
@@ -164,7 +195,9 @@ def test_webhook_idempotent_duplicate_no_double_processing(
     assert WebhookEvent.objects.filter(provider_event_id="evt_double_001").count() == 1
 
 
-def test_settings_endpoint_unauthenticated_returns_401(organization_a):
+def test_settings_endpoint_unauthenticated_is_denied(organization_a):
+    """Session-auth APIs answer 403 (not 401) to anonymous callers in this
+    project - there is no WWW-Authenticate challenge to attach a 401 to."""
     client = APIClient()
     res = client.get("/api/v1/payment/admin/payment/settings/")
-    assert res.status_code == 401
+    assert res.status_code in {401, 403}

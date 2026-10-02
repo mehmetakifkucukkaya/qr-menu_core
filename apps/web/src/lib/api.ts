@@ -1,3 +1,5 @@
+import { internalApiHeaders } from "@/lib/internal-api";
+import { createTtlCache } from "@/lib/ttl-cache";
 import type {
   LocaleCode,
   PublicMenuApiEnvelope,
@@ -52,11 +54,35 @@ function resolveBaseUrl(opts: { baseUrl?: string; internal?: boolean }): string 
 }
 
 /**
+ * Short-lived per-process cache of public menu payloads (ANALYSIS_1 F-05).
+ *
+ * The public menu is identical for every visitor (the request carries no
+ * cookies), and generating it costs the backend hundreds of SQL queries for
+ * a large menu. Caching it here means Django is hit at most once per
+ * `PUBLIC_MENU_CACHE_TTL_SECONDS` per business/locale/branch per Next
+ * process, no matter how many customers scan the QR code. Unlike Next's
+ * Data Cache it never serves data older than the TTL (see `lib/ttl-cache`).
+ *
+ * `PUBLIC_MENU_CACHE_TTL_SECONDS`: default 10; `0` disables caching.
+ * Menu edits made in the admin appear on the public page within that time.
+ */
+const publicMenuCache = createTtlCache<PublicMenuPayload>({ maxEntries: 500 });
+
+function publicMenuCacheTtlMs(): number {
+  const raw = process.env.PUBLIC_MENU_CACHE_TTL_SECONDS;
+  const seconds = raw === undefined || raw.trim() === "" ? 10 : Number(raw);
+  return Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : 0;
+}
+
+/**
  * Fetch the full public menu payload for a business slug.
  *
  * Used by server components (route = app router) with `internal: true` so
  * the request hops directly to the `backend` service in Docker. The
  * browser never calls this directly — it consumes the rendered HTML.
+ * Server-side calls identify themselves with `INTERNAL_API_TOKEN` so the
+ * backend does not rate limit the whole site as a single visitor, and are
+ * served from a short in-process cache (see `publicMenuCache`).
  */
 export async function fetchPublicMenu(
   businessSlug: string,
@@ -74,13 +100,23 @@ export async function fetchPublicMenu(
     businessSlug,
   )}${query ? `?${query}` : ""}`;
 
+  const ttlMs = internal && !baseUrl ? publicMenuCacheTtlMs() : 0;
+  return publicMenuCache.get(url, ttlMs, () => loadPublicMenu(url, internal));
+}
+
+async function loadPublicMenu(
+  url: string,
+  internal: boolean | undefined,
+): Promise<PublicMenuPayload> {
   let res: Response;
   try {
     res = await fetch(url, {
-      // Public menu is rendered per-request; cache it on the Next.js
-      // data-cache side (Sprint 5 may add an explicit revalidate value).
+      // Caching is handled by `publicMenuCache`, not by Next's Data Cache.
       cache: "no-store",
-      headers: { Accept: "application/json" },
+      headers: {
+        Accept: "application/json",
+        ...(internal ? internalApiHeaders() : {}),
+      },
     });
   } catch (err) {
     // Network-level failure (backend down, DNS, etc).

@@ -181,8 +181,16 @@ Required edits:
 | `CORS_ALLOWED_ORIGINS` | `https://menu.example.com` | must be https in prod |
 | `NEXT_PUBLIC_API_BASE_URL` | `https://menu.example.com` | same domain — Caddy routes `/api/*` to backend |
 | `INTERNAL_API_BASE_URL` | `http://backend:8000` | docker network name, not localhost |
+| `INTERNAL_API_TOKEN` | 32+ char token | shared by the Next.js server and the backend; without it every visitor shares one rate-limit bucket |
+| `PUBLIC_BASE_URL` | `https://menu.example.com` | printed into every QR code; the backend refuses to start if missing or `localhost` |
+| `PAYMENT_FERNET_KEY` | 44-char Fernet key | required even with payments off (see `.env.production.example` for how to generate) |
 | `DOMAIN` | `menu.example.com` | matches the DNS A record |
-| `[email protected]` | your email | Caddy ACME registration |
+| `EMAIL_HOST`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `DEFAULT_FROM_EMAIL` | your SMTP provider | customer magic-link login e-mails; failures are logged by the backend |
+
+> **Always pass `--env-file .env.production`** to `docker compose` (every command
+> below does). Compose reads `.env`, not `.env.production`, for the `${VAR}`
+> values used as build args, so without the flag the frontend bundle was built
+> pointing at `http://localhost:8000`.
 
 Run the validation script to catch typos before the first deploy:
 
@@ -216,11 +224,11 @@ otherwise and the stack won't come up.
 cd /opt/agency-qr-menu
 
 # Build + start everything in the background.
-docker compose -f docker-compose.production.yml pull
-docker compose -f docker-compose.production.yml up -d --build
+docker compose --env-file .env.production -f docker-compose.production.yml pull
+docker compose --env-file .env.production -f docker-compose.production.yml up -d --build
 
 # Watch the logs (Ctrl-C exits; the stack keeps running).
-docker compose -f docker-compose.production.yml logs -f --tail=200
+docker compose --env-file .env.production -f docker-compose.production.yml logs -f --tail=200
 ```
 
 What you should see, in order:
@@ -234,15 +242,20 @@ What you should see, in order:
 
 ### 3.1 Create the first admin
 
+(The Django admin site is at `https://menu.example.com/django-admin/`; the
+operator panel your customers' staff use is `https://menu.example.com/admin/`.
+Plan changes for a tenant are made in the Django admin: tenants cannot change
+their own plan.)
+
 ```bash
-docker compose -f docker-compose.production.yml exec backend \
+docker compose --env-file .env.production -f docker-compose.production.yml exec backend \
     python manage.py createsuperuser
 ```
 
 ### 3.2 Seed demo data
 
 ```bash
-docker compose -f docker-compose.production.yml exec backend \
+docker compose --env-file .env.production -f docker-compose.production.yml exec backend \
     python manage.py seed_demo
 ```
 
@@ -263,6 +276,26 @@ DNS not having propagated yet — see [§10 Troubleshooting](#10-troubleshooting
 
 ## 4. Subsequent Deploys
 
+### 4.0 Release gate — run before every deploy, on your laptop or CI
+
+```bash
+bash scripts/release_gate.sh
+```
+
+It runs the backend tests, the frontend type-check/lint/unit tests and the
+**six browser smoke flows** (public menu + language switch, add to cart → order,
+log in → dashboard, create/edit a product, change a price and see it publicly,
+download a QR code) against a production build and a throwaway database. See
+[`apps/web/e2e/README.md`](../apps/web/e2e/README.md).
+
+**Do not deploy on red.** These flows exist because unit tests, `tsc` and
+`next build` were all green while the admin could not create a product and
+customers could not place an order (see `ANALYSIS_1_FUNCTIONALITY`). On the
+server, also run `bash scripts/validate_prod_env.sh` after any `.env.production`
+change.
+
+### 4.1 Pull, rebuild, restart
+
 The cadence is: pull, rebuild, restart. Migrations run automatically as
 part of the backend `CMD`.
 
@@ -274,10 +307,10 @@ git pull origin main
 
 # 2. Rebuild + restart. The ``--build`` flag rebuilds images whose context
 #    changed; unchanged images are reused. ``-d`` runs in the background.
-docker compose -f docker-compose.production.yml up -d --build
+docker compose --env-file .env.production -f docker-compose.production.yml up -d --build
 
 # 3. Watch logs for ~30 s to catch boot errors.
-docker compose -f docker-compose.production.yml logs -f --tail=100
+docker compose --env-file .env.production -f docker-compose.production.yml logs -f --tail=100
 ```
 
 > **Migrations are run on every container start** (the backend `CMD`
@@ -286,11 +319,11 @@ docker compose -f docker-compose.production.yml logs -f --tail=100
 > `migrate` command in the running container:
 >
 > ```bash
-> docker compose -f docker-compose.production.yml exec backend \
+> docker compose --env-file .env.production -f docker-compose.production.yml exec backend \
 >     python manage.py migrate
 > ```
 
-### 4.1 Zero-downtime deploys (V2)
+### 4.2 Zero-downtime deploys (V2)
 
 V1 redeploys cause a ~5 s blip while the new backend container starts.
 V2 will introduce a rolling restart pattern (start the new container,
@@ -317,7 +350,7 @@ RETENTION_DAYS=7
 
 mkdir -p "$BACKUP_DIR"
 
-docker compose -f docker-compose.production.yml exec -T postgres \
+docker compose --env-file .env.production -f docker-compose.production.yml exec -T postgres \
     pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner --clean \
     > "$BACKUP_DIR/db-$(date +%Y%m%d-%H%M%S).sql"
 
@@ -354,16 +387,16 @@ The free-tier Box plan is fine for V1 volumes (a single daily dump is
 
 ```bash
 # Drop the running DB and re-import from a backup.
-docker compose -f docker-compose.production.yml exec -T postgres \
+docker compose --env-file .env.production -f docker-compose.production.yml exec -T postgres \
     psql -U "$POSTGRES_USER" -d postgres -c "DROP DATABASE $POSTGRES_DB;"
-docker compose -f docker-compose.production.yml exec -T postgres \
+docker compose --env-file .env.production -f docker-compose.production.yml exec -T postgres \
     createdb -U "$POSTGRES_USER" "$POSTGRES_DB"
-docker compose -f docker-compose.production.yml exec -T postgres \
+docker compose --env-file .env.production -f docker-compose.production.yml exec -T postgres \
     psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
     < /var/backups/qr-menu/db-20260926-031700.sql
 
 # Restart backend so it picks up the restored DB.
-docker compose -f docker-compose.production.yml restart backend
+docker compose --env-file .env.production -f docker-compose.production.yml restart backend
 ```
 
 Schedule a restore drill **quarterly** — a backup you haven't tested
@@ -389,7 +422,7 @@ git log --oneline -20
 git checkout <last-good-sha>
 
 # 3. Rebuild + restart.
-docker compose -f docker-compose.production.yml up -d --build
+docker compose --env-file .env.production -f docker-compose.production.yml up -d --build
 ```
 
 The backend's `CMD` runs `migrate` on every start. If the previous
@@ -399,7 +432,7 @@ of the new code's expectations, you may need to roll back the migration
 manually:
 
 ```bash
-docker compose -f docker-compose.production.yml exec backend \
+docker compose --env-file .env.production -f docker-compose.production.yml exec backend \
     python manage.py migrate <app> <previous_migration_name>
 ```
 
@@ -423,7 +456,7 @@ If everything is on fire, restore the whole VPS from a Hetzner snapshot:
 
 ### 7.1 Health endpoint
 
-`GET /health` returns 200 + JSON `{status: "ok", db: "ok", version: "..."}`
+`GET /health` returns 200 + JSON `{status: "ok", database: "ok", version: "..."}` (503 when the database is unreachable)
 when the API is fully up. Caddy routes this directly to the backend.
 
 Wire any uptime monitor (Better Stack, UptimeRobot, Healthchecks.io) to
@@ -447,10 +480,10 @@ for performance traces; 100 % of errors are reported.
 
 ```bash
 # Live tail, all services.
-docker compose -f docker-compose.production.yml logs -f --tail=200
+docker compose --env-file .env.production -f docker-compose.production.yml logs -f --tail=200
 
 # Just the backend.
-docker compose -f docker-compose.production.yml logs -f backend
+docker compose --env-file .env.production -f docker-compose.production.yml logs -f backend
 ```
 
 JSON log lines (when `json-logging` is installed) are shippable as-is
@@ -514,6 +547,9 @@ Run through this before the first deploy and after every major change.
 - [ ] `POSTGRES_PASSWORD` is ≥ 24 chars
 - [ ] `DJANGO_DEBUG=0` (default, do not enable in prod)
 - [ ] `DJANGO_ALLOWED_HOSTS` lists **only** the prod domain(s)
+- [ ] `PUBLIC_BASE_URL` is the public https origin (QR codes encode it)
+- [ ] `INTERNAL_API_TOKEN` and `PAYMENT_FERNET_KEY` are set and secret
+- [ ] `PAYMENTS_ENABLED` is `0` until the checkout has a payment step
 - [ ] `CORS_ALLOWED_ORIGINS` lists **only** the prod https origin(s)
 - [ ] `SENTRY_DSN` is set (or you explicitly opted out of Sentry)
 - [ ] HSTS preload list — submit `menu.example.com` once traffic stabilises
@@ -536,7 +572,7 @@ rate-limited the domain.
 dig menu.example.com +short
 
 # If correct but Caddy still fails, check the Caddy log.
-docker compose -f docker-compose.production.yml logs caddy | tail -50
+docker compose --env-file .env.production -f docker-compose.production.yml logs caddy | tail -50
 
 # Workaround for the rate limit: comment out ``tls {$EMAIL}`` and let
 # Caddy serve HTTP-only until the rate limit resets (1 hour). Then
@@ -550,8 +586,8 @@ docker compose -f docker-compose.production.yml logs caddy | tail -50
 **Fix:**
 
 ```bash
-docker compose -f docker-compose.production.yml ps
-docker compose -f docker-compose.production.yml logs backend --tail=100
+docker compose --env-file .env.production -f docker-compose.production.yml ps
+docker compose --env-file .env.production -f docker-compose.production.yml logs backend --tail=100
 
 # Common culprits:
 # - Postgres not ready → backend migration failed → check postgres logs
@@ -561,18 +597,23 @@ docker compose -f docker-compose.production.yml logs backend --tail=100
 
 ### 10.3 Static files 404
 
-**Cause:** `collectstatic` didn't run, or the `backend-static` volume
-is empty.
+Caddy serves `/static/*` and `/media/*` itself from the `backend-static` and
+`backend-media` volumes (mounted read-only into the Caddy container). Django
+does not serve them when `DEBUG` is off.
+
+**Cause:** `collectstatic` didn't run, the volume is empty, or the Caddy
+container was started without the volume mounts (`docker-compose.production.yml`
+`caddy.volumes`).
 
 **Fix:**
 
 ```bash
 # Re-run collectstatic (idempotent).
-docker compose -f docker-compose.production.yml exec backend \
+docker compose --env-file .env.production -f docker-compose.production.yml exec backend \
     python manage.py collectstatic --noinput
 
 # Verify the volume has files.
-docker compose -f docker-compose.production.yml exec backend \
+docker compose --env-file .env.production -f docker-compose.production.yml exec backend \
     ls /app/staticfiles | head
 ```
 
@@ -593,8 +634,8 @@ grep DATABASE_URL .env.production
 # Should be: postgres://qr_menu:...@postgres:5432/qr_menu
 
 # Confirm Postgres is up.
-docker compose -f docker-compose.production.yml ps postgres
-docker compose -f docker-compose.production.yml logs postgres --tail=50
+docker compose --env-file .env.production -f docker-compose.production.yml ps postgres
+docker compose --env-file .env.production -f docker-compose.production.yml logs postgres --tail=50
 ```
 
 ### 10.5 Missing environment variable at startup
@@ -610,7 +651,7 @@ placeholder from `base.py`.
 and update `.env.production`. Then:
 
 ```bash
-docker compose -f docker-compose.production.yml up -d --force-recreate backend
+docker compose --env-file .env.production -f docker-compose.production.yml up -d --force-recreate backend
 ```
 
 ### 10.6 Frontend can't reach the API
@@ -627,7 +668,7 @@ docker compose -f docker-compose.production.yml up -d --force-recreate backend
 3. After editing `.env.production`, restart the affected services:
 
    ```bash
-   docker compose -f docker-compose.production.yml restart frontend backend
+   docker compose --env-file .env.production -f docker-compose.production.yml restart frontend backend
    ```
 
 ### 10.7 Out of disk
@@ -653,7 +694,7 @@ If admin summary or `/api/v1/admin/analytics/overview` returns empty
 results, the `seed_demo` command may not have run. Re-run it:
 
 ```bash
-docker compose -f docker-compose.production.yml exec backend \
+docker compose --env-file .env.production -f docker-compose.production.yml exec backend \
     python manage.py seed_demo
 ```
 
@@ -666,26 +707,26 @@ codes (Sprint 6B will add 5 more for the full demo flow).
 
 ```bash
 # Open a Django shell on the running backend.
-docker compose -f docker-compose.production.yml exec backend \
+docker compose --env-file .env.production -f docker-compose.production.yml exec backend \
     python manage.py shell
 
 # Tail logs for a single service with timestamps.
-docker compose -f docker-compose.production.yml logs -f --tail=50 -t backend
+docker compose --env-file .env.production -f docker-compose.production.yml logs -f --tail=50 -t backend
 
 # Run pytest in the live container (uses sqlite, won't touch prod DB).
-docker compose -f docker-compose.production.yml exec backend \
+docker compose --env-file .env.production -f docker-compose.production.yml exec backend \
     pytest -v
 
 # Connect to Postgres directly.
-docker compose -f docker-compose.production.yml exec postgres \
+docker compose --env-file .env.production -f docker-compose.production.yml exec postgres \
     psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"
 
 # Force a fresh build (e.g. after requirements.txt change).
-docker compose -f docker-compose.production.yml build --no-cache backend
-docker compose -f docker-compose.production.yml up -d backend
+docker compose --env-file .env.production -f docker-compose.production.yml build --no-cache backend
+docker compose --env-file .env.production -f docker-compose.production.yml up -d backend
 
 # Roll back to the previous git commit.
-git checkout HEAD~1 && docker compose -f docker-compose.production.yml up -d --build
+git checkout HEAD~1 && docker compose --env-file .env.production -f docker-compose.production.yml up -d --build
 ```
 
 ---
