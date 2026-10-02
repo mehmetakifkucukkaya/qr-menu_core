@@ -151,13 +151,9 @@ PLAN_TIER_LIMITS: Final = {
 
 
 # ---------------------------------------------------------------------------
-# Feature / resource catalogs
+# Platform-wide switches
 # ---------------------------------------------------------------------------
 
-# 9 explicit feature flags — used by ``PlanSettings.effective_features()``
-# and ``has_feature()`` service. Listed explicitly so callers don't have
-# to introspect the model class at runtime (faster lookups, easier to
-# cross-check against the admin UI in Sprint B2).
 def platform_forced_off() -> frozenset:
     """Feature flags the PLATFORM has switched off for every tenant.
 
@@ -174,6 +170,14 @@ def platform_forced_off() -> frozenset:
     return frozenset(off)
 
 
+# ---------------------------------------------------------------------------
+# Feature / resource catalogs
+# ---------------------------------------------------------------------------
+
+# 9 explicit feature flags — used by ``PlanSettings.effective_features()``
+# and ``has_feature()`` service. Listed explicitly so callers don't have
+# to introspect the model class at runtime (faster lookups, easier to
+# cross-check against the admin UI in Sprint B2).
 FEATURE_FIELDS: Final = (
     "cart_enabled",
     "orders_enabled",

@@ -9,7 +9,6 @@ sends no Origin header, worked - which is how this went unnoticed).
 from __future__ import annotations
 
 import pytest
-from django.test import override_settings
 from rest_framework.test import APIClient
 
 pytestmark = pytest.mark.django_db

@@ -33,10 +33,10 @@ from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.permissions import SAFE_METHODS, AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
-from apps.core.throttling import InternalExemptAnonRateThrottle
 from rest_framework.views import APIView
 
 from apps.accounts.permissions import IsOrganizationMember, IsPlatformAdmin
+from apps.core.throttling import InternalExemptAnonRateThrottle
 
 from . import services
 from .serializers import (

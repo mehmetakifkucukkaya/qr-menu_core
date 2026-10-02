@@ -26,9 +26,9 @@ from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
-from apps.core.throttling import InternalExemptAnonRateThrottle
 from rest_framework.views import APIView
 
+from apps.core.throttling import InternalExemptAnonRateThrottle
 from apps.menu.services import get_active_menu, get_full_menu_payload
 
 

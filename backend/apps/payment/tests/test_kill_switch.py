@@ -11,7 +11,6 @@ the storefront falls back to "pay cash at the venue".
 from __future__ import annotations
 
 import pytest
-from django.urls import get_resolver
 from rest_framework.test import APIClient
 
 from apps.billing import services as billing_services
