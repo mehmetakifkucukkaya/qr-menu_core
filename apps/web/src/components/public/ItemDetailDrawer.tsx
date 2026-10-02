@@ -109,7 +109,7 @@ export function ItemDetailDrawer({
       onClick={onClose}
     >
       <div
-        className="flex max-h-[90vh] w-full flex-col overflow-hidden rounded-t-xl bg-surface shadow-lg ring-1 ring-[var(--color-border)] sm:max-w-lg sm:rounded-xl animate-[slideup_0.22s_ease-out]"
+        className="safe-bottom flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-xl bg-surface shadow-lg ring-1 ring-[var(--color-border)] sm:max-h-[85vh] sm:max-w-lg sm:rounded-xl animate-[slideup_0.22s_ease-out]"
         onClick={(e) => e.stopPropagation()}
         style={{
           animation: "slideup 0.22s ease-out",

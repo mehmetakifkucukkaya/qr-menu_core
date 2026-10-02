@@ -36,6 +36,9 @@ export function CategoryNav({ categories }: CategoryNavProps) {
     );
     if (sections.length === 0) return;
 
+    // rootMargin = "-{sticky-chrome}px 0px -{bottom-half}px 0px".
+    // We pick sections whose visible middle intersects the reading
+    // zone (top 50px) so the chip follows the user's reading line.
     const observer = new IntersectionObserver(
       (entries) => {
         const visible = entries
@@ -49,7 +52,12 @@ export function CategoryNav({ categories }: CategoryNavProps) {
         }
       },
       {
-        rootMargin: "-56px 0px -55% 0px",
+        // top - sticky header (48px) - sticky pill row (~40px) = -88px on sm+
+        // mobile: -48px (header only)
+        rootMargin:
+          typeof window !== "undefined" && window.innerWidth >= 640
+            ? "-88px 0px -55% 0px"
+            : "-48px 0px -55% 0px",
         threshold: [0, 0.25, 0.5, 0.75, 1],
       },
     );
@@ -63,9 +71,9 @@ export function CategoryNav({ categories }: CategoryNavProps) {
   return (
     <nav
       aria-label="Kategoriler"
-      className="sticky top-0 z-20 -mx-4 mt-4 border-b border-[var(--color-border)] bg-background/85 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/70 sm:-mx-6 sm:px-6 lg:mt-6"
+      className="sticky top-12 z-20 -mx-3 mt-3 border-b border-[var(--color-border)] bg-background/85 px-3 backdrop-blur supports-[backdrop-filter]:bg-background/70 sm:top-14 sm:-mx-6 sm:mt-6 sm:px-6"
     >
-      <div className="flex flex-1 snap-x snap-mandatory items-center gap-2 overflow-x-auto py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex flex-1 snap-x snap-mandatory items-center gap-1.5 overflow-x-auto py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:gap-2 sm:py-3">
         {categories.map((cat) => {
           const isActive = cat.slug === activeSlug;
           return (
@@ -74,7 +82,7 @@ export function CategoryNav({ categories }: CategoryNavProps) {
               href={`#category-${cat.slug}`}
               aria-current={isActive ? "true" : undefined}
               className={clsx(
-                "inline-flex min-h-[44px] shrink-0 snap-start items-center rounded-pill px-4 text-sm font-semibold uppercase tracking-wider transition focus:outline-none focus:ring-2 focus:ring-primary",
+                "inline-flex min-h-[36px] shrink-0 snap-start items-center rounded-pill px-3 text-xs font-semibold uppercase tracking-wider transition focus:outline-none focus:ring-2 focus:ring-primary sm:min-h-[44px] sm:px-4 sm:text-sm",
                 isActive
                   ? "bg-primary text-primary-foreground shadow-sm"
                   : "bg-[var(--color-surface-low)] text-on-surface-variant hover:bg-[var(--color-surface)] hover:text-text",

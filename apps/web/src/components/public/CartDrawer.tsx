@@ -100,7 +100,7 @@ export function CartDrawer({
         onClick={closeDrawer}
       >
         <div
-          className="flex max-h-[85vh] w-full flex-col overflow-hidden rounded-t-xl bg-surface shadow-lg ring-1 ring-[var(--color-border)] sm:max-h-full sm:h-full sm:w-96 sm:rounded-none sm:ring-0"
+          className="safe-bottom flex max-h-[90dvh] w-full flex-col overflow-hidden rounded-t-xl bg-surface shadow-lg ring-1 ring-[var(--color-border)] sm:max-h-full sm:h-full sm:w-96 sm:rounded-none sm:ring-0"
           onClick={(e) => e.stopPropagation()}
           style={{ animation: "slideup 0.22s ease-out" }}
         >
