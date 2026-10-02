@@ -17,6 +17,7 @@ import { humanizeSlug } from "@/lib/format";
 import {
   buildAlternates,
   buildJsonLdRestaurant,
+  serializeJsonLd,
   buildOgMetadata,
 } from "@/lib/seo";
 import type { LocaleCode } from "@/types/menu";
@@ -152,10 +153,13 @@ export default async function PublicMenuPage({ params, searchParams }: PageProps
       <>
         <script
           type="application/ld+json"
-          // The payload is JSON.stringify'd from a hand-built object —
-          // no user input flows into the script body. dangerouslySetInnerHTML
-          // is required because React escapes `<` / `>` in <script> children.
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+          // The graph embeds tenant-controlled text (business, category and
+          // item names; AI/PDF import and the demo template copy those in
+          // too), so it MUST go through serializeJsonLd(): plain
+          // JSON.stringify leaves "</script>" intact and would let a menu
+          // item name inject markup (stored XSS). dangerouslySetInnerHTML is
+          // required because React escapes `<` / `>` in <script> children.
+          dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
         />
         <MenuView
           payload={payload}
