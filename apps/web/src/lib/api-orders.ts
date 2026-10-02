@@ -110,7 +110,7 @@ export async function createOrder(
   payload: CreateOrderPayload,
 ): Promise<CreateOrderResponse> {
   const base = resolveBaseUrl();
-  const url = `${base}/api/v1/public/orders/`;
+  const url = `${base}/api/v1/public/orders`;
 
   let res: Response;
   try {
@@ -160,7 +160,7 @@ export async function fetchOrderStatus(
   const base = resolveBaseUrl();
   const url = `${base}/api/v1/public/orders/${encodeURIComponent(
     orderNumber,
-  )}/status/`;
+  )}/status`;
 
   let res: Response;
   try {
