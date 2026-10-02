@@ -30,6 +30,8 @@ from apps.account.services import (
     redeem_points,
 )
 from apps.account.tests.factories import (
+    customer_cookie_value,
+    customer_id_from_cookie,
     make_customer,
     make_earn_txn,
     make_loyalty_settings,
@@ -48,7 +50,7 @@ def _admin_login(client: APIClient, email: str) -> None:
 
 
 def _customer_login(client: APIClient, customer: Customer) -> None:
-    client.cookies["_auth_customer_id"] = str(customer.id)
+    client.cookies["_auth_customer_id"] = customer_cookie_value(customer)
 
 
 # ---------------------------------------------------------------------------
@@ -250,7 +252,7 @@ def test_cookie_is_httponly(no_throttle, api_client):
     )
     cookies = response.cookies
     matched = [
-        c for c in cookies.values() if c.value == str(customer.id)
+        c for c in cookies.values() if customer_id_from_cookie(c.value) == customer.id
     ]
     assert matched
     assert all(c["httponly"] for c in matched)
@@ -267,7 +269,7 @@ def test_cookie_secure_flag_in_prod(no_throttle, api_client):
     )
     matched = [
         c for c in response.cookies.values()
-        if c.value == str(customer.id)
+        if customer_id_from_cookie(c.value) == customer.id
     ]
     assert matched
     assert all(c["secure"] for c in matched)
@@ -284,7 +286,7 @@ def test_cookie_no_secure_in_local(api_client):
     )
     matched = [
         c for c in response.cookies.values()
-        if c.value == str(customer.id)
+        if customer_id_from_cookie(c.value) == customer.id
     ]
     assert matched
     assert not any(c["secure"] for c in matched)

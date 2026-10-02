@@ -107,6 +107,9 @@ SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"
+# End-customer session cookie (apps.account): never over plain HTTP. base.py
+# defaults this to False for local dev, which must not leak into production.
+AUTH_COOKIE_SECURE = True
 
 
 # ---------------------------------------------------------------------------

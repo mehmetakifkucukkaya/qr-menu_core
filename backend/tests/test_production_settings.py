@@ -94,6 +94,10 @@ class TestProductionSafetyRails:
         assert 'SESSION_COOKIE_SAMESITE = "Lax"' in src
         assert 'CSRF_COOKIE_SAMESITE = "Lax"' in src
 
+    def test_customer_session_cookie_is_secure(self):
+        """The end-customer cookie (apps.account) must be HTTPS-only in prod (F-07)."""
+        assert "AUTH_COOKIE_SECURE = True" in _read_source()
+
     def test_proxy_ssl_header(self):
         src = _read_source()
         assert "SECURE_PROXY_SSL_HEADER" in src

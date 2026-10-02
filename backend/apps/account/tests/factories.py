@@ -19,6 +19,9 @@ from datetime import timedelta
 from decimal import Decimal
 from typing import Optional
 
+from django.conf import settings
+from django.core import signing
+from django.http import HttpResponse
 from django.utils import timezone
 
 from apps.account.models import (
@@ -122,3 +125,33 @@ def make_redeem_txn(
         order=order,
         note=note,
     )
+
+
+# ---------------------------------------------------------------------------
+# Customer session cookie helpers (F-07: the cookie is signed, not the bare pk)
+# ---------------------------------------------------------------------------
+def customer_cookie_value(customer: Customer) -> str:
+    """Valid signed ``_auth_customer_id`` value, produced by production code.
+
+    Use this to put a customer "in a session" without going through the
+    magic-link round trip. Never put ``str(customer.pk)`` in the cookie: the
+    server rejects it.
+    """
+    from apps.account.views import _set_customer_cookie
+
+    response = HttpResponse()
+    _set_customer_cookie(response, customer)
+    return response.cookies[settings.AUTH_COOKIE_NAME].value
+
+
+def customer_id_from_cookie(raw: str) -> Optional[int]:
+    """Customer pk inside a signed cookie value, or ``None`` if it is invalid."""
+    from apps.account.views import CUSTOMER_COOKIE_SALT, customer_cookie_max_age
+
+    signer = signing.get_cookie_signer(
+        salt=settings.AUTH_COOKIE_NAME + CUSTOMER_COOKIE_SALT
+    )
+    try:
+        return int(signer.unsign(raw, max_age=customer_cookie_max_age()))
+    except (signing.BadSignature, ValueError):
+        return None

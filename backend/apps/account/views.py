@@ -28,12 +28,17 @@ Public-orders integration:
 
 Session model
 -------------
-The customer session is a plain unsigned cookie holding the
-customer's ``pk``. Validation is just ``Customer.objects.get(pk=…, is_active=True)``
-in :func:`get_current_customer`. Production deployments can flip
-``settings.AUTH_COOKIE_SECURE`` to gate HTTPS-only transport, and
-``settings.SESSION_COOKIE_HTTPONLY`` semantics are mirrored for our
-cookie (``HttpOnly=True`` is the default; we never expose it to JS).
+The customer session is a Django *signed, timestamped* cookie holding the
+customer's ``pk`` (``set_signed_cookie`` with a dedicated salt). The
+signature stops anyone from minting a session for a pk they merely
+guessed (pks are sequential), and the embedded timestamp makes the
+server enforce the lifetime instead of trusting the browser's
+``Max-Age``. :func:`get_current_customer` verifies the signature and then
+requires ``Customer.is_active``. Rotating ``SECRET_KEY`` invalidates every
+customer session. There is no server-side session table yet, so logout
+only clears the browser cookie. ``settings.AUTH_COOKIE_SECURE`` gates
+HTTPS-only transport (forced on in ``production.py``) and the cookie is
+``HttpOnly`` + ``SameSite=Lax``.
 CSRF is enforced through Django's standard middleware on the
 ``POST /auth/logout`` path; the ``POST /auth/request-link`` and
 ``GET /auth/verify`` paths are intentionally exempt (no auth + no
@@ -129,18 +134,31 @@ def _cookie_settings() -> dict:
     }
 
 
-def _set_customer_cookie(response: HttpResponse, customer: Customer) -> None:
-    """Stamp the ``_auth_customer_id`` cookie on ``response``.
+# Salt namespace for the customer session cookie. Django prefixes it with the
+# cookie name, so a value signed for any other purpose never validates here.
+CUSTOMER_COOKIE_SALT = "qrmenu.account.customer-session.v1"
 
-    Plain ``customer.pk`` — no signing (the cookie is HttpOnly +
-    SameSite=Lax + Secure(prod); see the spec note in the module
-    docstring). If a deployment needs server-side revocation it can
-    layer that on top by reading the value + checking ``is_active``.
+
+def customer_cookie_max_age() -> int:
+    """Lifetime (seconds) of the customer session, enforced server-side."""
+    return int(getattr(settings, "MAGIC_LINK_TTL_MINUTES", 15)) * 60 * 4
+
+
+def _set_customer_cookie(response: HttpResponse, customer: Customer) -> None:
+    """Stamp the signed ``_auth_customer_id`` cookie on ``response``.
+
+    The value is ``<pk>:<timestamp>:<signature>`` (Django's
+    ``TimestampSigner``), so it cannot be forged from a guessed pk and
+    stops validating after :func:`customer_cookie_max_age` seconds even
+    if the browser keeps sending it.
     """
-    response.set_cookie(
-        **_cookie_settings(),
-        value=str(customer.pk),
-        max_age=int(getattr(settings, "MAGIC_LINK_TTL_MINUTES", 15)) * 60 * 4,
+    params = _cookie_settings()
+    response.set_signed_cookie(
+        params.pop("key"),
+        str(customer.pk),
+        salt=CUSTOMER_COOKIE_SALT,
+        max_age=customer_cookie_max_age(),
+        **params,
     )
 
 
@@ -159,13 +177,19 @@ def _clear_customer_cookie(response: HttpResponse) -> None:
 def get_current_customer(request: Request) -> Optional[Customer]:
     """Read the customer cookie and return the matching Customer (active).
 
-    Returns ``None`` when the cookie is absent, malformed, or the row
-    is missing/inactive. Used by both view-level guards and helpers
-    (e.g. ``IsAuthenticatedCustomerDRF``). For the public orders endpoint
-    we use the same helper so checkout can attach the order to the
-    logged-in customer.
+    Returns ``None`` when the cookie is absent, unsigned, tampered with,
+    signed with a different salt, expired, or the row is missing/inactive.
+    Used by both view-level guards and helpers (e.g.
+    ``IsAuthenticatedCustomerDRF``). For the public orders endpoint we use
+    the same helper so checkout can attach the order to the logged-in
+    customer.
     """
-    raw = request.COOKIES.get(settings.AUTH_COOKIE_NAME)
+    raw = request.get_signed_cookie(
+        settings.AUTH_COOKIE_NAME,
+        default=None,
+        salt=CUSTOMER_COOKIE_SALT,
+        max_age=customer_cookie_max_age(),
+    )
     if not raw:
         return None
     try:
