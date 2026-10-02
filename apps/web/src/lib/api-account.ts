@@ -12,13 +12,14 @@
  *    cookie round-trip
  *  - `csrfToken` for unsafe methods
  *
- * The customer account session is a plain unsigned cookie
- * (`_auth_customer_id`) — distinct from the admin `qr_sessionid` so the
+ * The customer account session is a signed cookie
+ * (`_auth_customer_id`, opaque to the frontend) — distinct from the admin `qr_sessionid` so the
  * two sessions can coexist on the same browser without invalidating
  * each other. CSRF is enforced only on `POST /auth/logout`; the magic
  * link endpoints are exempt (D-025).
  */
 
+import { internalApiHeaders } from "@/lib/internal-api";
 import type {
   CustomerLoyaltySummary,
   CustomerOrderHistoryResult,
@@ -103,6 +104,7 @@ async function accountFetch<T>(
 
   const headers: Record<string, string> = {
     Accept: "application/json",
+    ...(internal ? internalApiHeaders() : {}),
     ...extraHeaders,
   };
   if (body !== undefined) headers["Content-Type"] = "application/json";

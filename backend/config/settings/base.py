@@ -340,6 +340,16 @@ BILLING_DEFAULT_PLAN = os.environ.get("BILLING_DEFAULT_PLAN", "ops")
 BILLING_LIMIT_GRACE_PCT = int(os.environ.get("BILLING_LIMIT_GRACE_PCT", "0"))
 
 # ---------------------------------------------------------------------------
+# Server-to-server trust (ANALYSIS_1 F-05)
+# ---------------------------------------------------------------------------
+# Shared secret the Next.js server sends as ``X-Internal-Token`` on its
+# server-side calls so they are not rate limited as one anonymous visitor.
+# Empty (default) disables the exemption. Set the same random value in the
+# backend and frontend environments (never NEXT_PUBLIC_*):
+#   python -c "import secrets; print(secrets.token_urlsafe(32))"
+INTERNAL_API_TOKEN = os.environ.get("INTERNAL_API_TOKEN", "")
+
+# ---------------------------------------------------------------------------
 # DRF
 # ---------------------------------------------------------------------------
 REST_FRAMEWORK = {
@@ -360,7 +370,9 @@ REST_FRAMEWORK = {
     # reasonable V1 default; Sprint 5A adds a stricter 30/min bucket on
     # /api/v1/public/events (PublicEventsThrottle.scope = "public_events").
     "DEFAULT_THROTTLE_CLASSES": [
-        "rest_framework.throttling.AnonRateThrottle",
+        # AnonRateThrottle + exemption for the trusted Next.js SSR caller
+        # (X-Internal-Token == INTERNAL_API_TOKEN). See apps/core/throttling.py.
+        "apps.core.throttling.InternalExemptAnonRateThrottle",
     ],
     "DEFAULT_THROTTLE_RATES": {
         "anon": "60/min",

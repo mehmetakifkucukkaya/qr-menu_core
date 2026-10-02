@@ -20,6 +20,7 @@
  * backoff, fall back to a safe-default `null`, or render a banner.
  */
 
+import { internalApiHeaders } from "@/lib/internal-api";
 import type {
   PublicEnvelope,
   PublicSettings,
@@ -118,6 +119,7 @@ export async function fetchPublicSettings(
 
   const headers: Record<string, string> = {
     Accept: "application/json",
+    ...(internal ? internalApiHeaders() : {}),
     ...extraHeaders,
   };
   if (cookieHeader) headers["Cookie"] = cookieHeader;

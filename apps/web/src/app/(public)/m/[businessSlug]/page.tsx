@@ -83,8 +83,20 @@ function resolveOrigin(): string {
  * admin pages are unaffected.
  *
  * Cache: `revalidate: 60` so plan flips propagate within a minute
- * without a full page reload. The public endpoint is throttled at
- * 60/min/IP — within that budget for a typical tenant traffic level.
+ * without a full page reload.
+ *
+ * Rate limiting (ANALYSIS_1 F-05): this server is the ONLY caller of the
+ * public endpoints for every page view, so a per-IP throttle on the backend
+ * would count all visitors of all businesses as one client. Server-side
+ * calls therefore send `INTERNAL_API_TOKEN` (see `lib/internal-api`), which
+ * the backend recognises and exempts, and the menu payload itself is served
+ * from a short in-process cache (`lib/api` `publicMenuCache`, default 10 s).
+ *
+ * Status codes: there is deliberately no route-level `loading.tsx` here. A
+ * Suspense boundary flushes a "200 OK" shell before the data is known, so a
+ * missing business or a backend failure reached the visitor (and monitoring,
+ * CDNs, crawlers) as HTTP 200 with an error UI. Without it `notFound()` is a
+ * real 404 and an uncaught failure a real 500.
  */
 export default async function PublicMenuPage({ params, searchParams }: PageProps) {
   const locale = resolveLocale(searchParams.locale);

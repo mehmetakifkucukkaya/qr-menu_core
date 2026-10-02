@@ -33,7 +33,7 @@ from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.permissions import SAFE_METHODS, AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
-from rest_framework.throttling import AnonRateThrottle
+from apps.core.throttling import InternalExemptAnonRateThrottle
 from rest_framework.views import APIView
 
 from apps.accounts.permissions import IsOrganizationMember, IsPlatformAdmin
@@ -245,8 +245,10 @@ class BillingResetUsageAdminView(APIView):
 # ---------------------------------------------------------------------------
 
 
-class PublicSettingsThrottle(AnonRateThrottle):
-    """60 req/min/IP — matches PublicMenuView throttle (Sprint 3)."""
+class PublicSettingsThrottle(InternalExemptAnonRateThrottle):
+    """60 req/min/IP — matches PublicMenuView throttle (Sprint 3).
+
+    The trusted Next.js SSR caller (``X-Internal-Token``) is exempt."""
 
     scope = "public_settings"
 

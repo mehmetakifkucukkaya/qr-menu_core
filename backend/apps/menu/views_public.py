@@ -26,7 +26,7 @@ from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
-from rest_framework.throttling import AnonRateThrottle
+from apps.core.throttling import InternalExemptAnonRateThrottle
 from rest_framework.views import APIView
 
 from apps.menu.services import get_active_menu, get_full_menu_payload
@@ -65,12 +65,13 @@ class PublicMenuView(APIView):
       published, but a payload is always returned).
     * ``404`` — business not found OR no active menu OR requested branch
       not found. The error envelope disambiguates via the ``code`` field.
-    * ``429`` — throttle exceeded (AnonRateThrottle, configured globally
-      in ``REST_FRAMEWORK`` settings).
+    * ``429`` — throttle exceeded (per client IP; the trusted Next.js SSR
+      caller sending ``X-Internal-Token`` is exempt, see
+      ``apps.core.throttling``).
     """
 
     permission_classes = [AllowAny]
-    throttle_classes = [AnonRateThrottle]
+    throttle_classes = [InternalExemptAnonRateThrottle]
 
     def get(self, request: Request, business_slug: str) -> Response:
         from apps.branches.models import Branch

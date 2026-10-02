@@ -86,6 +86,17 @@ if not CORS_ALLOWED_ORIGINS:
 # on every request.
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
+# DRF keys per-client throttles on REMOTE_ADDR, or on X-Forwarded-For when
+# present. With NUM_PROXIES unset it uses the WHOLE header value, so a client
+# can rotate the header and never hit a limit (ANALYSIS_1 F-05). Caddy is the
+# single trusted hop and appends the real client address, so DRF must use
+# exactly that last entry. Override with TRUSTED_PROXY_COUNT if the topology
+# changes (0 = ignore X-Forwarded-For entirely).
+REST_FRAMEWORK = {
+    **REST_FRAMEWORK,  # noqa: F405
+    "NUM_PROXIES": int(os.environ.get("TRUSTED_PROXY_COUNT", "1")),
+}
+
 # Redirect http → https unconditionally. Local-only debug runs use
 # ``DJANGO_DEBUG=1`` and proxy header preservation; in real prod this is on.
 SECURE_SSL_REDIRECT = True
