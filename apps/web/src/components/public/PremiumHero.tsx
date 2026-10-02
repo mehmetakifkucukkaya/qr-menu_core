@@ -71,40 +71,40 @@ export function PremiumHero({ business, theme }: BusinessHeroProps) {
       style={themeStyle}
       aria-labelledby="business-name"
     >
-      {/* ── Operational sub-header strip (Velouté desktop pattern) ── */}
+      {/* ── Operational sub-header strip (Velouté desktop pattern) ──
+       *  Mobile-first means the strip is *dense* on small screens:
+       *   • single line (no flex-wrap) until `md`
+       *   • address / saat pills collapse behind the cursor on mobile
+       *   • TR + masa chip stay visible (compact 36px pill) */}
       <div className="border-b border-[var(--color-border)] bg-[var(--color-surface-low)]">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-2 text-xs sm:px-6 sm:text-sm">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-            <span className="inline-flex items-center gap-1.5 font-semibold uppercase tracking-wider text-primary">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-2 text-xs sm:px-6 sm:text-sm">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="inline-flex shrink-0 items-center gap-1.5 font-semibold uppercase tracking-wider text-primary">
               <span
                 aria-hidden
                 className="inline-block h-2 w-2 animate-pulse rounded-full bg-secondary"
               />
               Servis Aktif
             </span>
-            <span className="hidden text-on-surface-variant sm:inline">
-              Her gün 08:30 – 23:00
+            <span className="hidden truncate text-on-surface-variant sm:inline">
+              08:30 – 23:00
             </span>
             {address ? (
-              <span className="hidden items-center gap-1 text-outline lg:inline-flex">
+              <span className="hidden items-center gap-1 truncate text-outline md:inline-flex">
                 <span aria-hidden>📍</span>
-                <span className="line-clamp-1">{address}</span>
+                <span className="truncate">{address}</span>
               </span>
             ) : null}
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* Currency display — single business currency, no switcher.
-             * Per brand spec (D-035) the QR-menu is a Turkish business
-             * product, so we always render TL. `currency` is still read
-             * from the API so a tenant that picked USD/EUR upstream is
-             * shown that code, but the user never sees a selector. */}
-            <div className="inline-flex items-center gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-primary shadow-sm">
+          <div className="flex shrink-0 items-center gap-1.5">
+            {/* Currency display — Turkish-first, no selector (D-035). */}
+            <div className="inline-flex h-7 items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-[10px] font-bold uppercase tracking-wider text-primary shadow-sm sm:h-8 sm:text-xs">
               <span aria-hidden>₺</span>
-              <span>Para Birimi · {currency}</span>
+              <span>{currency}</span>
             </div>
-            {/* Table context chip */}
-            <div className="hidden items-center gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-xs font-semibold text-primary shadow-sm sm:inline-flex">
+            {/* Table context chip — visible on sm+ to free up chrome on phones. */}
+            <div className="hidden h-7 items-center gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs font-semibold text-primary shadow-sm sm:inline-flex sm:h-8">
               <span aria-hidden>🪑</span>
               <span>Masa #08</span>
             </div>
@@ -147,19 +147,19 @@ export function PremiumHero({ business, theme }: BusinessHeroProps) {
           className="absolute inset-y-0 right-0 w-1/3 bg-gradient-to-l from-white/15 to-transparent"
         />
 
-        <div className="relative z-10 mx-auto flex max-w-6xl flex-col items-start gap-3 px-4 py-10 sm:px-6 md:py-14">
+        <div className="relative z-10 mx-auto flex max-w-6xl flex-col items-start gap-3 px-4 py-8 sm:px-6 sm:py-10 md:py-14">
           <span className="inline-flex items-center gap-1.5 rounded-pill border border-white/20 bg-white/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-primary-fixed backdrop-blur-md">
             <span aria-hidden>🍂</span>
             Sonbahar Menüsü
           </span>
-          <h2 className="max-w-xl font-heading text-2xl font-semibold leading-tight tracking-tight text-primary-foreground sm:text-3xl md:text-4xl">
+          <h2 className="max-w-xl font-heading text-xl font-semibold leading-tight tracking-tight text-primary-foreground sm:text-3xl md:text-4xl">
             Taş değirmen unları, ormandan toplanan kökler ve Galata ocağı.
           </h2>
           <p className="max-w-md text-sm leading-relaxed text-primary-fixed/80 sm:text-base">
             Her sabah 05:00&apos;te başlıyoruz — ekşi mayalı köy ekmeği, Bolu
             dağ köylerinin çalkalanmış tereyağı, kavrulmuş kahve.
           </p>
-          <div className="mt-1 flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-primary-fixed/70">
+          <div className="hidden items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-primary-fixed/70 sm:flex">
             <span>Executive Şef · Deniz Arda</span>
             <span aria-hidden>·</span>
             <span>Tek Kökenli Malzemeler</span>
@@ -179,14 +179,16 @@ export function PremiumHero({ business, theme }: BusinessHeroProps) {
         </div>
       </div>
 
-      {/* ── Title block + quick-action pill row ── */}
-      <div className="relative mx-auto max-w-6xl px-4 pt-5 pb-8 text-center sm:px-6 sm:pt-6 sm:pb-10">
+      {/* ── Title block + quick-action pill row ──
+       *  Mobile: title bumps to 2xl, description 2 lines, pills fill
+       *  the row edge-to-edge (gap-2 instead of centered). */}
+      <div className="relative mx-auto max-w-6xl px-4 pt-4 pb-6 text-center sm:px-6 sm:pt-6 sm:pb-10">
         <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-secondary">
           Bistro &amp; Pâtisserie
         </p>
         <h1
           id="business-name"
-          className="mt-2 font-heading text-3xl font-semibold tracking-tight text-primary sm:text-4xl md:text-5xl"
+          className="mt-2 font-heading text-2xl font-semibold tracking-tight text-primary sm:text-4xl md:text-5xl"
         >
           {business.name}
         </h1>
@@ -196,14 +198,14 @@ export function PremiumHero({ business, theme }: BusinessHeroProps) {
           </p>
         ) : null}
 
-        {/* Quick-action pill row (mobile-first, horizontal scroll on small screens) */}
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+        {/* Quick-action pill row — mobile full-width stack, sm+ inline */}
+        <div className="mt-5 grid grid-cols-1 gap-2 sm:mt-6 sm:flex sm:flex-wrap sm:items-center sm:justify-center sm:gap-2">
           {address ? (
             <a
               href={mapsUrl || "#"}
               target={mapsUrl ? "_blank" : undefined}
               rel={mapsUrl ? "noopener noreferrer" : undefined}
-              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-pill border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-xs font-medium text-text shadow-sm transition hover:bg-[var(--color-surface-low)] sm:text-sm"
+              className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-pill border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-sm font-medium text-text shadow-sm transition hover:bg-[var(--color-surface-low)] active:scale-[0.98]"
             >
               <span aria-hidden>📍</span>
               <span className="line-clamp-1">{address}</span>
@@ -212,7 +214,7 @@ export function PremiumHero({ business, theme }: BusinessHeroProps) {
           {phone ? (
             <a
               href={`tel:${phone.replace(/\s+/g, "")}`}
-              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-pill border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-xs font-medium text-text shadow-sm transition hover:bg-[var(--color-surface-low)] sm:text-sm"
+              className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-pill border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-sm font-medium text-text shadow-sm transition hover:bg-[var(--color-surface-low)] active:scale-[0.98]"
             >
               <span aria-hidden>📞</span>
               <span>Ara</span>
@@ -220,7 +222,7 @@ export function PremiumHero({ business, theme }: BusinessHeroProps) {
           ) : null}
           <a
             href="#contact"
-            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-pill border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-xs font-medium text-text shadow-sm transition hover:bg-[var(--color-surface-low)] sm:text-sm"
+            className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-pill border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-sm font-medium text-text shadow-sm transition hover:bg-[var(--color-surface-low)] active:scale-[0.98]"
           >
             <span aria-hidden>💬</span>
             <span>WhatsApp</span>
