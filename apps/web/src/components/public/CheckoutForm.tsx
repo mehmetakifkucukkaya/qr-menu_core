@@ -7,8 +7,6 @@ import { useCartStore } from "@/lib/cart-store";
 import { createOrder, OrdersApiError } from "@/lib/api-orders";
 import { formatPrice } from "@/lib/format";
 import { useFeatureFlag } from "@/lib/feature-flags";
-import { UpgradeBanner } from "@/components/billing/UpgradeBanner";
-import { useFeatureFlags } from "@/lib/feature-flags";
 import { LoyaltyRedemptionCheckbox } from "@/app/(public)/account/_components/LoyaltyRedemptionCheckbox";
 import type { PublicLoyaltySettings } from "@/types/account";
 
@@ -70,7 +68,6 @@ export function CheckoutForm({
   // The flag is read through the provider mounted by MenuViewClient;
   // CheckoutForm must be rendered inside that subtree.
   const paymentsEnabled = useFeatureFlag("payments_enabled");
-  const settings = useFeatureFlags();
   /** Sprint B3b — cash-only confirmation. The customer must tick this
    *  before submitting an order on a tenant without payments_enabled —
    *  keeps the legal acknowledgement explicit and prevents accidental
@@ -226,19 +223,14 @@ export function CheckoutForm({
 
         <div className="flex-1 overflow-y-auto px-4 py-4">
           {/* Sprint B3b — payment feature flag. When payments_enabled
-              is off, surface the UpgradeBanner (Sprint 12A Card +
-              IconButton — inline variant) + a "cash-only" confirmation
-              box. With payments on, this section renders nothing and
-              the order flow proceeds as before; the Sprint 11A payment
+              is off, show the "cash-only" confirmation box. (The
+              owner-facing "upgrade your plan" banner used to render
+              here too; customers must never see it - ANALYSIS_1 F-15.)
+              With payments on, this section renders nothing and the
+              order flow proceeds as before; the Sprint 11A payment
               step (when it lands) owns the rest of the payment UX. */}
           {!paymentsEnabled ? (
             <div className="mb-4 space-y-3">
-              <UpgradeBanner
-                feature="payments_enabled"
-                targetPlan="ops"
-                settings={settings}
-                variant="inline"
-              />
               <label
                 className="flex cursor-pointer items-start gap-3 rounded-lg border border-amber-200 bg-amber-50/70 p-3 text-sm text-amber-900 transition hover:bg-amber-100/70 focus-within:ring-2 focus-within:ring-amber-600 motion-reduce:transition-none dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-100 dark:hover:bg-amber-950/60"
               >

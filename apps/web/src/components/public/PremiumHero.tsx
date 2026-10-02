@@ -10,19 +10,19 @@ interface BusinessHeroProps {
  * PremiumHero — Velouté Hospitality Suite editorial hero (D-035 / Sprint G).
  *
  * Layout (top → bottom):
- *   1. Operational sub-header strip — "Bistro Service Live" pulse, address,
- *      currency switcher (₺/€/$), table context, Reserve CTA. Warm
+ *   1. Sub-header strip — the business address and currency chip. Warm
  *      surface-container-low band, hairline bottom border.
- *   2. Editorial cover banner — full-width forest-green panel with the
- *      brand philosophy tagline. Subtle radial glow + bottom-right wash.
+ *   2. Editorial cover banner — full-width forest-green panel (the tenant's
+ *      cover image when uploaded). Subtle radial glow + bottom-right wash.
  *   3. Logo overlay — square monogram, ring-8 surface ring, hangs off
  *      the cover bottom edge.
- *   4. Title block — Playfair Display name, terracotta tagline,
- *      description, quick-action pill row (address / call / whatsapp).
+ *   4. Title block — Playfair Display name, description, quick-action pill
+ *      row (address / call / whatsapp).
  *
- * Sub-header mirrors the desktop design's "Live Dish Search" sidebar
- * affordance: the customer always knows whether the kitchen is open
- * before they commit to a scan.
+ * Everything rendered here comes from the tenant's own data. The design
+ * mock's copy ("Servis Aktif", opening hours, "Masa #08", "Sonbahar
+ * Menüsü", a chef's name, "Bistro & Pâtisserie") used to be hard-coded and
+ * showed up on every business's public page (ANALYSIS_1 F-13).
  *
  * Per-business theme overrides flow through `--color-*` CSS variables
  * on the wrapper, so a tenant that picks terracotta will see that
@@ -71,24 +71,13 @@ export function PremiumHero({ business, theme }: BusinessHeroProps) {
       style={themeStyle}
       aria-labelledby="business-name"
     >
-      {/* ── Operational sub-header strip (Velouté desktop pattern) ──
+      {/* ── Sub-header strip (Velouté desktop pattern) ──
        *  Mobile-first means the strip is *dense* on small screens:
-       *   • single line (no flex-wrap) until `md`
-       *   • address / saat pills collapse behind the cursor on mobile
-       *   • TR + masa chip stay visible (compact 36px pill) */}
+       *   • single line (no flex-wrap)
+       *   • the address collapses below `md`; the currency chip stays */}
       <div className="border-b border-[var(--color-border)] bg-[var(--color-surface-low)]">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-2 text-xs sm:px-6 sm:text-sm">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="inline-flex shrink-0 items-center gap-1.5 font-semibold uppercase tracking-wider text-primary">
-              <span
-                aria-hidden
-                className="inline-block h-2 w-2 animate-pulse rounded-full bg-secondary"
-              />
-              Servis Aktif
-            </span>
-            <span className="hidden truncate text-on-surface-variant sm:inline">
-              08:30 – 23:00
-            </span>
             {address ? (
               <span className="hidden items-center gap-1 truncate text-outline md:inline-flex">
                 <span aria-hidden>📍</span>
@@ -102,11 +91,6 @@ export function PremiumHero({ business, theme }: BusinessHeroProps) {
             <div className="inline-flex h-7 items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-[10px] font-bold uppercase tracking-wider text-primary shadow-sm sm:h-8 sm:text-xs">
               <span aria-hidden>₺</span>
               <span>{currency}</span>
-            </div>
-            {/* Table context chip — visible on sm+ to free up chrome on phones. */}
-            <div className="hidden h-7 items-center gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs font-semibold text-primary shadow-sm sm:inline-flex sm:h-8">
-              <span aria-hidden>🪑</span>
-              <span>Masa #08</span>
             </div>
           </div>
         </div>
@@ -147,24 +131,9 @@ export function PremiumHero({ business, theme }: BusinessHeroProps) {
           className="absolute inset-y-0 right-0 w-1/3 bg-gradient-to-l from-white/15 to-transparent"
         />
 
-        <div className="relative z-10 mx-auto flex max-w-6xl flex-col items-start gap-3 px-4 py-8 sm:px-6 sm:py-10 md:py-14">
-          <span className="inline-flex items-center gap-1.5 rounded-pill border border-white/20 bg-white/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-primary-fixed backdrop-blur-md">
-            <span aria-hidden>🍂</span>
-            Sonbahar Menüsü
-          </span>
-          <h2 className="max-w-xl font-heading text-xl font-semibold leading-tight tracking-tight text-primary-foreground sm:text-3xl md:text-4xl">
-            Taş değirmen unları, ormandan toplanan kökler ve Galata ocağı.
-          </h2>
-          <p className="max-w-md text-sm leading-relaxed text-primary-fixed/80 sm:text-base">
-            Her sabah 05:00&apos;te başlıyoruz — ekşi mayalı köy ekmeği, Bolu
-            dağ köylerinin çalkalanmış tereyağı, kavrulmuş kahve.
-          </p>
-          <div className="hidden items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-primary-fixed/70 sm:flex">
-            <span>Executive Şef · Deniz Arda</span>
-            <span aria-hidden>·</span>
-            <span>Tek Kökenli Malzemeler</span>
-          </div>
-        </div>
+        {/* Decorative band only: it fixes the cover height so the logo
+         *  overlay below hangs off a stable edge. No copy lives here. */}
+        <div aria-hidden className="relative z-10 h-24 sm:h-32 md:h-40" />
       </div>
 
       {/* ── Logo overlay — hangs off cover bottom edge ── */}
@@ -183,12 +152,9 @@ export function PremiumHero({ business, theme }: BusinessHeroProps) {
        *  Mobile: title bumps to 2xl, description 2 lines, pills fill
        *  the row edge-to-edge (gap-2 instead of centered). */}
       <div className="relative mx-auto max-w-6xl px-4 pt-4 pb-6 text-center sm:px-6 sm:pt-6 sm:pb-10">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-secondary">
-          Bistro &amp; Pâtisserie
-        </p>
         <h1
           id="business-name"
-          className="mt-2 font-heading text-2xl font-semibold tracking-tight text-primary sm:text-4xl md:text-5xl"
+          className="font-heading text-2xl font-semibold tracking-tight text-primary sm:text-4xl md:text-5xl"
         >
           {business.name}
         </h1>
