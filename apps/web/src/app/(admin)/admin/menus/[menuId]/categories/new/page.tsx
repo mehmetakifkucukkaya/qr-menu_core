@@ -110,9 +110,6 @@ export default async function NewCategoryPage({ params }: PageProps) {
           menu={menu}
           parentOptions={parents}
           csrfToken={csrfToken}
-          onSaved={(category) => {
-            redirect(`/admin/menus/${menu.id}/categories/${category.id}/items`);
-          }}
         />
       </div>
     </div>

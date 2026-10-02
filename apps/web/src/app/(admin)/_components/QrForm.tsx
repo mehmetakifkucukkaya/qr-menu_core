@@ -28,12 +28,6 @@ interface QrFormProps {
   branches: Branch[];
   /** CSRF token (admin PATCH/POST requires X-CSRFToken). */
   csrfToken: string | null;
-  /**
-   * Called after a successful save.
-   * - mode=create → push to detail page (created QR's id is in the result).
-   * - mode=edit   → push to detail page.
-   */
-  onSaved: (qr: AdminQRCode) => void;
 }
 
 /**
@@ -58,7 +52,6 @@ export function QrForm({
   menus,
   branches,
   csrfToken,
-  onSaved,
 }: QrFormProps) {
   const router = useRouter();
   const isEdit = Boolean(qr);
@@ -104,8 +97,9 @@ export function QrForm({
           table_number: tableNumber.trim(),
           is_active: isActive,
         };
-        const updated = await updateQRCode(qr.id, payload, { csrfToken });
-        onSaved(updated);
+        await updateQRCode(qr.id, payload, { csrfToken });
+        router.push(`/admin/qr-codes/${qr.id}`);
+        router.refresh();
       } else {
         const payload: CreateQRPayload = {
           organization_id: organization.id,
@@ -117,9 +111,9 @@ export function QrForm({
           is_active: isActive,
         };
         const created = await createQRCode(payload, { csrfToken });
-        onSaved(created);
         // Push to detail so the operator sees the freshly-rendered PNG.
         router.push(`/admin/qr-codes/${created.id}`);
+        router.refresh();
       }
     } catch (err) {
       const msg =

@@ -125,9 +125,6 @@ export default async function EditItemPage({ params }: PageProps) {
             allergens={allergens}
             dietaryTags={dietaryTags}
             csrfToken={csrfToken}
-            onSaved={() => {
-              redirect(`/admin/menus/${menu.id}/categories/${category.id}/items`);
-            }}
           />
         </div>
       ) : (

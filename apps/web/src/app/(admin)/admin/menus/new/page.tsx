@@ -93,15 +93,7 @@ export default async function NewMenuPage() {
         />
       ) : organization ? (
         <div className="rounded-xl border border-border bg-surface p-6 shadow-sm">
-          <MenuForm
-            organization={organization}
-            csrfToken={csrfToken}
-            onSaved={(menu) => {
-              // Server-rendered redirect: we navigate the client to the
-              // detail page so the operator can start adding categories.
-              redirect(`/admin/menus/${menu.id}`);
-            }}
-          />
+          <MenuForm organization={organization} csrfToken={csrfToken} />
         </div>
       ) : null}
     </div>

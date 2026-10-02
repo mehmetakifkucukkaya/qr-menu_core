@@ -119,13 +119,6 @@ export default async function NewQRCodePage() {
             menus={menus}
             branches={branches}
             csrfToken={csrfToken}
-            onSaved={() => {
-              // QrForm routes the user to /admin/qr-codes/{id} on success.
-              // This callback is only invoked when an edit-mode form fires,
-              // which shouldn't happen here (create page) — keep it as a
-              // safety net redirect.
-              redirect("/admin/qr-codes");
-            }}
           />
         </div>
       ) : null}

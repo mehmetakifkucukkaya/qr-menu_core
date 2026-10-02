@@ -30,8 +30,6 @@ interface MenuFormProps {
   organization: Organization;
   /** CSRF token from the cookie (admin PATCH/POST requires it). */
   csrfToken: string | null;
-  /** Called after a successful save — typically `router.push(detail)`. */
-  onSaved: (menu: AdminMenu) => void;
 }
 
 /**
@@ -45,7 +43,7 @@ interface MenuFormProps {
  * from the name (D-012). We still expose it so the operator can pin a
  * stable URL (e.g. for marketing QR codes).
  */
-export function MenuForm({ menu, organization, csrfToken, onSaved }: MenuFormProps) {
+export function MenuForm({ menu, organization, csrfToken }: MenuFormProps) {
   const router = useRouter();
   const isEdit = Boolean(menu);
 
@@ -99,8 +97,9 @@ export function MenuForm({ menu, organization, csrfToken, onSaved }: MenuFormPro
           supported_locales: supportedLocales,
           is_active: isActive,
         };
-        const updated = await updateMenu(menu.id, payload, { csrfToken });
-        onSaved(updated);
+        await updateMenu(menu.id, payload, { csrfToken });
+        router.push(`/admin/menus/${menu.id}`);
+        router.refresh();
       } else {
         const payload: CreateMenuPayload = {
           organization_id: organization.id,
@@ -112,7 +111,8 @@ export function MenuForm({ menu, organization, csrfToken, onSaved }: MenuFormPro
           is_active: isActive,
         };
         const created = await createMenu(payload, { csrfToken });
-        onSaved(created);
+        router.push(`/admin/menus/${created.id}`);
+        router.refresh();
       }
     } catch (err) {
       const msg =

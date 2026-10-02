@@ -106,9 +106,6 @@ export default async function EditMenuPage({ params }: PageProps) {
             menu={menu}
             organization={organization}
             csrfToken={csrfToken}
-            onSaved={() => {
-              redirect(`/admin/menus/${menu.id}`);
-            }}
           />
         </div>
       ) : (
