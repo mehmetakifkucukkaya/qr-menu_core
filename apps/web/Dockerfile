@@ -24,7 +24,20 @@ RUN --mount=type=cache,target=/root/.npm \
 
 FROM node:20-bookworm-slim AS builder
 WORKDIR /app
-ENV NEXT_TELEMETRY_DISCH=1 \
+# Next.js inlines NEXT_PUBLIC_* values into the JavaScript at BUILD time, so they
+# must arrive as build args (docker-compose.production.yml `build.args`). Setting
+# them only in the runtime environment leaves the browser bundle calling
+# http://localhost:8000 and canonical/OG URLs pointing at localhost (F-03b).
+# Empty defaults keep a plain `docker build` working for local use.
+ARG NEXT_PUBLIC_API_BASE_URL=""
+ARG NEXT_PUBLIC_BASE_URL=""
+ARG NEXT_PUBLIC_DEFAULT_LOCALE="tr"
+ARG NEXT_PUBLIC_SUPPORTED_LOCALES="tr,en"
+ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL \
+    NEXT_PUBLIC_BASE_URL=$NEXT_PUBLIC_BASE_URL \
+    NEXT_PUBLIC_DEFAULT_LOCALE=$NEXT_PUBLIC_DEFAULT_LOCALE \
+    NEXT_PUBLIC_SUPPORTED_LOCALES=$NEXT_PUBLIC_SUPPORTED_LOCALES \
+    NEXT_TELEMETRY_DISABLED=1 \
     NODE_ENV=production
 # Reuse node_modules from the deps stage.
 COPY --from=deps /app/node_modules ./node_modules
@@ -35,7 +48,7 @@ RUN npm run build
 FROM node:20-bookworm-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production \
-    NEXT_TELEMETRY_DISCH=1 \
+    NEXT_TELEMETRY_DISABLED=1 \
     PORT=3000 \
     HOSTNAME=0.0.0.0
 

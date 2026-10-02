@@ -12,7 +12,7 @@
 # Exit codes:
 #   0 — all checks passed
 #   1 — one or more required variables missing
-#   2 — DJANGO_SECRET_KEY too short
+#   2 — a secret is too short / malformed, or PUBLIC_BASE_URL points at localhost
 #   3 — file not found
 #
 # Idempotent — safe to run as a pre-deploy hook or in CI.
@@ -41,6 +41,11 @@ required_vars=(
     "NEXT_PUBLIC_API_BASE_URL"
     "INTERNAL_API_BASE_URL"
     "DOMAIN"
+    # Without these the backend refuses to start (or, for the token, every
+    # visitor shares one rate-limit bucket): see config/settings/production.py.
+    "PUBLIC_BASE_URL"
+    "PAYMENT_FERNET_KEY"
+    "INTERNAL_API_TOKEN"
 )
 
 missing=0
@@ -95,6 +100,39 @@ if [[ $salt_len -lt 32 ]]; then
     exit 2
 fi
 
+# INTERNAL_API_TOKEN is the shared secret between the Next.js server and the
+# backend (rate-limit exemption for server-side calls): 32+ characters.
+tok_len=$(grep -E "^INTERNAL_API_TOKEN=" "$ENV_FILE" | cut -d= -f2- | tr -d '\n' | wc -c | tr -d ' ')
+if [[ $tok_len -lt 32 ]]; then
+    echo ""
+    echo "❌ INTERNAL_API_TOKEN must be at least 32 characters (got $tok_len)."
+    echo "   Generate with:"
+    echo "     python -c \"import secrets; print(secrets.token_urlsafe(32))\""
+    exit 2
+fi
+
+# PAYMENT_FERNET_KEY is a urlsafe-base64 Fernet key: exactly 44 characters.
+fernet_len=$(grep -E "^PAYMENT_FERNET_KEY=" "$ENV_FILE" | cut -d= -f2- | tr -d '\n' | wc -c | tr -d ' ')
+if [[ $fernet_len -ne 44 ]]; then
+    echo ""
+    echo "❌ PAYMENT_FERNET_KEY must be a 44-character Fernet key (got $fernet_len)."
+    echo "   Generate with:"
+    echo "     python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
+    exit 2
+fi
+
+# PUBLIC_BASE_URL is printed into every QR code - it must be the public origin.
+public_url=$(grep -E "^PUBLIC_BASE_URL=" "$ENV_FILE" | cut -d= -f2-)
+if [[ "$public_url" == *localhost* || "$public_url" == *127.0.0.1* ]]; then
+    echo ""
+    echo "❌ PUBLIC_BASE_URL ($public_url) points at localhost - printed QR codes would too."
+    exit 2
+fi
+if [[ "$public_url" != https://* ]]; then
+    echo ""
+    echo "⚠️  PUBLIC_BASE_URL is not https:// - QR codes should open the secure site."
+fi
+
 # --- 4. CORS / HTTPS sanity -------------------------------------------------
 # CORS_ALLOWED_ORIGINS must use https:// in production. Allow http://localhost
 # for the rare local-smoke scenario.
@@ -116,4 +154,7 @@ fi
 # --- 6. Success -------------------------------------------------------------
 echo ""
 echo "✅ All required variables present and strong."
-echo "   Safe to run: docker compose -f docker-compose.production.yml up -d --build"
+echo "   Safe to run:"
+echo "     docker compose --env-file .env.production -f docker-compose.production.yml up -d --build"
+echo "   (--env-file is required: Compose reads .env, not .env.production, for the"
+echo "    \${VAR} values used as build args.)"

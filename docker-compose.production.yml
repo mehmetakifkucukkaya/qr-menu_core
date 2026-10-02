@@ -5,14 +5,20 @@
 #
 #   cp .env.production.example .env.production
 #   # edit .env.production — fill DJANGO_SECRET_KEY, DOMAIN, POSTGRES_PASSWORD,
-#   # Caddy DOMAIN/EMAIL, NEXT_PUBLIC_API_BASE_URL.
-#   docker compose -f docker-compose.production.yml pull
-#   docker compose -f docker-compose.production.yml up -d --build
-#   docker compose -f docker-compose.production.yml exec backend \
+#   # PUBLIC_BASE_URL, INTERNAL_API_TOKEN, PAYMENT_FERNET_KEY, NEXT_PUBLIC_API_BASE_URL.
+#   bash scripts/validate_prod_env.sh
+#   docker compose --env-file .env.production -f docker-compose.production.yml pull
+#   docker compose --env-file .env.production -f docker-compose.production.yml up -d --build
+#   docker compose --env-file .env.production -f docker-compose.production.yml exec backend \
 #       python manage.py createsuperuser
-#   docker compose -f docker-compose.production.yml exec backend \
-#       python manage.py seed_demo
 #   curl https://${DOMAIN}/health
+#
+# ALWAYS pass `--env-file .env.production`. `env_file:` below only feeds the
+# containers' runtime environment; the `${VAR}` placeholders in THIS file
+# (build args, the frontend's environment) are interpolated by Compose itself,
+# which reads `.env` - not `.env.production` - unless told otherwise. Without
+# the flag they came out empty and the browser bundle was built pointing at
+# http://localhost:8000. Required ones now fail loudly instead.
 #
 # Differences from docker-compose.yml (local):
 #   - No host port mappings — Caddy publishes 80/443 only.
@@ -30,16 +36,16 @@ services:
     image: postgres:16-alpine
     container_name: qrmenu-prod-postgres
     restart: unless-stopped
+    # POSTGRES_DB / POSTGRES_USER / POSTGRES_PASSWORD reach the container from
+    # this file directly; repeating them under `environment:` as ${...} only
+    # added a second, `.env`-dependent source for the same values.
     env_file: .env.production
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - pgdata:/var/lib/postgresql/data
     # No host port mapping — backend talks to it over the docker network.
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      # `$$` defers expansion to the container's own environment.
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -76,14 +82,28 @@ services:
     build:
       context: ./apps/web
       dockerfile: Dockerfile
+      # NEXT_PUBLIC_* values are inlined into the JavaScript at BUILD time, so
+      # they have to be build args - setting them only in `environment:` (as
+      # this file used to) left the browser bundle calling
+      # http://localhost:8000 for analytics, orders, customer accounts and
+      # uploads (ANALYSIS_1 F-03b). NEXT_PUBLIC_BASE_URL feeds the canonical /
+      # hreflang / Open Graph URLs.
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:?set NEXT_PUBLIC_API_BASE_URL in .env.production and pass --env-file .env.production}
+        NEXT_PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?set PUBLIC_BASE_URL in .env.production and pass --env-file .env.production}
+        NEXT_PUBLIC_DEFAULT_LOCALE: ${NEXT_PUBLIC_DEFAULT_LOCALE:-tr}
+        NEXT_PUBLIC_SUPPORTED_LOCALES: ${NEXT_PUBLIC_SUPPORTED_LOCALES:-tr,en}
     container_name: qrmenu-prod-frontend
     restart: unless-stopped
+    # Runtime-only values (read per request by the server, never inlined).
     environment:
-      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
-      INTERNAL_API_BASE_URL: ${INTERNAL_API_BASE_URL}
-      NEXT_PUBLIC_DEFAULT_LOCALE: ${NEXT_PUBLIC_DEFAULT_LOCALE:-tr}
-      NEXT_PUBLIC_SUPPORTED_LOCALES: ${NEXT_PUBLIC_SUPPORTED_LOCALES:-tr,en}
-      # Tell Next.js standalone server it's behind https (for redirect URLs).
+      INTERNAL_API_BASE_URL: ${INTERNAL_API_BASE_URL:?set INTERNAL_API_BASE_URL in .env.production and pass --env-file .env.production}
+      # Shared secret that lets this server's calls skip the backend's
+      # per-visitor rate limit (backend apps/core/throttling.py). Must equal
+      # the backend's INTERNAL_API_TOKEN (same .env.production).
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?set INTERNAL_API_TOKEN in .env.production and pass --env-file .env.production}
+      # Seconds a public menu is cached in the Next process (0 = off).
+      PUBLIC_MENU_CACHE_TTL_SECONDS: ${PUBLIC_MENU_CACHE_TTL_SECONDS:-10}
       NODE_ENV: production
     depends_on:
       - backend
@@ -104,6 +124,10 @@ services:
       - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Served directly by Caddy (see the Caddyfile): the same named volumes
+      # the backend writes uploads / collectstatic output to, read-only here.
+      - backend-media:/srv/media:ro
+      - backend-static:/srv/static:ro
       - caddy-data:/data
       - caddy-config:/config
     depends_on:
