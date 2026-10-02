@@ -149,9 +149,10 @@ export function MenuViewClient({
         settings={publicSettings}
       />
 
-      {/* Sticky top bar */}
-      <header className="sticky top-0 z-30 border-b border-[var(--color-border)] bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2.5 sm:px-6">
+      {/* Sticky top bar — mobile-first: 48px chrome, account chip hidden
+       *  on phones (moved to AccountHeaderChip's mobile sheet) */}
+      <header className="sticky safe-top top-0 z-30 border-b border-[var(--color-border)] bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70">
+        <div className="mx-auto flex h-12 max-w-6xl items-center justify-between gap-2 px-3 sm:h-14 sm:gap-3 sm:px-4 md:px-6">
           <div className="flex min-w-0 items-center gap-2">
             {business.logo ? (
               /* eslint-disable-next-line @next/next/no-img-element */
@@ -159,12 +160,12 @@ export function MenuViewClient({
                 src={business.logo}
                 alt=""
                 aria-hidden="true"
-                className="h-8 w-8 shrink-0 rounded-md bg-surface object-cover ring-1 ring-[var(--color-border)]"
+                className="h-7 w-7 shrink-0 rounded-md bg-surface object-cover ring-1 ring-[var(--color-border)] sm:h-8 sm:w-8"
               />
             ) : (
               <span
                 aria-hidden
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary text-xs font-bold text-primary-foreground"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary text-xs font-bold text-primary-foreground sm:h-8 sm:w-8"
               >
                 {business.name.charAt(0).toUpperCase()}
               </span>
@@ -176,12 +177,14 @@ export function MenuViewClient({
               {business.name}
             </span>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             <LocaleSelector current={locale} />
-            <AccountHeaderChip
-              initialProfile={headerInitial}
-              initialLoyaltyBalance={headerLoyaltyBalance}
-            />
+            <div className="hidden sm:block">
+              <AccountHeaderChip
+                initialProfile={headerInitial}
+                initialLoyaltyBalance={headerLoyaltyBalance}
+              />
+            </div>
             <HeaderCartIcon />
           </div>
         </div>
@@ -567,7 +570,7 @@ function CartFab({ count, onClick }: { count: number; onClick: () => void }) {
       type="button"
       onClick={onClick}
       aria-label={`Sepetim — ${count} ürün`}
-      className="fixed bottom-6 right-4 z-30 inline-flex items-center gap-2 rounded-pill bg-primary px-4 py-3 text-sm font-bold uppercase tracking-wider text-primary-foreground shadow-floating transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 sm:hidden"
+      className="safe-bottom-fixed fixed right-3 z-30 inline-flex h-12 items-center gap-2 rounded-pill bg-primary px-4 text-sm font-bold uppercase tracking-wider text-primary-foreground shadow-floating transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 active:scale-[0.98] sm:hidden"
     >
       <span aria-hidden>🛒</span>
       Sepetim · {count}
