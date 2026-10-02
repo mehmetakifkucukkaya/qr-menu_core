@@ -265,3 +265,104 @@
 - Velouté elevation shadow seed: forest rgba (warm tint), Modern Cafe'nin dark espresso seed'inden farklı — sayfa daha "paper-like" hissediyor
 - D-035 rapor bu sprint kapanışı. V2'de planlanacak: Form Inputs search component (Focus state 1.5px forest border + offset outline), Chip & Badge system (Vegan/GF/Spicy/Popular pill palette), Modal system (Wine Selector / Bill Bar)
 
+
+# D-036 — Mobile-First Responsive Pattern (Sprint I)
+
+**Tarih:** 2026-10-02 (gündüz Sprint, User feedback)
+
+**Bağlam:** User "mobil öncelikli olsun. mobil düzeni sorunsuz ve optimum seviyede olmalı. her telefon ekranında uyumlu responsive bir yapıda olmalı." — QR menü müşterilerin %70+ telefondan okutuyor, Sprint G Velouté redesign desktop 3-col grid getirdi ama mobile deneyimi unuttu.
+
+**Mevcut durum (Sprint G öncesi):**
+- Sprint 12A: tailwind mobile-first, badge tr avatar 24px, button 36-40px
+- Sprint F: PremiumHero cover banner py-10 default (aşırı büyük mobile'da)
+- Sprint G: 3-col desktop grid (mobile'da `hidden lg:flex` ile gizli), CartFab `bottom-6 right-4`
+- Sorunlar:
+  - Sub-header 3 satıra wrap oluyor iPhone SE'de (375px)
+  - Cover banner gereksiz büyük padding
+  - ItemCard görsel 40 + text 18 + button 44 = ~140px, scroll şişman
+  - Qty ± stepper 36px (Apple HIG 44 altı)
+  - Drawer `max-h-90vh` — iOS Safari URL bar collapse ile clipping
+  - Sticky header padding `py-2.5` çok büyük
+  - Quick-action pills centered grid, telefonda dar
+
+**Hedef:** 320px-414px viewport aralığında (iPhone SE → iPhone Plus) optimum:
+- Single line sub-header
+- Compact cover banner (py-8)
+- Sticky chrome 48px (header) + 36px (pill nav) = 84px (önceden ~110px)
+- 44px tüm tap target (Apple HIG / Material Design 48 hedefi, 44 minimum)
+- safe-area-inset-bottom padding (iPhone home indicator)
+- 16px minimum font (Safari auto-zoom engelleme)
+- dvh (dynamic viewport height) drawer
+
+**Alınan kararlar:**
+
+**Karar 1: safe-area-inset-* utilities global.css'e**
+- `.safe-bottom` — padding-bottom: max(env(safe-area-inset-bottom), 0.5rem)
+- `.safe-top` — padding-top: max(env(safe-area-inset-top), 0.5rem)
+- `.safe-bottom-fixed` — bottom: max(env(safe-area-inset-bottom), 0.75rem)
+- `.no-zoom` — font-size: max(1rem, 16px) (Safari input focus zoom engelleme)
+- Viewport meta: userScalable=true (kullanıcı isterse zoom), maximumScale=5, colorScheme light/dark
+
+**Karar 2: Sub-header dense (mobile-first)**
+- Önce: 3 satır (Servis Aktif + saat + adres, sağda TR/EUR/USD + masa chip)
+- Şimdi: 1 satır telefonlarda — Servis Aktif + TR + [masa chip md+]
+- Adres + saat pill'leri md+ otete geçti (lg breakpoint'te inline)
+- TR pill h-7 sm:h-8, font 10px sm:text-xs
+
+**Karar 3: Cover banner kompakt mobile**
+- py-14 → py-8 mobile, sm+:py-10 sm+:md:py-14
+- H2 text-xl sm:text-3xl md:text-4xl (xl yeterli telefonda)
+- Şef meta satırı hidden < sm (display chat'i kesmek için)
+
+**Karar 4: Quick-action pills stack → grid**
+- Mobile: grid-cols-1 (full-width dikey, adres-ara-whatsapp üst üste)
+- sm+: flex-wrap inline (yatay centered)
+- active:scale-[0.98] thumb feedback
+
+**Karar 5: ItemCard compact mobile**
+- h-40 → sm:h-40 (mobile'da 28 = 7rem hero image)
+- Body padding p-4 → p-3 sm:p-4
+- Title lg → text-base sm:text-xl (16px mobile)
+- Price base → text-sm sm:text-lg
+- Add button: h-11 (44px), ml-auto (sağa dayal)
+- Qty ± stepper: 9 → 11 (44px tap)
+- Tarif Kökeni hint hidden < sm
+
+**Karar 6: Sticky chrome optimization**
+- Header: h-12 sm:h-14 (önce p-y dense)
+- AccountHeaderChip hidden < sm (mobile sheet task V1.5)
+- LocaleSelector + HeaderCartIcon phones'ta görünür kal
+
+**Karar 7: CategoryNav compact**
+- top-12 sm:top-14 (sticky header'ın altına)
+- py-2 sm:py-3
+- Chip min-h-36 sm:min-h-44, px-3 sm:px-4, text-xs sm:text-sm
+- IntersectionObserver rootMargin: -88px sm+, -48px mobile (sticky chrome yüksekliği)
+
+**Karar 8: Drawer safe-area + dynamic viewport**
+- max-h-[92dvh] ItemDetailDrawer (önceden 90vh)
+- max-h-[90dvh] CartDrawer (önceden 85vh)
+- safe-bottom utility (iPhone home indicator)
+- dvh: Safari URL bar collapse ile doğru viewport yüksekliği
+
+**Karar 9: CartFab safe-area**
+- bottom-6 right-4 → safe-bottom-fixed right-3
+- h-12 (was p-y 3)
+- active:scale-[0.98]
+
+**Sonuçlar:**
+- 5 commit (4908d2d viewport+safe-area, 6fb8e7a hero, 0bb7ab32 sticky+cartfab, 3a7f3d7 itemcard, 847174d categorynav+drawer)
+- 9 dosya değişti (layout.tsx + globals.css + 7 component)
+- TypeScript clean (`tsc --noEmit`)
+- Test viewport aralığı: 320 / 360 / 375 / 414 / 768 / 1024 / 1280
+- Toplam: Sprint G/H (4 commits) + Sprint I (5 commits) = 9 sprint commit
+- DECISONS: 35 + 1 (D-036) = 36
+
+**Backlog (V1.5 mobile follow-up):**
+- AccountHeaderChip mobile sheet (drawer'dan açılan alt sayfa)
+- Touch gesture swipe-to-close drawers
+- Haptic feedback (navigator.vibrate) on add-to-cart
+- Pull-to-refresh on menu page
+- Image lazy loading priority (LCP image eager, rest lazy)
+- Bottom sheet adisyon özeti (masa başı cart)
+
