@@ -109,6 +109,27 @@
     min-height: 44px;
   }
 
+  /* ----- iOS / Android safe-area helpers (D-036 mobile-first) -------
+   * Modern phones have notch / home-indicator insets. Hard-coding
+   * `bottom: 0` on a floating FAB lands the FAB under the home
+   * indicator — these utilities add the device's safe area to any
+   * fixed/sticky element without per-component logic. */
+  .safe-bottom {
+    padding-bottom: max(env(safe-area-inset-bottom), 0.5rem);
+  }
+  .safe-top {
+    padding-top: max(env(safe-area-inset-top), 0.5rem);
+  }
+  .safe-bottom-fixed {
+    bottom: max(env(safe-area-inset-bottom), 0.75rem);
+  }
+
+  /* No-zoom font-size — Safari/Android auto-zooms text fields below 16px
+   * on focus. Forcing body copy to 16px is the canonical fix. */
+  .no-zoom {
+    font-size: max(1rem, 16px);
+  }
+
   /* Glassmorphism surface — used by the admin nav, modals, and the
    * `<Card variant="glass">` primitive. The blur + saturate combo is the
    * standard SaaS pattern (Linear / Vercel / Notion). Backdrop-filter is

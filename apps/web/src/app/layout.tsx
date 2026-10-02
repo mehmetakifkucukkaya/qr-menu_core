@@ -71,8 +71,14 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  // Disabled user-scalable so accidental pinch doesn't zoom into the
+  // pill track during a QR scan. `maximumScale=5` still allows the
+  // user to zoom if they need to read a tiny menu description.
+  userScalable: true,
   maximumScale: 5,
   themeColor: "#2A4436",
+  // iOS Safari 15+ — hint that the page supports dark color scheme.
+  colorScheme: "light dark",
 };
 
 /** Read the persisted theme preference from the cookie that the
