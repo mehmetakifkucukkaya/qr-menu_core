@@ -41,10 +41,29 @@ def test_get_plan_returns_settings(make_plan_settings, organization_a, user_a):
     assert body["features"]["orders_enabled"] is False
 
 
-def test_put_plan_updates_and_audits(make_plan_settings, organization_a, user_a):
+def _platform_admin_member(organization, django_user_model):
+    """A platform admin (role=admin, superuser) who is also a member of ``organization``."""
+    from apps.accounts.models import Membership, MembershipRole
+
+    admin = django_user_model.objects.create_user(
+        email="ops-admin@example.com",
+        password="x",
+        role="admin",
+        is_staff=True,
+        is_superuser=True,
+    )
+    Membership.objects.create(
+        user=admin, organization=organization, role=MembershipRole.OWNER
+    )
+    return admin
+
+
+def test_put_plan_updates_and_audits(
+    make_plan_settings, organization_a, django_user_model
+):
     make_plan_settings(organization_a, plan=BASIC)
     client = APIClient()
-    client.force_authenticate(user=user_a)
+    client.force_authenticate(user=_platform_admin_member(organization_a, django_user_model))
     res = client.put(
         "/api/v1/admin/billing/plan/",
         data={"active_plan": "ops"},
@@ -65,6 +84,43 @@ def test_put_plan_updates_and_audits(make_plan_settings, organization_a, user_a)
     assert audit_rows.count() == 1
     assert audit_rows.first().payload["before"]["active_plan"] == BASIC
     assert audit_rows.first().payload["after"]["active_plan"] == OPS
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"active_plan": "ops"},
+        {"features": {"payments_enabled": True, "orders_enabled": True}},
+        {"billing_notes": "free upgrade"},
+    ],
+    ids=["plan", "feature-overrides", "notes"],
+)
+def test_put_plan_is_forbidden_for_a_tenant_owner(
+    make_plan_settings, organization_a, user_a, body
+):
+    """F-09: a tenant must not be able to grant itself the unlimited plan."""
+    from apps.billing.models import PlanSettings
+
+    make_plan_settings(organization_a, plan=BASIC)
+    client = APIClient()
+    client.force_authenticate(user=user_a)
+
+    res = client.put("/api/v1/admin/billing/plan/", data=body, format="json")
+
+    assert res.status_code == 403, res.content
+    ps = PlanSettings.objects.get(organization=organization_a)
+    assert ps.active_plan == BASIC
+    assert not AuditEvent.objects.filter(
+        organization=organization_a, action="plan_changed"
+    ).exists()
+
+
+def test_tenant_owner_can_still_read_the_plan(make_plan_settings, organization_a, user_a):
+    make_plan_settings(organization_a, plan=BASIC)
+    client = APIClient()
+    client.force_authenticate(user=user_a)
+
+    assert client.get("/api/v1/admin/billing/plan/").status_code == 200
 
 
 # ---------------------------------------------------------------------------

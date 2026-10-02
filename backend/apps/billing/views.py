@@ -3,7 +3,7 @@
 Six admin endpoints under ``/api/v1/admin/billing/``:
 
 * GET  /plan/                    — current PlanSettings row
-* PUT  /plan/                    — operator update plan/feature/note
+* PUT  /plan/                    — platform-admin update plan/feature/note
 * GET  /usage/                   — current-month metric snapshot
 * GET  /limits/                  — static 4-plan comparison matrix
 * POST /limits/preview-upgrade/  — diff current → target plan
@@ -30,13 +30,13 @@ import logging
 
 from rest_framework import status
 from rest_framework.exceptions import NotFound, PermissionDenied
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import SAFE_METHODS, AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 
-from apps.accounts.permissions import IsOrganizationMember
+from apps.accounts.permissions import IsOrganizationMember, IsPlatformAdmin
 
 from . import services
 from .serializers import (
@@ -92,9 +92,19 @@ def _wrap(data, request: Request) -> Response:
 
 
 class BillingPlanAdminView(APIView):
-    """GET /api/v1/admin/billing/plan/ — current PlanSettings."""
+    """GET /api/v1/admin/billing/plan/ — current PlanSettings.
+
+    PUT is restricted to platform admins (ANALYSIS_1 F-09): V1 has no
+    subscription billing, so a tenant-writable plan / feature override is a
+    free upgrade to the unlimited OPS tier. Tenants can still read it.
+    """
 
     permission_classes = [IsAuthenticated, IsOrganizationMember]
+
+    def get_permissions(self):
+        if self.request.method not in SAFE_METHODS:
+            return [IsAuthenticated(), IsPlatformAdmin()]
+        return super().get_permissions()
 
     def get(self, request: Request) -> Response:
         org = _resolve_organization(request)
