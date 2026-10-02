@@ -18,14 +18,24 @@ export const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? "";
  *   - a routing 404 from the API: an HTML 404 page means "no such URL" (the
  *     trailing-slash bug). A JSON 404 is a legitimate "not found" answer and
  *     is allowed;
- *   - an uncaught exception in the page.
+ *   - an uncaught exception in the page;
+ *   - a React hydration mismatch (server HTML != first client render). Dev
+ *     builds say "Hydration failed ..."; production builds only log
+ *     "Minified React error #418 / #423 / #425".
  */
+const HYDRATION_ERROR = /hydration|did not match|Minified React error #(418|419|422|423|425)\b/i;
+
 export const test = base.extend<{ guard: void }>({
   guard: [
     async ({ page }, use) => {
       const problems: string[] = [];
 
       page.on("pageerror", (error) => problems.push(`page error: ${error.message}`));
+      page.on("console", (message) => {
+        if (message.type() === "error" && HYDRATION_ERROR.test(message.text())) {
+          problems.push(`hydration error: ${message.text().split("\n")[0].slice(0, 200)}`);
+        }
+      });
       page.on("response", (response) => {
         const status = response.status();
         const url = response.url();
@@ -43,7 +53,7 @@ export const test = base.extend<{ guard: void }>({
 
       await use();
 
-      expect(problems, "unexpected server errors / broken API routes during the test").toEqual([]);
+      expect(problems, "unexpected server errors / broken API routes / hydration errors during the test").toEqual([]);
     },
     { auto: true },
   ],

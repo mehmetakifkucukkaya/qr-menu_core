@@ -43,7 +43,7 @@ run "web type-check"  bash -c "cd '$ROOT/apps/web' && npx tsc --noEmit"
 run "web lint"        bash -c "cd '$ROOT/apps/web' && npx next lint"
 run "e2e type-check"  bash -c "cd '$ROOT/apps/web' && npm run --silent type-check:e2e"
 
-for t in test:seo test:currency test:feature-flags test:trial-banner test:media-uploader test:ttl-cache; do
+for t in test:seo test:currency test:feature-flags test:trial-banner test:media-uploader test:ttl-cache test:cart-store; do
     run "web unit tests ($t)" bash -c "cd '$ROOT/apps/web' && npm run --silent $t"
 done
 
@@ -58,7 +58,7 @@ if [[ "${SKIP_E2E:-0}" == "1" ]]; then
     echo ""
     echo "⚠️  SKIP_E2E=1 - browser smoke tests NOT run. This is not a release gate."
 else
-    run "browser smoke tests (6 flows)" bash -c "cd '$ROOT/apps/web' && npm run --silent test:e2e"
+    run "browser smoke tests (flows 1-6 + regressions)" bash -c "cd '$ROOT/apps/web' && npm run --silent test:e2e"
 fi
 
 echo ""

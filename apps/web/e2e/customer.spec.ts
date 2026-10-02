@@ -36,6 +36,35 @@ test.describe("customer menu", () => {
     await expect(page.getByRole("heading", { level: 2, name: "Kahveler" })).toHaveCount(0);
   });
 
+  test("flow 2b: a returning customer's saved cart is restored without a hydration error", async ({
+    page,
+  }) => {
+    // What the cart store wrote to localStorage on a previous visit. The server
+    // renders an empty cart; applying this during the first client render used
+    // to fail hydration ("Expected server HTML to contain a matching <span> in
+    // <button>") and throw the page away for client rendering. The guard in
+    // support.ts fails the test on that error.
+    const saved = JSON.stringify({
+      state: {
+        items: [
+          { menuItemId: 1, name: "Türk Kahvesi", price: "75.00", currency: "TRY", quantity: 2 },
+        ],
+        tableNumber: "",
+      },
+      version: 0,
+    });
+    await page.addInitScript((value) => window.localStorage.setItem("qr-menu-cart", value), saved);
+
+    await page.goto("/m/modern-cafe");
+
+    // Restored AFTER hydration: header badge and cart contents show the saved items.
+    await expect(page.getByRole("button", { name: "Sepetim — 2 ürün" }).first()).toBeVisible();
+    await page.getByRole("button", { name: "Sepetim — 2 ürün" }).first().click();
+    const cart = page.getByRole("dialog", { name: "Sepetim" });
+    await expect(cart).toContainText("Türk Kahvesi");
+    await expect(cart).toContainText("₺150,00");
+  });
+
   test("flow 2: add to cart and place an order that the business can see", async ({ page }) => {
     await page.goto("/m/modern-cafe");
 

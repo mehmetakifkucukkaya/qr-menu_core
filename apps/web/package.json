@@ -15,7 +15,8 @@
     "test:trial-banner": "TSX_TSCONFIG_PATH=tsconfig.test.json node --import tsx --import ./src/test-dom.ts --no-warnings=ExperimentalWarning --test src/components/billing/TrialBanner.test.tsx",
     "test:media-uploader": "TSX_TSCONFIG_PATH=tsconfig.test.json node --import tsx --import ./src/test-dom.ts --no-warnings=ExperimentalWarning --test src/components/admin/MediaUploader.test.tsx",
     "test:e2e": "playwright test",
-    "type-check:e2e": "tsc -p e2e/tsconfig.json"
+    "type-check:e2e": "tsc -p e2e/tsconfig.json",
+    "test:cart-store": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test src/lib/cart-store.test.ts"
   },
   "dependencies": {
     "clsx": "^2.1.1",

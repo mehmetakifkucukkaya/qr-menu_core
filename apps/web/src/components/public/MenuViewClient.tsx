@@ -25,6 +25,7 @@ import { LocaleSelector } from "./LocaleSelector";
 import { HeaderCartIcon } from "./HeaderCartIcon";
 import { AccountHeaderChip } from "./AccountHeaderChip";
 import { useCartStore } from "@/lib/cart-store";
+import { CartHydrator } from "./CartHydrator";
 
 interface MenuViewClientProps {
   publicSettings: PublicSettings | null;
@@ -147,6 +148,10 @@ export function MenuViewClient({
 
   return (
     <FeatureFlagProvider settings={publicSettings}>
+      {/* First on purpose: restores the saved cart before any sibling effect
+       *  can write to the (persisted) store. See CartHydrator. */}
+      <CartHydrator />
+
       {/* Sticky top bar — mobile-first: 48px chrome, account chip hidden
        *  on phones (moved to AccountHeaderChip's mobile sheet) */}
       <header className="sticky safe-top top-0 z-30 border-b border-[var(--color-border)] bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70">
