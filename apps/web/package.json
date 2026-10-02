@@ -13,7 +13,9 @@
     "test:currency": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test src/lib/currency.test.ts",
     "test:feature-flags": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test src/lib/feature-flags.test.ts",
     "test:trial-banner": "TSX_TSCONFIG_PATH=tsconfig.test.json node --import tsx --import ./src/test-dom.ts --no-warnings=ExperimentalWarning --test src/components/billing/TrialBanner.test.tsx",
-    "test:media-uploader": "TSX_TSCONFIG_PATH=tsconfig.test.json node --import tsx --import ./src/test-dom.ts --no-warnings=ExperimentalWarning --test src/components/admin/MediaUploader.test.tsx"
+    "test:media-uploader": "TSX_TSCONFIG_PATH=tsconfig.test.json node --import tsx --import ./src/test-dom.ts --no-warnings=ExperimentalWarning --test src/components/admin/MediaUploader.test.tsx",
+    "test:e2e": "playwright test",
+    "type-check:e2e": "tsc -p e2e/tsconfig.json"
   },
   "dependencies": {
     "clsx": "^2.1.1",
@@ -24,6 +26,7 @@
     "zustand": "^5.0.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",
     "@types/jsdom": "^30.0.0",

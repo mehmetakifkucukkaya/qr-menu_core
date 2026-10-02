@@ -276,6 +276,26 @@ DNS not having propagated yet — see [§10 Troubleshooting](#10-troubleshooting
 
 ## 4. Subsequent Deploys
 
+### 4.0 Release gate — run before every deploy, on your laptop or CI
+
+```bash
+bash scripts/release_gate.sh
+```
+
+It runs the backend tests, the frontend type-check/lint/unit tests and the
+**six browser smoke flows** (public menu + language switch, add to cart → order,
+log in → dashboard, create/edit a product, change a price and see it publicly,
+download a QR code) against a production build and a throwaway database. See
+[`apps/web/e2e/README.md`](../apps/web/e2e/README.md).
+
+**Do not deploy on red.** These flows exist because unit tests, `tsc` and
+`next build` were all green while the admin could not create a product and
+customers could not place an order (see `ANALYSIS_1_FUNCTIONALITY`). On the
+server, also run `bash scripts/validate_prod_env.sh` after any `.env.production`
+change.
+
+### 4.1 Pull, rebuild, restart
+
 The cadence is: pull, rebuild, restart. Migrations run automatically as
 part of the backend `CMD`.
 
@@ -303,7 +323,7 @@ docker compose --env-file .env.production -f docker-compose.production.yml logs 
 >     python manage.py migrate
 > ```
 
-### 4.1 Zero-downtime deploys (V2)
+### 4.2 Zero-downtime deploys (V2)
 
 V1 redeploys cause a ~5 s blip while the new backend container starts.
 V2 will introduce a rolling restart pattern (start the new container,
@@ -527,6 +547,9 @@ Run through this before the first deploy and after every major change.
 - [ ] `POSTGRES_PASSWORD` is ≥ 24 chars
 - [ ] `DJANGO_DEBUG=0` (default, do not enable in prod)
 - [ ] `DJANGO_ALLOWED_HOSTS` lists **only** the prod domain(s)
+- [ ] `PUBLIC_BASE_URL` is the public https origin (QR codes encode it)
+- [ ] `INTERNAL_API_TOKEN` and `PAYMENT_FERNET_KEY` are set and secret
+- [ ] `PAYMENTS_ENABLED` is `0` until the checkout has a payment step
 - [ ] `CORS_ALLOWED_ORIGINS` lists **only** the prod https origin(s)
 - [ ] `SENTRY_DSN` is set (or you explicitly opted out of Sentry)
 - [ ] HSTS preload list — submit `menu.example.com` once traffic stabilises
@@ -574,8 +597,13 @@ docker compose --env-file .env.production -f docker-compose.production.yml logs 
 
 ### 10.3 Static files 404
 
-**Cause:** `collectstatic` didn't run, or the `backend-static` volume
-is empty.
+Caddy serves `/static/*` and `/media/*` itself from the `backend-static` and
+`backend-media` volumes (mounted read-only into the Caddy container). Django
+does not serve them when `DEBUG` is off.
+
+**Cause:** `collectstatic` didn't run, the volume is empty, or the Caddy
+container was started without the volume mounts (`docker-compose.production.yml`
+`caddy.volumes`).
 
 **Fix:**
 

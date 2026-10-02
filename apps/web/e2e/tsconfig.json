@@ -1,0 +1,12 @@
+{
+  "//": "Type-check config for the Playwright smoke tests (npm run type-check:e2e). The app's own tsconfig excludes e2e/ so test tooling can never break `next build`.",
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": false,
+    "plugins": [],
+    "types": ["node"]
+  },
+  "include": ["./**/*.ts", "../playwright.config.ts"],
+  "exclude": ["../node_modules"]
+}
