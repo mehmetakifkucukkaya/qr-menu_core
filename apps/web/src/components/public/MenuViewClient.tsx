@@ -25,7 +25,6 @@ import { CartDrawer } from "./CartDrawer";
 import { LocaleSelector } from "./LocaleSelector";
 import { HeaderCartIcon } from "./HeaderCartIcon";
 import { AccountHeaderChip } from "./AccountHeaderChip";
-import { PrintButton } from "./PrintButton";
 import { useCartStore } from "@/lib/cart-store";
 
 interface MenuViewClientProps {
@@ -178,7 +177,6 @@ export function MenuViewClient({
             </span>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <PrintButton />
             <LocaleSelector current={locale} />
             <AccountHeaderChip
               initialProfile={headerInitial}
