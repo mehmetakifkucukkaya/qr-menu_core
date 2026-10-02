@@ -388,3 +388,31 @@ def test_csrf_required_for_logout_when_admin_session_present(api_client):
     # If 200, CSRF was bypassed (env-dependent). The point of the
     # test is that the cookie is no longer carrying secrets —
     # thus the assert is informational, not strict.
+
+
+# ---------------------------------------------------------------------------
+# Delivery failures must be visible to the operator (ANALYSIS_1 F-04)
+# ---------------------------------------------------------------------------
+def test_magic_link_email_failure_is_logged_but_the_response_stays_uniform(
+    no_throttle, api_client, caplog
+):
+    """The endpoint answers 200 whether or not the mail went out (no account
+    enumeration), but the failure must reach the logs: it used to be
+    `fail_silently=True`, so a wrong SMTP host looked like success."""
+    import smtplib
+    import logging
+
+    with patch(
+        "django.core.mail.message.EmailMessage.send",
+        side_effect=smtplib.SMTPException("relay denied"),
+    ), caplog.at_level(logging.ERROR, logger="apps.account.services"):
+        response = api_client.post(
+            "/api/v1/account/auth/request-link",
+            data={"email": "someone@example.com"},
+            format="json",
+        )
+
+    assert response.status_code == 200
+    assert any(
+        "Magic-link email" in r.getMessage() and r.exc_info for r in caplog.records
+    ), "SMTP failure must be logged with its traceback"

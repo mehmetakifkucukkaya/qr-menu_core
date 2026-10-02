@@ -281,6 +281,19 @@ DEFAULT_FROM_EMAIL = os.environ.get(
     "DEFAULT_FROM_EMAIL", "noreply@qrmenu.local"
 )
 
+# SMTP transport (ANALYSIS_1 F-04). Only EMAIL_BACKEND used to be configurable,
+# so production could never reach a mail server and magic-link mails vanished.
+# Port 587 + STARTTLS is the default; for implicit TLS (port 465) set
+# EMAIL_USE_TLS=0 and EMAIL_USE_SSL=1. EMAIL_TIMEOUT stops a dead mail server
+# from pinning a gunicorn worker (Django's default is to wait forever).
+EMAIL_HOST = os.environ.get("EMAIL_HOST", "localhost")
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = _env_bool("EMAIL_USE_TLS", default=True)
+EMAIL_USE_SSL = _env_bool("EMAIL_USE_SSL", default=False)
+EMAIL_TIMEOUT = int(os.environ.get("EMAIL_TIMEOUT", "10"))
+
 # End-customer session cookie. Distinct from ``SESSION_COOKIE_NAME`` so
 # the platform admin session and the customer session can coexist on
 # the same browser without one invalidating the other (V1 keeps admin
