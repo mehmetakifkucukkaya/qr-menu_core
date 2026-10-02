@@ -11,6 +11,7 @@ source code or at API responses in isolation can see that.
 |---|------|------|---------------------------|
 | 1 | Public menu renders tenant data only; language switch translates it | `customer.spec.ts` | hard-coded demo copy shown to every business (F-13), upsell banner (F-15), broken locale switch |
 | 2 | Add to cart → place an order → order tracking page | `customer.spec.ts` | `POST /public/orders` 404 (F-02), payments UI/flag mismatch (F-06) |
+| 2b | A returning customer's saved cart is restored with no hydration error | `customer.spec.ts` | persisted cart applied during the first client render → React error #418 for every returning customer |
 | 3 | Log in → dashboard loads its data, no error banner | `admin.spec.ts` | `GET /admin/summary` 404 (F-02), broken login/redirect |
 | 4 | Create a product, then edit it | `admin.spec.ts` | the 8 create/edit pages answering HTTP 500 (F-01), admin writes rejected by CSRF |
 | 5 | Change the price → it shows on the public menu | `admin.spec.ts` | stale/cached public menu, write path not reaching the public read path |
@@ -21,8 +22,9 @@ phones.
 
 Every test also runs an automatic **guard** (`support.ts`): it fails on any
 HTTP 5xx, on an API *routing* 404 (an HTML 404 = "no such URL", the
-trailing-slash bug) and on an uncaught page error, even when the UI swallowed
-the failure and rendered something plausible.
+trailing-slash bug), on an uncaught page error and on a React **hydration
+mismatch** (production builds only log `Minified React error #418/#423/#425`),
+even when the UI swallowed the failure and rendered something plausible.
 
 ## Run it
 

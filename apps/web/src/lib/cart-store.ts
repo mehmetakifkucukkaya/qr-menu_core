@@ -10,10 +10,20 @@
  *
  * Why Zustand + persist?
  *  - Tiny footprint, no provider boilerplate.
- *  - `persist` middleware handles localStorage hydration + SSR safety
- *    (the store initializes with default state on the server, the real
- *    localStorage values are read on first client render).
- *  - Cross-tab via `storage` is automatic.
+ *  - `persist` middleware writes every change to localStorage.
+ *
+ * Hydration (read this before touching `persist` options): by default the
+ * middleware reads localStorage synchronously when the store is created, so
+ * the FIRST client render already sees the saved cart while the server HTML
+ * was rendered with an empty one. React then reports "Hydration failed ...
+ * Expected server HTML to contain a matching <span> in <button>" (header badge,
+ * floating cart button, line items, "Sepete Ekle" -> quantity stepper) and
+ * throws the whole boundary away in favour of client rendering. That hit every
+ * returning customer who had items in their cart.
+ *
+ * So `skipHydration: true`: the store starts empty on server and client alike
+ * and `<CartHydrator />` (mounted once in MenuViewClient) calls
+ * `useCartStore.persist.rehydrate()` in an effect, i.e. after hydration.
  *
  * Schema:
  *  - `items` — line items in the cart. `quantity` is mutable from the UI
@@ -134,6 +144,9 @@ export const useCartStore = create<CartStore>()(
         items: state.items,
         tableNumber: state.tableNumber,
       }),
+      // Do not read localStorage during the first client render (see the
+      // "Hydration" note above); <CartHydrator /> restores it after hydration.
+      skipHydration: true,
     },
   ),
 );
