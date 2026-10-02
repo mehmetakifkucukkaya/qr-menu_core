@@ -90,8 +90,10 @@ export function ItemCard({ item, category, onSelect }: ItemCardProps) {
         (isSoldOut ? "opacity-60" : "")
       }
     >
-      {/* ── Image block ── */}
-      <div className="relative h-40 w-full shrink-0 overflow-hidden bg-[var(--color-surface-low)] sm:h-40 sm:w-44 sm:rounded-l-lg">
+      {/* ── Image block ──
+       *  Mobile: 7rem (112px) tall, full-width hero on top.
+       *  sm+ :    10rem (160px) tall, 11rem (176px) wide, left-anchored. */}
+      <div className="relative h-28 w-full shrink-0 overflow-hidden bg-[var(--color-surface-low)] sm:h-40 sm:w-44 sm:rounded-l-lg">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={src}
@@ -121,23 +123,24 @@ export function ItemCard({ item, category, onSelect }: ItemCardProps) {
         </div>
         {isSoldOut ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 text-white">
-            <span className="text-2xl">⛔</span>
-            <span className="text-[10px] font-bold uppercase tracking-wider">
+            <span className="text-xl sm:text-2xl">⛔</span>
+            <span className="px-1 text-center text-[10px] font-bold uppercase tracking-wider">
               Şu an tükendi
             </span>
           </div>
         ) : null}
       </div>
 
-      {/* ── Body ── */}
-      <div className="flex flex-1 flex-col gap-1 p-4">
-        <div className="flex items-start justify-between gap-3">
+      {/* ── Body ──
+       *  Mobile: dense padding (p-3), 16px+ body text, line-clamp-2. */}
+      <div className="flex flex-1 flex-col gap-1 p-3 sm:p-4">
+        <div className="flex items-start justify-between gap-2 sm:gap-3">
           <h3
-            className="font-heading text-lg font-semibold leading-tight text-text transition group-hover:text-primary sm:text-xl"
+            className="font-heading text-base font-semibold leading-tight text-text transition group-hover:text-primary sm:text-xl"
           >
             {item.name}
           </h3>
-          <span className="shrink-0 font-heading text-base font-bold tabular-nums text-primary sm:text-lg">
+          <span className="shrink-0 font-heading text-sm font-bold tabular-nums text-primary sm:text-lg">
             {price}
           </span>
         </div>
@@ -167,9 +170,9 @@ export function ItemCard({ item, category, onSelect }: ItemCardProps) {
           ) : null}
         </div>
 
-        {/* Footer row — Recipe link + Quick Add */}
+        {/* Footer row — Recipe link + Quick Add (mobile-first 44px tap). */}
         <div className="mt-auto flex items-center justify-between gap-2 pt-2">
-          <span className="inline-flex items-center gap-1 text-xs font-semibold text-primary transition group-hover:text-primary-container">
+          <span className="hidden items-center gap-1 text-xs font-semibold text-primary transition group-hover:text-primary-container sm:inline-flex">
             Tarif Kökeni
             <span aria-hidden>→</span>
           </span>
@@ -179,20 +182,20 @@ export function ItemCard({ item, category, onSelect }: ItemCardProps) {
               <div
                 role="group"
                 aria-label={`${item.name} adedi`}
-                className="inline-flex items-center gap-1 rounded-pill border border-primary bg-primary/5 px-1 py-0.5"
+                className="ml-auto inline-flex items-center gap-0.5 rounded-pill border border-primary bg-primary/5 px-0.5 py-0.5"
                 onClick={(e) => e.stopPropagation()}
               >
                 <button
                   type="button"
                   onClick={handleDec}
                   aria-label="Azalt"
-                  className="flex h-9 w-9 items-center justify-center rounded-pill text-primary transition hover:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="flex h-11 w-11 items-center justify-center rounded-pill text-primary transition hover:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-primary"
                 >
                   <Minus className="h-4 w-4" aria-hidden />
                 </button>
                 <span
                   aria-live="polite"
-                  className="min-w-[1.5rem] text-center font-heading text-sm font-semibold tabular-nums text-primary"
+                  className="min-w-[1.75rem] text-center font-heading text-sm font-semibold tabular-nums text-primary"
                 >
                   {cartItem.quantity}
                 </span>
@@ -200,7 +203,7 @@ export function ItemCard({ item, category, onSelect }: ItemCardProps) {
                   type="button"
                   onClick={handleInc}
                   aria-label="Arttır"
-                  className="flex h-9 w-9 items-center justify-center rounded-pill text-primary transition hover:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="flex h-11 w-11 items-center justify-center rounded-pill text-primary transition hover:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-primary"
                 >
                   <Plus className="h-4 w-4" aria-hidden />
                 </button>
@@ -213,7 +216,7 @@ export function ItemCard({ item, category, onSelect }: ItemCardProps) {
                   handleAdd();
                 }}
                 className={
-                  "inline-flex min-h-[44px] items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-xs font-bold uppercase tracking-wider text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1 " +
+                  "ml-auto inline-flex h-11 items-center gap-1.5 rounded-pill bg-primary px-4 text-xs font-bold uppercase tracking-wider text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1 active:scale-[0.97] " +
                   (pulse ? "scale-105" : "")
                 }
               >
