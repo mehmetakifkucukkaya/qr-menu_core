@@ -1,8 +1,5 @@
 import type { PublicMenuBusiness, PublicMenuTheme } from "@/types/menu";
-import {
-  getBusinessCoverPlaceholder,
-  generatePlaceholderSvg,
-} from "@/lib/placeholder";
+import { generatePlaceholderSvg } from "@/lib/placeholder";
 
 interface BusinessHeroProps {
   business: PublicMenuBusiness;
@@ -32,23 +29,25 @@ interface BusinessHeroProps {
  * accent in the quick-action pills without any further plumbing.
  */
 export function PremiumHero({ business, theme }: BusinessHeroProps) {
+  // Only render the <img> when the tenant uploaded a real cover image.
+  // Inline-SVG placeholders (1.2kB base64 every render) were bloating
+  // the DOM and producing a never-ending "loading" feel.
   const hasRealCover =
-    business.cover_image && !business.cover_image.startsWith("data:");
+    Boolean(business.cover_image) &&
+    !business.cover_image!.startsWith("data:");
 
-  const coverSrc: string =
-    (hasRealCover ? business.cover_image : null) ??
-    getBusinessCoverPlaceholder(business.slug);
+  const hasRealLogo =
+    Boolean(business.logo) && !business.logo!.startsWith("data:");
 
-  const logoSrc =
-    business.logo && !business.logo.startsWith("data:")
-      ? business.logo
-      : generatePlaceholderSvg({
-          emoji: business.name.charAt(0).toUpperCase() || "M",
-          color1: "#FAF8F5",
-          color2: "#2A4436",
-          size: 256,
-          label: `${business.name} logo`,
-        });
+  const logoSrc = hasRealLogo
+    ? business.logo!
+    : generatePlaceholderSvg({
+        emoji: business.name.charAt(0).toUpperCase() || "M",
+        color1: "#FAF8F5",
+        color2: "#2A4436",
+        size: 256,
+        label: `${business.name} logo`,
+      });
 
   const themeStyle: React.CSSProperties = theme
     ? {
@@ -123,16 +122,21 @@ export function PremiumHero({ business, theme }: BusinessHeroProps) {
           }}
           aria-hidden
         />
-        {/* Optional real cover image — mixed in as a soft overlay */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={coverSrc}
-          alt=""
-          aria-hidden
-          className="absolute inset-0 h-full w-full object-cover opacity-25 mix-blend-luminosity"
-          loading="eager"
-          decoding="async"
-        />
+        {/* Real cover image — only when the tenant uploaded one.
+         * When there's no image we rely on the gradient + noise + warm
+         * wash layers below for visual depth instead of a 1.2kB SVG
+         * data URI that bloats the DOM. */}
+        {hasRealCover ? (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            src={business.cover_image!}
+            alt=""
+            aria-hidden
+            className="absolute inset-0 h-full w-full object-cover opacity-25 mix-blend-luminosity"
+            loading="eager"
+            decoding="async"
+          />
+        ) : null}
         {/* Right-side warm wash */}
         <div
           aria-hidden
