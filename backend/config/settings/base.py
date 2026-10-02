@@ -430,6 +430,14 @@ CORS_ALLOWED_ORIGINS = _env_list(
 )
 CORS_ALLOW_CREDENTIALS = True
 
+# Django's CSRF middleware compares a request's Origin header with the host it
+# was sent to. With the web app and the API on different ports (the documented
+# local layout: :3000 and :8000) every browser write from the admin panel
+# (POST/PATCH/DELETE) failed with "Origin checking failed" because only
+# production.py trusted the frontend origin. The origins that may call the API
+# with credentials are exactly the ones that may send CSRF-protected requests.
+CSRF_TRUSTED_ORIGINS = list(CORS_ALLOWED_ORIGINS)
+
 # ---------------------------------------------------------------------------
 # Sessions / Cookies
 # ---------------------------------------------------------------------------
