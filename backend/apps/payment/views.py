@@ -45,6 +45,7 @@ from .errors import (
     PaymentSettingMissing,
 )
 from .models import OrderPayment, PaymentSettings, RefundRecord, WebhookEvent
+from .permissions import PaymentsFeatureEnabled
 from .providers.base import InvalidSignatureError
 from .serializers import (
     CreatePaymentIntentSerializer,
@@ -117,7 +118,7 @@ class CreateOrderPaymentView(APIView):
     and not already be ``confirmed``. ``payment_failure`` returns 402.
     """
 
-    permission_classes = [AllowAny]
+    permission_classes = [PaymentsFeatureEnabled, AllowAny]
 
     def post(self, request, order_number: str):
         serializer = CreatePaymentIntentSerializer(data=request.data)
@@ -172,7 +173,7 @@ class CreateOrderPaymentView(APIView):
 class OrderPaymentStatusPublicView(APIView):
     """GET /api/v1/public/orders/{order_number}/payment/ — poll for status."""
 
-    permission_classes = [AllowAny]
+    permission_classes = [PaymentsFeatureEnabled, AllowAny]
 
     def get(self, request, order_number: str):
         try:
@@ -188,20 +189,34 @@ class OrderPaymentStatusPublicView(APIView):
         return Response(PaymentStatusPublicSerializer(payment).data)
 
 
+#: Providers that can receive webhooks today (iyzico is a V2 placeholder).
+WEBHOOK_PROVIDERS = frozenset({"stripe"})
+
+
 @api_view(["POST"])
 @parser_classes([RawBodyParser])
 @authentication_classes([])
-@permission_classes([AllowAny])
+@permission_classes([PaymentsFeatureEnabled, AllowAny])
 @csrf_exempt
-def stripe_webhook_view(request):
-    """Stripe webhook receiver — POST /api/v1/payment/webhooks/stripe/.
+def stripe_webhook_view(request, provider_name: str = "stripe"):
+    """Webhook receiver — POST /api/v1/payment/webhooks/<provider>/.
 
     Raw body, no DRF auth, signature verify required.
+
+    The route is ``webhooks/<str:provider_name>/`` so Django passes
+    ``provider_name`` as a keyword argument; the view used to take only
+    ``request`` and raised ``TypeError`` on EVERY delivery (HTTP 500 - Stripe
+    retries for days, then disables the endpoint).
     """
+    if provider_name not in WEBHOOK_PROVIDERS:
+        return Response(
+            {"detail": "Bilinmeyen ödeme sağlayıcısı.", "code": "payment.unknown_provider"},
+            status=status.HTTP_404_NOT_FOUND,
+        )
     sig_header = request.headers.get("Stripe-Signature", "")
     try:
         result = handle_webhook_event(
-            provider_name="stripe",
+            provider_name=provider_name,
             payload=request.body,
             signature_header=sig_header,
         )
@@ -234,7 +249,7 @@ def stripe_webhook_view(request):
 class PaymentSettingsAdminView(APIView):
     """GET/PUT /api/v1/admin/payment/settings/ — provider config CRUD."""
 
-    permission_classes = [IsAuthenticated, IsOrganizationMember]
+    permission_classes = [PaymentsFeatureEnabled, IsAuthenticated, IsOrganizationMember]
 
     def get(self, request):
         org = _resolve_organization(request)
@@ -266,7 +281,7 @@ class PaymentProviderTestAdminView(APIView):
     any specific resource id and validates the API key instantly.
     """
 
-    permission_classes = [IsAuthenticated, IsOrganizationMember]
+    permission_classes = [PaymentsFeatureEnabled, IsAuthenticated, IsOrganizationMember]
 
     def post(self, request):
         org = _resolve_organization(request)
@@ -297,7 +312,7 @@ class PaymentProviderTestAdminView(APIView):
 class PaymentSettlementAdminView(APIView):
     """GET /api/v1/admin/payment/settlement/ — today/week/month + by_provider."""
 
-    permission_classes = [IsAuthenticated, IsOrganizationMember]
+    permission_classes = [PaymentsFeatureEnabled, IsAuthenticated, IsOrganizationMember]
 
     def get(self, request):
         org = _resolve_organization(request)
@@ -351,7 +366,7 @@ class AdminRefundListCreateView(APIView):
     POST /api/v1/admin/payment/refunds/ — create new refund.
     """
 
-    permission_classes = [IsAuthenticated, IsOrganizationMember]
+    permission_classes = [PaymentsFeatureEnabled, IsAuthenticated, IsOrganizationMember]
 
     def get(self, request):
         org = _resolve_organization(request)
@@ -405,16 +420,21 @@ class AdminRefundListCreateView(APIView):
 class PaymentReconcileAdminView(APIView):
     """POST /api/v1/admin/payment/reconcile/ — find orphan intents."""
 
-    permission_classes = [IsAuthenticated, IsOrganizationMember]
+    permission_classes = [PaymentsFeatureEnabled, IsAuthenticated, IsOrganizationMember]
 
     def post(self, request):
         org = _resolve_organization(request)
         result = reconcile_pending_payments(organization=org)
+        # The actor comes from the request context (AuditContextMiddleware);
+        # ``record_event`` has no ``actor`` parameter and requires target_id and
+        # target_repr - the old call raised TypeError after the run had
+        # already confirmed orders.
         record_event(
             organization=org,
-            actor=request.user,
             action="payment_reconciled",
             target_type="payment",
+            target_id=org.id,
+            target_repr=f"{org.slug} mutabakat",
             payload=result,
         )
         return Response(ReconcileResultSerializer(result).data)
@@ -423,7 +443,7 @@ class PaymentReconcileAdminView(APIView):
 class PaymentDashboardRedirectView(APIView):
     """GET /api/v1/admin/payment/ — convenience redirect."""
 
-    permission_classes = [IsAuthenticated, IsOrganizationMember]
+    permission_classes = [PaymentsFeatureEnabled, IsAuthenticated, IsOrganizationMember]
 
     def get(self, request):
         return Response({"detail": "Use /api/v1/admin/payment/settlement/"},
@@ -433,7 +453,7 @@ class PaymentDashboardRedirectView(APIView):
 class PaymentWebhookEventDebugView(APIView):
     """GET /api/v1/admin/payment/webhook-events/ — debug view (admin only)."""
 
-    permission_classes = [IsAuthenticated, IsOrganizationMember]
+    permission_classes = [PaymentsFeatureEnabled, IsAuthenticated, IsOrganizationMember]
 
     def get(self, request):
         org = _resolve_organization(request)

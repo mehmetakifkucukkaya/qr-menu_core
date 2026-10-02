@@ -40,6 +40,23 @@ class IyzicoProvider(PaymentProvider):
 
     name = "iyzico"
 
+    def __init__(
+        self,
+        *,
+        api_key: str = "",
+        webhook_secret: str = "",
+        is_test_mode: bool = True,
+    ):
+        # Same keyword signature as StripeProvider: the registry builds every
+        # provider as ``cls(api_key=..., webhook_secret=..., is_test_mode=...)``.
+        # With no __init__ this raised ``TypeError: IyzicoProvider() takes no
+        # arguments`` for any tenant that picked iyzico (/pay -> 502, refund ->
+        # 500). Constructing is now fine; every operation still raises
+        # NotImplementedError, which the service layer maps to a clean 502.
+        self.api_key = api_key
+        self.webhook_secret = webhook_secret
+        self.is_test_mode = is_test_mode
+
     def create_payment_intent(
         self,
         *,

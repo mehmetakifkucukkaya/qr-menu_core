@@ -47,6 +47,7 @@ class StripeProvider(PaymentProvider):
         # Configure the SDK once per provider instance — Stripe reads this
         # module global on every API call.
         stripe.api_key = api_key
+        self.api_key = api_key
         self.webhook_secret = webhook_secret
         self.is_test_mode = is_test_mode
 

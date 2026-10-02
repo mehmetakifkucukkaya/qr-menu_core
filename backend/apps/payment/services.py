@@ -115,7 +115,7 @@ def handle_webhook_event(
             "configured — ignoring.",
             provider_name,
         )
-        return _mark_event(provider_name, "no_settings", payload, processed=False)
+        return _ignored_event(provider_name)
 
     try:
         event = provider.verify_webhook(
@@ -124,10 +124,13 @@ def handle_webhook_event(
     except InvalidSignatureError as exc:
         raise PaymentInvalidSignature(str(exc)) from exc
 
-    # Idempotency — ``WebhookEvent.objects.get_or_create`` is the second
-    # line of defence. If a row with the same (provider, event_id)
-    # already exists we return it without re-processing.
-    web_hook_row, created = WebhookEvent.objects.get_or_create(
+    # Idempotency. The row is the record of "we have seen this event"; its
+    # ``processed`` flag is the record of "we finished handling it". Only a
+    # PROCESSED event is skipped on redelivery. (It used to be skipped as soon
+    # as the row existed, so one failed attempt - which happened before the
+    # row's flag was set - turned Stripe's retry into a silent no-op: the
+    # customer stayed charged and the order stayed pending, for good.)
+    web_hook_row, _created = WebhookEvent.objects.get_or_create(
         provider_name=event.provider,
         provider_event_id=event.provider_event_id,
         defaults={
@@ -135,23 +138,33 @@ def handle_webhook_event(
             "processed": False,
         },
     )
-    if not created:
-        logger.info(
-            "Duplicate webhook event %s/%s — skipping dispatch.",
-            event.provider,
-            event.provider_event_id,
-        )
-        return web_hook_row
 
-    # Dispatch by event type. Stripe names events with dotted paths; we
-    # only act on the customer-relevant subset.
+    # Dispatch by event type. Stripe names events with dotted paths; we only
+    # act on the customer-relevant subset. The dispatch and the "processed"
+    # mark commit together, so a failure rolls back every side effect of the
+    # attempt and the retry starts clean.
     try:
-        dispatch_webhook_event(event, web_hook_row)
-        web_hook_row.processed = True
-        web_hook_row.save(update_fields=["processed"])
+        with transaction.atomic():
+            # Lock the row: two concurrent deliveries of one event serialise
+            # here and the second sees processed=True.
+            web_hook_row = WebhookEvent.objects.select_for_update().get(
+                pk=web_hook_row.pk
+            )
+            if web_hook_row.processed:
+                logger.info(
+                    "Duplicate webhook event %s/%s — already processed.",
+                    event.provider,
+                    event.provider_event_id,
+                )
+                return web_hook_row
+            dispatch_webhook_event(event, web_hook_row)
+            web_hook_row.processed = True
+            web_hook_row.error = ""
+            web_hook_row.save(update_fields=["processed", "error"])
     except Exception as exc:  # noqa: BLE001 — log + audit; webhook must not crash
-        web_hook_row.error = f"{type(exc).__name__}: {exc}"
-        web_hook_row.save(update_fields=["error"])
+        WebhookEvent.objects.filter(pk=web_hook_row.pk).update(
+            error=f"{type(exc).__name__}: {exc}"
+        )
         logger.exception("Webhook dispatch failed for %s", event.provider_event_id)
         # Re-raise so the view returns 500 — Stripe will retry on 5xx.
         raise
@@ -185,6 +198,8 @@ def refund_payment(
             "pay endpoint'inden PaymentIntent oluşturun."
         )
 
+    # ``ValidationError`` ("payments not configured") must stay a 400, so the
+    # provider is built outside the guard that turns provider failures into 502.
     provider = get_provider_for_org(payment.organization)
     try:
         receipt = provider.refund(
@@ -193,7 +208,9 @@ def refund_payment(
             reason=reason,
         )
     except Exception as exc:  # noqa: BLE001 — provider errors are 502
-        raise PaymentProviderUnavailable(f"Stripe refund başarısız: {exc}") from exc
+        raise PaymentProviderUnavailable(
+            f"{provider.name} iadesi başarısız: {exc}"
+        ) from exc
 
     refund_record = RefundRecord.objects.create(
         payment=payment,
@@ -211,17 +228,22 @@ def refund_payment(
     # delivered AND the customer actually earned points.
     reverse_loyalty_for_refund(order=order, refund_record=refund_record)
 
+    # ``record_event`` takes the actor from the request context (the admin who
+    # clicked refund, via AuditContextMiddleware) and requires ``target_repr``;
+    # passing ``actor=`` raised TypeError AFTER the money had already left
+    # Stripe, so the API answered 500 for a refund that had succeeded.
     record_event(
         organization=order.organization,
-        actor=initiated_by_user,
         action="order_refunded",
         target_type="payment",
         target_id=refund_record.id,
+        target_repr=f"{order.order_number} iade #{refund_record.id}",
         payload={
             "order_number": order.order_number,
             "amount": str(refund_record.amount),
             "reason": reason,
             "provider_refund_id": receipt.provider_refund_id,
+            "initiated_by": getattr(initiated_by_user, "id", None),
         },
     )
     return refund_record
@@ -262,15 +284,17 @@ def reconcile_pending_payments(*, organization=None) -> dict:
         if status.status == "succeeded" and payment.order.status == "pending":
             payment.provider_payment_status = status.status
             payment.amount = status.amount_received or payment.amount
+            # A succeeded payment always has a paid_at: settlement reports
+            # filter on it, so None would drop the payment from every window.
             payment.paid_at = (
                 timezone.datetime.fromisoformat(status.paid_at_iso)
                 if status.paid_at_iso
-                else None
+                else timezone.now()
             )
             payment.save(
                 update_fields=["provider_payment_status", "amount", "paid_at"]
             )
-            _confirm_order_after_payment(payment)
+            _confirm_order_after_payment(payment, via="reconcile")
             reconciled += 1
 
     return {"reconciled": reconciled, "scanned": scanned}
@@ -364,33 +388,36 @@ def _on_charge_refunded(event: ProviderWebhookEvent):
     return
 
 
-def _confirm_order_after_payment(payment: OrderPayment):
-    """Atomically transition ``pending → confirmed`` once Stripe says paid."""
+def _confirm_order_after_payment(payment: OrderPayment, via: str = "payment_webhook"):
+    """Atomically transition ``pending → confirmed`` once Stripe says paid.
+
+    ``via`` says which path noticed the payment ("payment_webhook" or
+    "reconcile"); it is recorded on the ``order_paid`` audit event.
+    """
     from apps.orders.services import transition_status
 
     if payment.order.status != "pending":
         return
     try:
-        transition_status(
-            payment.order,
-            "confirmed",
-            actor=None,
-            payload={"via": "payment_webhook"},
-        )
+        # transition_status(order, new_status, actor=None) has no ``payload``;
+        # passing one raised TypeError, so a paid order never left ``pending``.
+        # It records its own ``order_confirmed`` audit event.
+        transition_status(payment.order, "confirmed", actor=None)
     except Exception as exc:  # noqa: BLE001
         logger.exception("Order transition failed for %s: %s", payment.order, exc)
         raise
 
     record_event(
         organization=payment.organization,
-        actor=None,
         action="order_paid",
         target_type="payment",
         target_id=payment.id,
+        target_repr=f"{payment.order.order_number} ödendi",
         payload={
             "order_number": payment.order.order_number,
             "amount": str(payment.amount),
             "provider_payment_id": payment.provider_payment_id,
+            "via": via,
         },
     )
 
@@ -433,12 +460,18 @@ def reverse_loyalty_for_refund(*, order, refund_record) -> Optional[int]:
         return None
 
 
-def _mark_event(provider_name, event_id, payload, processed=False) -> WebhookEvent:
-    """Persist a placeholder WebhookEvent when we can't dispatch (e.g. no
-    settings for this provider). Used so duplicate webhooks don't 500."""
-    return WebhookEvent.objects.create(
+def _ignored_event(provider_name) -> WebhookEvent:
+    """An UNSAVED placeholder for a webhook we cannot dispatch (no tenant has
+    this provider configured). The view only reads ``provider_event_id`` and
+    ``processed`` from it.
+
+    Nothing is persisted: the old version inserted a ('provider', 'no_settings')
+    row on every such call, which violates the unique constraint on the second
+    delivery (HTTP 500) and let anonymous callers write to the table.
+    """
+    return WebhookEvent(
         provider_name=provider_name,
-        provider_event_id=event_id,
-        payload=payload if isinstance(payload, dict) else {"raw": str(payload)},
-        processed=processed,
+        provider_event_id="no_settings",
+        payload={},
+        processed=False,
     )

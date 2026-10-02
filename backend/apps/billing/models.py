@@ -24,7 +24,7 @@ from django.utils import timezone
 
 from apps.core.models import TimeStampedModel
 
-from .constants import FEATURE_FIELDS, PLAN_CHOICES, default_features
+from .constants import FEATURE_FIELDS, PLAN_CHOICES, default_features, platform_forced_off
 
 
 class PlanSettings(TimeStampedModel):
@@ -95,9 +95,14 @@ class PlanSettings(TimeStampedModel):
         Used by :func:`apps.billing.services.has_feature` — the
         operator override on this row wins over the static tier
         defaults in :data:`PLAN_TIER_LIMITS`. The keys returned are
-        exactly :data:`FEATURE_FIELDS`.
+        exactly :data:`FEATURE_FIELDS`. Flags the platform has switched off
+        globally (:func:`platform_forced_off`) are reported False.
         """
-        return {field: bool(getattr(self, field)) for field in FEATURE_FIELDS}
+        forced_off = platform_forced_off()
+        return {
+            field: bool(getattr(self, field)) and field not in forced_off
+            for field in FEATURE_FIELDS
+        }
 
     def reset_features_to_plan(self) -> None:
         """Snap the boolean columns back to the static matrix default

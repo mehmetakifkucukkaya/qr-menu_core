@@ -49,6 +49,7 @@ from .constants import (
     USAGE_METRICS,
     default_features,
     is_valid_plan,
+    platform_forced_off,
 )
 from .errors import FeatureDisabled, LimitExceeded
 from .models import PlanSettings, TenantUsageCounter
@@ -99,6 +100,8 @@ def has_feature(
     unknown name returns ``False`` (the safe default — "no, you can't
     use a thing you didn't ask for by name").
     """
+    if feature in platform_forced_off():
+        return False
     if isinstance(org_or_plan_settings, PlanSettings):
         ps = org_or_plan_settings
     else:
@@ -323,7 +326,7 @@ def get_public_settings(organization: Organization) -> dict:
         "slug": organization.slug,
         "name": organization.name,
         "active_plan": ps.active_plan,
-        "features": {feature: bool(getattr(ps, feature)) for feature in FEATURE_FIELDS},
+        "features": ps.effective_features(),
     }
 
 

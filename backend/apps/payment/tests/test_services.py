@@ -15,6 +15,7 @@
 
 from __future__ import annotations
 
+import json
 from decimal import Decimal
 
 import pytest
@@ -84,8 +85,6 @@ def test_handle_webhook_event_idempotent(
             },
         }
     ).encode("utf-8")
-    import json as json_mod
-
     first = handle_webhook_event(
         provider_name="stripe", payload=payload, signature_header="t=1,v1=a"
     )
@@ -195,7 +194,7 @@ def test_refund_payment_triggers_loyalty_reverse_when_earn_exists(
     from apps.orders.services import transition_status
 
     make_payment_settings(organization_a)
-    order = make_order(organization_a, customer=customer_a, organization=organization_a)
+    order = make_order(organization_a, customer=customer_a)
     create_payment_for_order(order=order)
 
     # Simulate delivered + earn (loyalty award hook fires here in real flow).
@@ -207,7 +206,15 @@ def test_refund_payment_triggers_loyalty_reverse_when_earn_exists(
         order=order,
         note="Initial earn",
     )
-    transition_status(order, OrderStatus.DELIVERED, actor=user_a)
+    # Walk the real state machine - pending -> delivered is not a legal jump,
+    # which is why this test could never have reached the refund call.
+    for step in (
+        OrderStatus.CONFIRMED,
+        OrderStatus.PREPARING,
+        OrderStatus.READY,
+        OrderStatus.DELIVERED,
+    ):
+        transition_status(order, step, actor=user_a)
 
     refund_payment(
         order=order, amount=None, reason="customer_request", initiated_by_user=user_a,
@@ -256,16 +263,15 @@ def test_handle_webhook_event_signature_missing_raises(make_payment_settings, or
     from apps.payment.errors import PaymentInvalidSignature
 
     # Force an invalid signature by stubbing out the verify step.
-    from apps.payment.providers import get_provider_for_org
     from unittest.mock import patch
-
-    from apps.payment.errors import PaymentInvalidSignature as PSIE
 
     with patch("apps.payment.providers.stripe.stripe.Webhook.construct_event") as m:
         from stripe.error import SignatureVerificationError
 
         m.side_effect = SignatureVerificationError("bad", "x")
-        with pytest.raises((PSIE, Exception)):
+        # Exactly PaymentInvalidSignature - ``(PSIE, Exception)`` accepted any
+        # error at all, including the TypeErrors this suite was hiding.
+        with pytest.raises(PaymentInvalidSignature):
             handle_webhook_event(
                 provider_name="stripe",
                 payload=b"{}",

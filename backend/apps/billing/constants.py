@@ -158,6 +158,22 @@ PLAN_TIER_LIMITS: Final = {
 # and ``has_feature()`` service. Listed explicitly so callers don't have
 # to introspect the model class at runtime (faster lookups, easier to
 # cross-check against the admin UI in Sprint B2).
+def platform_forced_off() -> frozenset:
+    """Feature flags the PLATFORM has switched off for every tenant.
+
+    Today only ``payments_enabled``: while ``settings.PAYMENTS_ENABLED`` is False
+    the payment module is dark (see ``apps.payment.permissions``), so no tenant
+    may be told - or let its checkout assume - that online payment works,
+    whatever its plan row says.
+    """
+    from django.conf import settings
+
+    off = set()
+    if not getattr(settings, "PAYMENTS_ENABLED", False):
+        off.add("payments_enabled")
+    return frozenset(off)
+
+
 FEATURE_FIELDS: Final = (
     "cart_enabled",
     "orders_enabled",

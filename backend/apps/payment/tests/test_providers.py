@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import json
+from decimal import Decimal
 
 import pytest
 from cryptography.fernet import InvalidToken
@@ -21,6 +22,7 @@ from apps.payment.crypto import decrypt, encrypt
 from apps.payment.errors import PaymentSettingMissing
 from apps.payment.providers import PROVIDERS, IyzicoProvider, StripeProvider
 from apps.payment.providers.base import InvalidSignatureError
+from apps.payment.tests.conftest import stripe_event, stripe_signature
 
 
 pytestmark = pytest.mark.django_db
@@ -63,20 +65,42 @@ def test_stripe_refund_partial(mock_stripe_payment_intent, make_payment_settings
     provider = StripeProvider(api_key="sk_test_x", webhook_secret="whsec_x", is_test_mode=True)
     refund = provider.refund(
         provider_payment_id="pi_test_x",
-        amount=4.5,
+        amount=Decimal("4.50"),
         reason="customer_request",
     )
-    assert refund.amount == 100  # mock echoes kwargs amount (test seam)
+    # 4.50 TRY is sent to Stripe as 450 minor units; the fake echoes the amount it
+    # was given, so a correct conversion round-trips to 4.50. (This used to
+    # assert 100, a leftover from the full-refund fixture default.)
+    assert refund.amount == Decimal("4.50")
 
 
-def test_stripe_webhook_signature_verify_valid(mock_stripe_payment_intent):
+def test_stripe_webhook_signature_verify_valid():
+    """A genuinely signed payload verifies (real SDK, real HMAC - nothing patched)."""
     provider = StripeProvider(api_key="sk_test_x", webhook_secret="whsec_x", is_test_mode=True)
+    payload = stripe_event("evt_x", "payment_intent.succeeded", id="pi_1")
     event = provider.verify_webhook(
-        payload=b'{"id":"evt_x","type":"payment_intent.succeeded"}',
-        signature_header="t=1234,v1=abcd",
+        payload=payload, signature_header=stripe_signature(payload, "whsec_x")
     )
     assert event.event_type == "payment_intent.succeeded"
     assert event.provider == "stripe"
+    assert event.provider_event_id == "evt_x"
+
+
+def test_stripe_webhook_rejects_a_signature_made_with_another_secret():
+    provider = StripeProvider(api_key="sk_test_x", webhook_secret="whsec_x", is_test_mode=True)
+    payload = stripe_event("evt_x", "payment_intent.succeeded", id="pi_1")
+    with pytest.raises(InvalidSignatureError):
+        provider.verify_webhook(
+            payload=payload, signature_header=stripe_signature(payload, "whsec_attacker")
+        )
+
+
+def test_stripe_webhook_rejects_a_tampered_body():
+    provider = StripeProvider(api_key="sk_test_x", webhook_secret="whsec_x", is_test_mode=True)
+    payload = stripe_event("evt_x", "payment_intent.succeeded", id="pi_1")
+    header = stripe_signature(payload, "whsec_x")
+    with pytest.raises(InvalidSignatureError):
+        provider.verify_webhook(payload=payload.replace(b"pi_1", b"pi_2"), signature_header=header)
 
 
 def test_stripe_webhook_signature_verify_invalid_raises():

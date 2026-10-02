@@ -11,9 +11,37 @@ both).
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
+import time
+
 import pytest
 from django.core.cache import cache
 from rest_framework.test import APIClient
+
+WEBHOOK_SECRET = "whsec_dummy_abcdef0123456789"
+
+
+def stripe_signature(payload: bytes, secret: str = WEBHOOK_SECRET, timestamp: int | None = None) -> str:
+    """A REAL ``Stripe-Signature`` header value for ``payload``.
+
+    Stripe signs ``f"{t}.{body}"`` with HMAC-SHA256 and sends ``t=...,v1=...``.
+    Tests that need to exercise signature verification must use this instead of
+    patching ``construct_event``: the permissive fake below accepts anything,
+    which is exactly how the broken webhook view went unnoticed.
+    """
+    t = int(time.time()) if timestamp is None else timestamp
+    signed = f"{t}.".encode() + payload
+    v1 = hmac.new(secret.encode(), signed, hashlib.sha256).hexdigest()
+    return f"t={t},v1={v1}"
+
+
+def stripe_event(event_id: str, event_type: str, **object_fields) -> bytes:
+    """Serialised Stripe event body with ``data.object`` set from kwargs."""
+    return json.dumps(
+        {"id": event_id, "type": event_type, "data": {"object": object_fields}}
+    ).encode("utf-8")
 
 
 @pytest.fixture(autouse=True)
@@ -136,9 +164,12 @@ def make_order(db):
 
 
 @pytest.fixture
-def mock_stripe_payment_intent(monkeypatch):
-    """Patch the SDK calls invoked by ``StripeProvider`` — pure
-    ``monkeypatch`` style, never hits the network."""
+def mock_stripe_api(monkeypatch):
+    """Patch the Stripe SDK *API* calls (PaymentIntent.create / retrieve,
+    Refund.create) - pure ``monkeypatch`` style, never hits the network.
+
+    ``Webhook.construct_event`` is left REAL, so tests using this fixture verify
+    genuine HMAC signatures (build them with ``stripe_signature``)."""
 
     class _FakeIntent:
         id = "pi_test_3Oxxxxxxxxxxxxxx"
@@ -181,19 +212,38 @@ def mock_stripe_payment_intent(monkeypatch):
 
         return _FakeRefund()
 
-    def fake_construct_event(payload, signature, secret):
-        import json
-
-        decoded = json.loads(payload.decode("utf-8")) if payload else {}
-        event = _FakeIntent()
-        event.id = decoded.get("id", "evt_fake_001")
-        event.type = decoded.get("type", "payment_intent.succeeded")
-        return event
-
     import stripe
 
     monkeypatch.setattr(stripe.PaymentIntent, "create", fake_create)
     monkeypatch.setattr(stripe.PaymentIntent, "retrieve", fake_retrieve)
     monkeypatch.setattr(stripe.Refund, "create", fake_refund)
-    monkeypatch.setattr(stripe.Webhook, "construct_event", fake_construct_event)
     return _FakeIntent
+
+
+@pytest.fixture
+def mock_stripe_payment_intent(monkeypatch, mock_stripe_api):
+    """``mock_stripe_api`` PLUS a permissive ``Webhook.construct_event``.
+
+    Use it for tests about dispatch / idempotency / services where the
+    signature is irrelevant. It accepts ANY signature - so never rely on it to
+    test signature handling."""
+
+    class _FakeEvent:
+        """What ``stripe.Webhook.construct_event`` returns: the decoded body."""
+
+        def __init__(self, decoded):
+            self._decoded = decoded
+
+        def to_dict(self):
+            return self._decoded
+
+    def fake_construct_event(payload, signature, secret):
+        decoded = json.loads(payload.decode("utf-8")) if payload else {}
+        decoded.setdefault("id", "evt_fake_001")
+        decoded.setdefault("type", "payment_intent.succeeded")
+        return _FakeEvent(decoded)
+
+    import stripe
+
+    monkeypatch.setattr(stripe.Webhook, "construct_event", fake_construct_event)
+    return mock_stripe_api

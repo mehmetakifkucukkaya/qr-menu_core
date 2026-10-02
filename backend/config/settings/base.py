@@ -333,6 +333,12 @@ PAYMENT_DEFAULT_TEST_MODE = _env_bool(
     "PAYMENT_DEFAULT_TEST_MODE", default=True
 )
 
+# Platform-wide kill switch for the payment API (ANALYSIS_1 F-06). The module
+# has no checkout UI yet, so its endpoints stay dark (404) and the
+# ``payments_enabled`` plan flag reports False for every tenant until this is
+# switched on. Set PAYMENTS_ENABLED=1 only once the payment step ships.
+PAYMENTS_ENABLED = _env_bool("PAYMENTS_ENABLED", default=False)
+
 # Public hostname advertised to Stripe for ``success_url`` / ``cancel_url``
 # when the PaymentIntent is created. Production overrides this via env.
 PAYMENT_WEBHOOK_BASE_URL = os.environ.get(

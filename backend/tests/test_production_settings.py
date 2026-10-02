@@ -229,6 +229,8 @@ def test_production_settings_import_with_valid_env():
         # F-05: one trusted proxy hop; F-07: customer cookie is HTTPS-only
         "assert settings.REST_FRAMEWORK['NUM_PROXIES'] == 1; "
         "assert settings.AUTH_COOKIE_SECURE is True; "
+        # F-06: the payment API is dark unless PAYMENTS_ENABLED=1 is set explicitly
+        "assert settings.PAYMENTS_ENABLED is False; "
         # F-04: QR base URL and SMTP come from the environment
         "assert settings.PUBLIC_BASE_URL == 'https://menu.example.com'; "
         "assert (settings.EMAIL_HOST, settings.EMAIL_PORT) == ('smtp.example.com', 2525); "
