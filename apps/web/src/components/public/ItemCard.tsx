@@ -204,6 +204,7 @@ export function ItemCard({
             src={item.image}
             alt=""
             aria-hidden
+            thumbnail
             wrapperClassName="h-full w-full rounded-xl ring-1 ring-inset ring-black/5"
             className="transition-transform duration-500 ease-out-expo group-hover:scale-105"
           />

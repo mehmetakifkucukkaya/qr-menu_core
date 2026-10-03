@@ -47,6 +47,20 @@ Neden işlenmiş hat? Telefon fotoğrafı 3–5 MB'dır; işlenmeden her müşte
 
 `ImageUpload` bunu `processed` prop'uyla seçer (varsayılan: `false`).
 
+### Küçük resimler (thumbnail)
+
+Backend her işlenmiş yüklemenin yanına `<ad>.thumb.<uzantı>` adıyla ≤ 400 px'lik bir kopya yazar. Ekranda **küçük** görünen
+yerler bunu kullanır: menü kartı (~120 px), sepet satırı, admin liste karosu (`SmartImage thumbnail` →
+`lib/media-url.ts → thumbnailSrc()`). 30 ürünlük bir kategori ≈ 10 MB yerine ≈ 1 MB indirir. **Büyük** yerler tam dosyayı
+yükler: ürün çekmecesi, kategori şeridi, kapak, form önizlemesi.
+
+* Yalnızca `tenants/<işletme>/image/<32 hex>.<jpg|png|webp>` biçimindeki dosyalar aday olur (host fark etmez, sorgu dizgisi
+  korunur). Eski yüklemeler (`uploads/…`) ve zaten küçük resim olanlar tam dosyayla kalır.
+* Küçük resim bir **tahmindir**: dosya yoksa (üretilememiş, silinmiş) `SmartImage` hata karosu göstermeden tam dosyaya döner
+  (e2e flow 8b).
+* Backend küçük resmi her zaman JPEG olarak kodlar ama adı özgün uzantıyı taşır (`x.thumb.png` içinde JPEG baytları olabilir).
+  Tarayıcılar resmi içeriğinden tanıdığı için bu bir sorun değildir; yine de bilinen bir tuhaflık.
+
 ## 3. `/media` rotası (`app/media/[...path]/route.ts`)
 
 Production'da `/media/*` isteğini Caddy karşılar ve bu rota hiç çalışmaz. Caddy olmayan her yerde
@@ -77,10 +91,10 @@ origin'i, CDN, R2) **dokunmaz**. `SmartImage` ve `PremiumHero` bunu otomatik uyg
 
 | Ne | Nerede |
 |---|---|
-| `mediaSrc` / `absoluteMediaUrl` | `src/lib/media-url.test.ts` (`npm run test:media-url`) |
+| `mediaSrc` / `thumbnailSrc` / `absoluteMediaUrl` | `src/lib/media-url.test.ts` (`npm run test:media-url`) |
 | yol doğrulama, `image/*` süzgeci | `src/lib/media-proxy.test.ts` (`npm run test:media-proxy`) |
 | JSON-LD'de mutlak görsel URL'si | `src/lib/seo.test.ts` |
-| uçtan uca: seç → yükle → kaydet → müşteri menüsünde **gerçekten yüklenir** | `e2e/photos.spec.ts` (flow 8a–8f) |
+| uçtan uca: seç → yükle → kaydet → müşteri menüsünde **gerçekten yüklenir** (kart: küçük resim, çekmece: tam dosya, eksik küçük resimde geri dönüş) | `e2e/photos.spec.ts` (flow 8a–8g) |
 
 E2E düzeneği artık yüklemeleri çalışma kopyasındaki `backend/media`'ya değil, her çalıştırmada silinen geçici bir
 klasöre yazar: `MEDIA_ROOT` ortam değişkeni (`backend/config/settings/base.py`). `production.py` kendi yolunu
@@ -88,9 +102,6 @@ bilerek sabit tutar — Caddy tam o volume'u okur.
 
 ## 6. Bilinen sınırlar ve sonraki adımlar
 
-* **Kartlar tam boyutlu dosyayı yükler.** Kartta görünen alan ~120 px; oysa dosya ≤ 1920×1080. Backend her yüklemede
-  `<ad>.thumb.<uzantı>` adıyla 400 px'lik bir küçük resim de üretiyor; kartlarda onu kullanmak (yoksa asıl dosyaya
-  dönmek) uzun menülerde mobil veri tüketimini ciddi azaltır. Kapsam dışı bırakıldı.
 * **Yetim dosya.** Yükleme, fotoğraf seçildiği anda yapılır. Kullanıcı Kaydet'e basmadan çıkarsa ya da fotoğrafı
   kaldırırsa dosya medya kitaplığında kalır (silinmez).
 * **S3 / R2.** `MEDIA_STORAGE_BACKEND=s3` iken `public_url` mutlak (`MEDIA_PUBLIC_BASE_URL`) döner; `mediaSrc` ona

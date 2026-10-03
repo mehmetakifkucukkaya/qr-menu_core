@@ -19,12 +19,13 @@ source code or at API responses in isolation can see that.
 | 5 | Change the price → it shows on the public menu | `admin.spec.ts` | stale/cached public menu, write path not reaching the public read path |
 | 6 | Open a QR code and download its PNG | `admin.spec.ts` | broken QR endpoint / auth |
 | 7 | On a phone the admin menu button opens the nav drawer and navigates | `admin.spec.ts` | admin unusable on phones: sidebar hidden below `md` and no way to open navigation |
-| 8a | Add a product photo: wrong type / over 5 MB refused in the browser, upload, save, thumbnail in the list, shown (and resized) on the public menu | `photos.spec.ts` | an uploaded photo saved fine but answered 404 on the public menu (nothing served `/media` outside production's Caddy) |
-| 8b | Remove the photo → an ordinary text-only product | `photos.spec.ts` | a cleared photo coming back, or the product breaking without one |
-| 8c | A category photo is an optional banner above its title; removing it restores the plain heading | `photos.spec.ts` | category photos never reaching the public menu |
-| 8d | A refused upload shows the server's message and keeps the photo that was already there | `photos.spec.ts` | a failed upload wiping the preview, or failing silently |
-| 8e | `/media` is read-only (405) and refuses path tricks | `photos.spec.ts` | the public file route being usable for traversal |
-| 8f | A non-picture on the media volume (an imported PDF) is not served through `/media` | `photos.spec.ts` | the public file route leaking private files |
+| 8a | Add a product photo: wrong type / over 5 MB refused in the browser, upload, save; the list and the cards load the ~400 px thumbnail, the detail sheet the full photo (resized to ≤ 1920 px); the sheet's close button stays inside it | `photos.spec.ts` | an uploaded photo saved fine but answered 404 on the public menu (nothing served `/media` outside production's Caddy); every card downloading a multi-MB file |
+| 8b | A missing thumbnail file falls back to the full photo | `photos.spec.ts` | a card showing an empty tile because the guessed companion file does not exist |
+| 8c | Remove the photo → an ordinary text-only product | `photos.spec.ts` | a cleared photo coming back, or the product breaking without one |
+| 8d | A category photo is an optional banner above its title; removing it restores the plain heading | `photos.spec.ts` | category photos never reaching the public menu |
+| 8e | A refused upload shows the server's message and keeps the photo that was already there | `photos.spec.ts` | a failed upload wiping the preview, or failing silently |
+| 8f | `/media` is read-only (405) and refuses path tricks | `photos.spec.ts` | the public file route being usable for traversal |
+| 8g | A non-picture on the media volume (an imported PDF) is not served through `/media` | `photos.spec.ts` | the public file route leaking private files |
 
 Flows 1, 1b, 2, 2b and 2c also run on a phone viewport (Pixel 7): the product is
 used on phones.

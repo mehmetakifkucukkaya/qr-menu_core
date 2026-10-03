@@ -11,7 +11,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { absoluteMediaUrl, mediaSrc } from "./media-url.ts";
+import { absoluteMediaUrl, mediaSrc, thumbnailSrc } from "./media-url.ts";
 
 test("empty input gives null", () => {
   assert.equal(mediaSrc(null), null);
@@ -78,4 +78,59 @@ test("absoluteMediaUrl resolves relative paths against the site origin", () => {
     "https://cdn.example.com/a.jpg",
   );
   assert.equal(absoluteMediaUrl("https://menu.example.com", null), null);
+});
+
+const HEX = "0a1b2c3d4e5f60718293a4b5c6d7e8f9";
+
+test("a processed upload has a .thumb companion next to it", () => {
+  assert.equal(
+    thumbnailSrc(`/media/tenants/modern-cafe/image/${HEX}.jpg`),
+    `/media/tenants/modern-cafe/image/${HEX}.thumb.jpg`,
+  );
+  assert.equal(
+    thumbnailSrc(`/media/tenants/modern-cafe/image/${HEX}.png`),
+    `/media/tenants/modern-cafe/image/${HEX}.thumb.png`,
+  );
+  assert.equal(
+    thumbnailSrc(`/media/tenants/modern-cafe/image/${HEX}.webp`),
+    `/media/tenants/modern-cafe/image/${HEX}.thumb.webp`,
+  );
+  assert.equal(
+    thumbnailSrc(`/media/tenants/modern-cafe/image/${HEX.toUpperCase()}.JPEG`),
+    `/media/tenants/modern-cafe/image/${HEX.toUpperCase()}.thumb.JPEG`,
+  );
+});
+
+test("the thumbnail of a loopback-origin or CDN URL keeps its host and query", () => {
+  assert.equal(
+    thumbnailSrc(`http://localhost:3000/media/tenants/cafe/image/${HEX}.jpg`),
+    `/media/tenants/cafe/image/${HEX}.thumb.jpg`,
+  );
+  assert.equal(
+    thumbnailSrc(`https://cdn.example.com/media/tenants/cafe/image/${HEX}.jpg?v=2`),
+    `https://cdn.example.com/media/tenants/cafe/image/${HEX}.thumb.jpg?v=2`,
+  );
+  assert.equal(
+    thumbnailSrc(`https://pub-abc.r2.dev/tenants/cafe/image/${HEX}.png`),
+    `https://pub-abc.r2.dev/tenants/cafe/image/${HEX}.thumb.png`,
+  );
+});
+
+test("anything that is not a processed upload has no thumbnail", () => {
+  for (const url of [
+    null,
+    undefined,
+    "",
+    "/media/uploads/1/abc-test.jpg", // legacy upload: stored untouched
+    "http://localhost:3000/media/uploads/1/abc-test.jpg",
+    `/media/tenants/cafe/image/${HEX}.thumb.jpg`, // already a thumbnail
+    `/media/tenants/cafe/video/${HEX}.jpg`, // not the image folder
+    "/media/tenants/cafe/image/not-a-uuid.jpg", // not a 32-hex name
+    `/media/tenants/cafe/image/${HEX}.gif`, // not a processed format
+    `/media/tenants/cafe/image/${HEX}`, // no extension
+    "data:image/svg+xml;base64,AAAA",
+    "blob:http://localhost:3000/1234",
+  ]) {
+    assert.equal(thumbnailSrc(url), null, String(url));
+  }
 });

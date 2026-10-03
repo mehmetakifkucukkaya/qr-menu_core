@@ -138,6 +138,7 @@ export function CartDrawer({
                       src={thumb}
                       alt=""
                       aria-hidden
+                      thumbnail
                       wrapperClassName="h-16 w-16 shrink-0 rounded-xl"
                     />
                   ) : null}

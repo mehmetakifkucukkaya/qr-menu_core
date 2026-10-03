@@ -10,7 +10,7 @@ import {
 } from "react";
 import { UtensilsCrossed } from "lucide-react";
 
-import { mediaSrc } from "@/lib/media-url";
+import { mediaSrc, thumbnailSrc } from "@/lib/media-url";
 
 /**
  * SmartImage — an <img> that never shows the browser's "broken image" glyph.
@@ -28,6 +28,11 @@ import { mediaSrc } from "@/lib/media-url";
  * `src` goes through `mediaSrc()`: an old upload saved with a loopback origin
  * (`http://localhost:3000/media/…`) is turned into a same-origin `/media/…` path
  * that actually resolves.
+ *
+ * `thumbnail`: for pictures that are small on screen. A processed upload has a
+ * ~400 px companion file next to it (see `thumbnailSrc`); that is requested
+ * instead of the full file, and if it cannot be loaded the full file takes over
+ * before the error tile is ever shown.
  *
  * The wrapper owns size, radius and background (`wrapperClassName`); the image
  * fills it. A custom `fallback` is centred inside the wrapper, so the caller
@@ -49,6 +54,11 @@ interface SmartImageProps
   wrapperClassName?: string;
   /** Render nothing at all (not even the empty box) when there is no usable image. */
   hideOnError?: boolean;
+  /**
+   * The picture is small on screen (card, cart row, list tile): load the ~400 px
+   * companion of a processed upload, falling back to the full file.
+   */
+  thumbnail?: boolean;
 }
 
 export function SmartImage({
@@ -57,11 +67,17 @@ export function SmartImage({
   fallback,
   wrapperClassName,
   hideOnError = false,
+  thumbnail = false,
   className,
   loading = "lazy",
   ...rest
 }: SmartImageProps) {
-  const src = mediaSrc(rawSrc);
+  const full = mediaSrc(rawSrc);
+  // The picture whose companion failed to load: ask for the full file instead.
+  // Keyed by URL, so a new `src` tries its own companion again.
+  const [thumbFailedFor, setThumbFailedFor] = useState<string | null>(null);
+  const thumb = thumbnail && full && thumbFailedFor !== full ? thumbnailSrc(rawSrc) : null;
+  const src = thumb ?? full;
   const imgRef = useRef<HTMLImageElement | null>(null);
   const [status, setStatus] = useState<Status>(src ? "loading" : "error");
 
@@ -72,11 +88,13 @@ export function SmartImage({
     }
     const img = imgRef.current;
     if (img?.complete) {
-      setStatus(img.naturalWidth > 0 ? "loaded" : "error");
+      if (img.naturalWidth > 0) setStatus("loaded");
+      else if (thumb) setThumbFailedFor(full); // the companion failed before hydration
+      else setStatus("error");
     } else {
       setStatus("loading");
     }
-  }, [src]);
+  }, [src, thumb, full]);
 
   if (!src || status === "error") {
     if (hideOnError) return null;
@@ -108,7 +126,10 @@ export function SmartImage({
         loading={loading}
         decoding="async"
         onLoad={() => setStatus("loaded")}
-        onError={() => setStatus("error")}
+        onError={() => {
+          if (thumb) setThumbFailedFor(full);
+          else setStatus("error");
+        }}
         className={clsx("relative h-full w-full object-cover", className)}
         {...rest}
       />

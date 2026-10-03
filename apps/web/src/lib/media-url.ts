@@ -43,6 +43,31 @@ export function mediaSrc(url: string | null | undefined): string | null {
 }
 
 /**
+ * The ~400 px companion of a processed upload, or `null` when there is none.
+ *
+ * A photo that went through the upload pipeline (`POST /admin/media/upload/`) is
+ * stored as `tenants/<slug>/image/<32 hex>.<ext>` next to a thumbnail named
+ * `<32 hex>.thumb.<ext>`. Pictures that are small on screen (a 120 px menu card,
+ * a 64 px cart row, a 48 px list tile) can load that instead of a file up to
+ * 1920 px wide: a 30-dish category costs about 1 MB instead of 10.
+ *
+ * Only that exact shape qualifies (a 32-hex name under `/tenants/<slug>/image/`,
+ * on any host, with or without a query). Legacy uploads and anything that is
+ * already a thumbnail return `null` and the caller keeps the full image. The
+ * result is a guess about a file the backend normally wrote, so a caller must
+ * fall back to the full image when it fails to load (SmartImage does).
+ */
+const PROCESSED_UPLOAD =
+  /^([^?#]*\/tenants\/[^/?#]+\/image\/[0-9a-f]{32})(\.(?:jpe?g|png|webp))([?#].*)?$/i;
+
+export function thumbnailSrc(url: string | null | undefined): string | null {
+  const src = mediaSrc(url);
+  if (!src) return null;
+  const match = PROCESSED_UPLOAD.exec(src);
+  return match ? `${match[1]}.thumb${match[2]}${match[3] ?? ""}` : null;
+}
+
+/**
  * Make a stored image URL absolute for places that require it (JSON-LD, Open
  * Graph). Relative `/media/…` paths are resolved against the public site origin;
  * anything already absolute is returned as is.

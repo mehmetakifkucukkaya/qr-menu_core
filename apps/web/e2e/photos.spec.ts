@@ -38,6 +38,7 @@ const categoryPhotoSection = (page: Page) =>
 test.describe.serial("optional photos", () => {
   const productName = `E2E Fotoğraflı ${Date.now()}`;
   let editUrl = "";
+  let cardPhotoSrc = ""; // what the public card loaded in 8a (the thumbnail), for 8b
 
   test("flow 8a: add a product photo - checked, uploaded, resized, shown on the public menu", async ({
     page,
@@ -85,17 +86,23 @@ test.describe.serial("optional photos", () => {
     // Saved with the product: the edit page loads it back from the stored item.
     await loadedImageWidth(photoSection(page).locator("img"));
 
-    // The product list shows it as a thumbnail.
+    // The product list shows it as a thumbnail (the small companion file).
     await page.goto("/admin/menus/1/categories/1/items");
-    await loadedImageWidth(page.locator("tr").filter({ hasText: productName }).locator("img"));
+    const listPhoto = page.locator("tr").filter({ hasText: productName }).locator("img");
+    await loadedImageWidth(listPhoto);
+    await expect(listPhoto).toHaveAttribute("src", /\.thumb\.png$/);
 
-    // And customers see it, resized to fit within 1920 px.
+    // And customers see it. A card is ~120 px wide, so it loads the ~400 px
+    // companion file instead of the 1620 px one.
     await page.goto("/m/modern-cafe");
     const card = page.locator("article").filter({
       has: page.getByRole("heading", { level: 3, name: productName }),
     });
-    const width = await loadedImageWidth(card.locator("img"));
-    expect(width, "the 2400 px upload should have been resized").toBeLessThanOrEqual(1920);
+    const cardPhoto = card.locator("img");
+    const thumbWidth = await loadedImageWidth(cardPhoto);
+    expect(thumbWidth, "the card should load the thumbnail, not the full photo").toBeLessThanOrEqual(400);
+    cardPhotoSrc = (await cardPhoto.getAttribute("src"))!;
+    expect(cardPhotoSrc).toMatch(/^\/media\/tenants\/.+\.thumb\.png$/);
 
     // The detail sheet shows the photo flush with its top edge, with the close
     // button floating over it. (The button used to sit in the page flow: a blank
@@ -104,8 +111,14 @@ test.describe.serial("optional photos", () => {
     await clickCentered(card.getByRole("button", { name: productName, exact: true }));
     const sheet = page.getByRole("dialog", { name: productName });
     await expect(sheet).toBeVisible();
+    // The sheet is large, so it loads the full file: 2400 px in, resized to fit within 1920 px.
+    const heroPhoto = sheet.locator("img");
+    const fullWidth = await loadedImageWidth(heroPhoto);
+    expect(fullWidth, "the sheet should load the full photo").toBeGreaterThan(400);
+    expect(fullWidth, "the 2400 px upload should have been resized").toBeLessThanOrEqual(1920);
+    await expect(heroPhoto).not.toHaveAttribute("src", /\.thumb\./);
     const panel = (await sheet.locator(":scope > div").first().boundingBox())!;
-    const hero = (await sheet.locator("img").boundingBox())!;
+    const hero = (await heroPhoto.boundingBox())!;
     const close = (await sheet.getByRole("button", { name: "Kapat" }).boundingBox())!;
     const slack = 1.5; // the sheet may still be easing in
     expect(Math.abs(hero.y - panel.y), "the photo starts at the sheet's top edge").toBeLessThanOrEqual(slack);
@@ -116,7 +129,28 @@ test.describe.serial("optional photos", () => {
     await expect(sheet).toBeHidden();
   });
 
-  test("flow 8b: removing the photo leaves an ordinary text-only product", async ({ page }) => {
+  test("flow 8b: if a thumbnail file is missing, the card shows the full photo instead", async ({
+    page,
+  }) => {
+    // The backend writes the ~400 px companion next to the photo. It is a guess
+    // about a file, so a card whose companion is gone must not show an empty tile.
+    test.skip(!MEDIA_DIR, "needs the media folder of the harness's own backend");
+    expect(cardPhotoSrc, "flow 8a must have loaded the card thumbnail").toMatch(/\.thumb\.png$/);
+    const onDisk = path.join(MEDIA_DIR, cardPhotoSrc.replace(/^\/media\//, ""));
+    expect(fs.existsSync(onDisk), "the harness backend writes thumbnails to its media folder").toBe(true);
+    fs.rmSync(onDisk);
+
+    await page.goto("/m/modern-cafe");
+    const card = page.locator("article").filter({
+      has: page.getByRole("heading", { level: 3, name: productName }),
+    });
+    const cardPhoto = card.locator("img");
+    const width = await loadedImageWidth(cardPhoto);
+    await expect(cardPhoto).not.toHaveAttribute("src", /\.thumb\./);
+    expect(width, "the full photo took over from the missing thumbnail").toBeGreaterThan(400);
+  });
+
+  test("flow 8c: removing the photo leaves an ordinary text-only product", async ({ page }) => {
     expect(editUrl, "flow 8a must have created the product").not.toBe("");
     await loginAsAdmin(page);
     await page.goto(editUrl);
@@ -139,7 +173,7 @@ test.describe.serial("optional photos", () => {
     await expect(card.locator("img")).toHaveCount(0);
   });
 
-  test("flow 8c: a category photo is an optional banner above its title", async ({ page }) => {
+  test("flow 8d: a category photo is an optional banner above its title", async ({ page }) => {
     await loginAsAdmin(page);
     await page.goto("/admin/menus/1/categories/1/edit");
 
@@ -169,7 +203,7 @@ test.describe.serial("optional photos", () => {
     await expect(page.locator("#category-kahveler > div > img")).toHaveCount(0);
   });
 
-  test("flow 8d: a refused upload says so and keeps the photo that was already there", async ({
+  test("flow 8e: a refused upload says so and keeps the photo that was already there", async ({
     page,
   }) => {
     await loginAsAdmin(page);
@@ -199,7 +233,7 @@ test.describe.serial("optional photos", () => {
     await expect(section.getByRole("button", { name: "Fotoğrafı kaldır" })).toBeVisible();
   });
 
-  test("flow 8e: /media is read-only and refuses path tricks", async ({ request }) => {
+  test("flow 8f: /media is read-only and refuses path tricks", async ({ request }) => {
     // A picture that does not exist is a plain 404, not an error page.
     expect((await request.get("/media/tenants/modern-cafe/image/nope.png")).status()).toBe(404);
     // Nothing but GET / HEAD.
@@ -210,7 +244,7 @@ test.describe.serial("optional photos", () => {
     }
   });
 
-  test("flow 8f: a file that is not a picture is not served through /media", async ({ request }) => {
+  test("flow 8g: a file that is not a picture is not served through /media", async ({ request }) => {
     // Imported PDFs live on the same media volume as the photos; the site must
     // never hand them out, even though the backend would.
     test.skip(!MEDIA_DIR, "needs the media folder of the harness's own backend");

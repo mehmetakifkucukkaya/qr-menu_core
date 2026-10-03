@@ -381,6 +381,7 @@ function ItemThumb({ src }: { src: string | null }) {
       src={src}
       alt=""
       aria-hidden
+      thumbnail
       fallback={<ImageOff className="h-5 w-5 text-outline" aria-hidden />}
       wrapperClassName={clsx(
         "h-12 w-12 shrink-0 rounded-lg bg-surface-low",
