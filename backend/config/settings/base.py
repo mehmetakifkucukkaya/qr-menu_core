@@ -182,7 +182,10 @@ STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 MEDIA_URL = "/media/"
-MEDIA_ROOT = BASE_DIR / "media"
+# MEDIA_ROOT may be redirected (the Playwright harness points it at a throwaway
+# folder so test uploads never land in the working copy). production.py pins
+# its own path on purpose: Caddy serves exactly that shared volume.
+MEDIA_ROOT = Path(os.environ.get("MEDIA_ROOT") or BASE_DIR / "media")
 
 # ---------------------------------------------------------------------------
 # Sprint E1 — Media storage backend (D-033)

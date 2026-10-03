@@ -1,3 +1,4 @@
+import { SmartImage } from "@/components/ui/SmartImage";
 import type { PublicMenuCategory, PublicMenuItem } from "@/types/menu";
 import { ItemCard } from "./ItemCard";
 
@@ -9,7 +10,8 @@ interface CategorySectionProps {
 
 /**
  * CategorySection — anchor target for the category chips / rail, plus the
- * section heading and its list of dishes.
+ * section heading and its list of dishes. A category that has a photo shows it
+ * as a banner above the heading; the photo is optional, like every image.
  *
  * `id="category-{slug}"` makes direct hash links work; `useCategorySpy` reads
  * the same ids for the active-chip highlight. The landing offset under the
@@ -29,6 +31,17 @@ export function CategorySection({
       data-category-anchor={category.slug}
       aria-labelledby={`category-${category.slug}-title`}
     >
+      {/* Optional category photo. It is a banner, so a photo that cannot be
+          loaded is dropped entirely instead of leaving an empty frame. */}
+      {category.image ? (
+        <SmartImage
+          src={category.image}
+          alt=""
+          aria-hidden
+          hideOnError
+          wrapperClassName="mb-4 h-28 w-full rounded-2xl ring-1 ring-black/5 sm:h-36"
+        />
+      ) : null}
       <header className="mb-4 flex items-end justify-between gap-4">
         <div className="min-w-0">
           <h2

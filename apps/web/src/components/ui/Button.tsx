@@ -11,6 +11,7 @@ import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
  *   outline   bordered, transparent — secondary actions
  *   ghost     text only — tertiary / toolbar actions
  *   danger    destructive actions (delete, cancel order)
+ *   danger-soft  quiet destructive action (remove a photo) — tinted, not solid
  *   inverse   translucent white — for use ON a primary-coloured surface (banners)
  *   floating  frosted surface chip — a close button over a photograph
  *
@@ -35,6 +36,7 @@ export type ButtonVariant =
   | "outline"
   | "ghost"
   | "danger"
+  | "danger-soft"
   | "inverse"
   | "floating";
 export type ButtonSize = "sm" | "md" | "lg" | "icon" | "icon-sm";
@@ -55,6 +57,7 @@ const variants: Record<ButtonVariant, string> = {
     "border border-border-strong bg-surface text-text hover:bg-surface-low hover:border-input",
   ghost: "text-text hover:bg-surface-low",
   danger: "bg-danger text-white shadow-sm hover:bg-danger/90",
+  "danger-soft": "bg-danger-soft text-danger hover:bg-danger/15",
   inverse: "bg-white/15 text-primary-foreground hover:bg-white/25",
   floating: "bg-surface/90 text-text shadow-md backdrop-blur hover:bg-surface",
 };

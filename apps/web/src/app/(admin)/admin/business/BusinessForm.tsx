@@ -320,9 +320,8 @@ export function BusinessForm({ organization, csrfToken }: BusinessFormProps) {
           Görseller
         </h2>
         <p className="text-xs text-muted">
-          Logo ve kapak görseli. Yükleme multipart üzerinden
-          /api/v1/admin/media/upload endpoint&apos;ine gider. JPG / PNG /
-          WEBP · maks. 5 MB (D-011 local MEDIA_ROOT).
+          Logo ve kapak fotoğrafı menünüzün üst kısmında görünür. İkisi de
+          isteğe bağlıdır. JPG, PNG veya WEBP · en fazla 5 MB.
         </p>
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
           <div className="flex flex-col gap-2">
@@ -332,17 +331,22 @@ export function BusinessForm({ organization, csrfToken }: BusinessFormProps) {
               onUpload={(serverUrl) => setLogoUrl(serverUrl)}
               csrfToken={csrfToken}
               aspectClassName="aspect-square"
+              widthClassName="max-w-[11rem]"
               alt={`${organization.name} logo`}
+              emptyTitle="Logo ekle"
+              saveHint="Değişiklikleri kaydedince menüde görünür."
             />
           </div>
           <div className="flex flex-col gap-2">
-            <span className="text-sm font-medium text-text">Kapak görseli</span>
+            <span className="text-sm font-medium text-text">Kapak fotoğrafı</span>
             <ImageUpload
               value={coverUrl}
               onUpload={(serverUrl) => setCoverUrl(serverUrl)}
               csrfToken={csrfToken}
               aspectClassName="aspect-video"
-              alt={`${organization.name} kapak görseli`}
+              alt={`${organization.name} kapak fotoğrafı`}
+              emptyTitle="Kapak fotoğrafı ekle"
+              saveHint="Değişiklikleri kaydedince menüde görünür."
             />
           </div>
         </div>

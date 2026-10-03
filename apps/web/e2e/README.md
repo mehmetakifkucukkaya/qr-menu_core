@@ -17,9 +17,14 @@ source code or at API responses in isolation can see that.
 | 3 | Log in → dashboard loads its data, no error banner | `admin.spec.ts` | `GET /admin/summary` 404 (F-02), broken login/redirect |
 | 4 | Create a product, then edit it | `admin.spec.ts` | the 8 create/edit pages answering HTTP 500 (F-01), admin writes rejected by CSRF |
 | 5 | Change the price → it shows on the public menu | `admin.spec.ts` | stale/cached public menu, write path not reaching the public read path |
-| 5b | The detail sheet of a dish with a photo keeps its close button inside it | `admin.spec.ts` | the floating close button sitting in the page flow, half outside the sheet (only reachable with a photo, which the seed data has none of) |
 | 6 | Open a QR code and download its PNG | `admin.spec.ts` | broken QR endpoint / auth |
 | 7 | On a phone the admin menu button opens the nav drawer and navigates | `admin.spec.ts` | admin unusable on phones: sidebar hidden below `md` and no way to open navigation |
+| 8a | Add a product photo: wrong type / over 5 MB refused in the browser, upload, save, thumbnail in the list, shown (and resized) on the public menu | `photos.spec.ts` | an uploaded photo saved fine but answered 404 on the public menu (nothing served `/media` outside production's Caddy) |
+| 8b | Remove the photo → an ordinary text-only product | `photos.spec.ts` | a cleared photo coming back, or the product breaking without one |
+| 8c | A category photo is an optional banner above its title; removing it restores the plain heading | `photos.spec.ts` | category photos never reaching the public menu |
+| 8d | A refused upload shows the server's message and keeps the photo that was already there | `photos.spec.ts` | a failed upload wiping the preview, or failing silently |
+| 8e | `/media` is read-only (405) and refuses path tricks | `photos.spec.ts` | the public file route being usable for traversal |
+| 8f | A non-picture on the media volume (an imported PDF) is not served through `/media` | `photos.spec.ts` | the public file route leaking private files |
 
 Flows 1, 1b, 2, 2b and 2c also run on a phone viewport (Pixel 7): the product is
 used on phones.
@@ -47,7 +52,9 @@ Chromium. Playwright's bundled one is installed once with
 The harness starts its **own** stack and never touches your dev data:
 
 * backend: Django `runserver` on `:8200`, a fresh SQLite file in the OS temp
-  directory (deleted and re-seeded with `seed_demo` on every run);
+  directory (deleted and re-seeded with `seed_demo` on every run) and a
+  throwaway media folder next to it (`MEDIA_ROOT`, wiped on every run - uploaded
+  test photos never land in `backend/media`);
 * web: `next build` + `next start` on `:3200`, pointed at that backend;
 * an admin account with a random password generated for that run (nothing is
   written to disk or committed).
@@ -84,3 +91,7 @@ frontend unit tests and these flows. **Do not deploy on red.** See
   bottom bar otherwise intercept Playwright's default scroll position.
 * Keep each flow independent of the others' data where you can (the admin specs
   deliberately run in order because a product is created, repriced, then viewed).
+* Spec files run alphabetically (`admin`, `customer`, `photos`), so a flow that
+  needs an order to exist (2c) lives after the one that places it. Photo flows
+  assert that the picture really *loads* (`loadedImageWidth`), never just that
+  an `<img>` is in the DOM: a 404 leaves the element in place with width 0.

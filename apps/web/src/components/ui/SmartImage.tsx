@@ -47,6 +47,8 @@ interface SmartImageProps
   fallback?: ReactNode;
   /** Size / radius / ring of the box. The image fills it. */
   wrapperClassName?: string;
+  /** Render nothing at all (not even the empty box) when there is no usable image. */
+  hideOnError?: boolean;
 }
 
 export function SmartImage({
@@ -54,6 +56,7 @@ export function SmartImage({
   alt,
   fallback,
   wrapperClassName,
+  hideOnError = false,
   className,
   loading = "lazy",
   ...rest
@@ -76,6 +79,7 @@ export function SmartImage({
   }, [src]);
 
   if (!src || status === "error") {
+    if (hideOnError) return null;
     return (
       <div className={clsx("relative overflow-hidden", wrapperClassName)}>
         {fallback ? (
