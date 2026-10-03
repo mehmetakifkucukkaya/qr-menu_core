@@ -271,8 +271,9 @@ export interface AuditEvent {
   id: number;
   /** Email of the actor, or the literal string "system". */
   actor: string;
-  action: AuditAction;
-  target_type: AuditTargetType;
+  /** Open set: the backend also records orders, AI import, billing... (see `AuditAction`). */
+  action: string;
+  target_type: string;
   target_id: number;
   /** Human-readable snapshot (e.g. "Türk Kahvesi (modern-cafe)"). */
   target_repr: string;
@@ -283,6 +284,12 @@ export interface AuditEvent {
   created_at: string;
 }
 
+/**
+ * The actions / targets the admin UI has a dedicated label and icon for. They
+ * are NOT the full set the API can return (it also sends `order_placed`,
+ * `ai_import_uploaded`, `tenant_created`...), so `AuditEvent` types the fields
+ * as plain strings and every lookup must tolerate a miss.
+ */
 export type AuditAction =
   | "created"
   | "updated"

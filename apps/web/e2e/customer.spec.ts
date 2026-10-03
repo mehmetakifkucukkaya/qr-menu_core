@@ -1,8 +1,8 @@
-import { clickCentered, expect, test } from "./support";
+import { clickCentered, errorBanners, expect, loginAsAdmin, test } from "./support";
 
 /**
- * Flows 1 and 2 - what a customer does after scanning a QR code.
- * Runs on a desktop and on a phone viewport.
+ * Flows 1 and 2 - what a customer does after scanning a QR code - and flow 2c,
+ * the business's side of the same order. Runs on a desktop and on a phone viewport.
  */
 
 test.describe("customer menu", () => {
@@ -113,5 +113,20 @@ test.describe("customer menu", () => {
     await page.waitForURL(/\/m\/modern-cafe\/order-confirmation\/[A-Z]{2}-\d{8}-\d{3}$/);
     await expect(page.getByText(/Beklemede/)).toBeVisible();
     await expect(page.getByRole("heading", { name: /^[A-Z]{2}-\d{8}-\d{3}$/ })).toBeVisible();
+  });
+
+  test("flow 2c: the order shows up on the dashboard the owner lands on after login", async ({
+    page,
+  }) => {
+    // The dashboard's activity feed looked its audit actions up in a table of
+    // nine, and the first order ("order_placed") took the whole page down with
+    // "Application error: a server-side exception has occurred" - for the owner
+    // that is the page every login lands on. flow 3 cannot see it: it runs
+    // before any order exists, so this runs after flow 2 has placed one.
+    await loginAsAdmin(page);
+
+    await expect(page.getByText("için özet")).toBeVisible();
+    await expect(errorBanners(page)).toHaveCount(0);
+    await expect(page.getByText("sipariş alındı").first()).toBeVisible();
   });
 });
