@@ -52,6 +52,20 @@ def test_organization_summary_logo_passed_through_when_absolute_url(org_a):
     assert data["logo"] == "https://demo.example.com/uploads/orgs/modern-cafe-logo.png"
 
 
+def test_organization_summary_passes_root_relative_urls_through(org_a):
+    """The MediaAsset upload returns ``/media/tenants/...`` for local storage;
+    ``field.url`` would turn it into ``/media/media/tenants/...``."""
+    org_a.logo = "/media/uploads/1/logo.png"
+    org_a.cover_image = "/media/tenants/modern-cafe/image/cover.jpg"
+    org_a.save()
+
+    from apps.organizations.serializers import OrganizationSummarySerializer
+
+    data = OrganizationSummarySerializer(org_a).data
+    assert data["logo"] == "/media/uploads/1/logo.png"
+    assert data["cover_image"] == "/media/tenants/modern-cafe/image/cover.jpg"
+
+
 def test_organization_summary_logo_resolves_fieldfile(org_a):
     """Faz 1.1 — when an admin uploads via the Django admin form (FieldFile),
     the public serializer must resolve to MEDIA_URL + filename so the

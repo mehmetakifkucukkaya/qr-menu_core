@@ -101,7 +101,9 @@ def _resolve_image_url(field) -> str | None:
     serializers. Handles three shapes:
 
     * ``None`` / empty string → ``None``
-    * absolute URL (``http://...``, ``https://...``) → passed through
+    * absolute URL (``http://...``, ``https://...``) or root-relative URL
+      (``/media/tenants/...``, what the MediaAsset upload returns for local
+      storage) → passed through; ``field.url`` would mangle both
     * anything else (Django ``FieldFile``) → ``field.url`` (prepends MEDIA_URL)
 
     The media-upload endpoint returns absolute URLs (Sprint 5B); the legacy
@@ -112,6 +114,6 @@ def _resolve_image_url(field) -> str | None:
     if not field:
         return None
     value = str(field)
-    if value.startswith(("http://", "https://")):
+    if value.startswith(("http://", "https://", "/")):
         return value
     return field.url
