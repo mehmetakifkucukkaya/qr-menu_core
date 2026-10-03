@@ -92,37 +92,79 @@ export default async function LoginPage({ searchParams }: PageProps) {
     : undefined;
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
-      <div className="w-full max-w-md">
-        <div className="mb-6 text-center">
+    <main className="grid min-h-screen bg-background lg:grid-cols-2">
+      {/* Brand panel — desktop only. Pure CSS artwork, no image request. */}
+      <aside className="relative hidden overflow-hidden bg-primary text-primary-foreground lg:flex lg:flex-col lg:justify-between lg:p-14">
+        <div aria-hidden className="absolute inset-0">
+          <div className="absolute inset-0 bg-gradient-to-br from-primary via-primary to-accent" />
+          <div className="absolute -right-24 -top-28 h-[28rem] w-[28rem] rounded-full bg-secondary/50 mix-blend-screen blur-3xl" />
+          <div className="absolute -bottom-40 -left-16 h-[30rem] w-[34rem] rounded-full bg-accent blur-3xl" />
           <div
+            className="absolute inset-0 opacity-50 [mask-image:linear-gradient(to_bottom,black,transparent_90%)]"
+            style={{
+              backgroundImage:
+                "radial-gradient(rgb(255 255 255 / 0.2) 1px, transparent 1.5px)",
+              backgroundSize: "22px 22px",
+            }}
+          />
+        </div>
+
+        <div className="relative flex items-center gap-3">
+          <span
             aria-hidden
-            className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-base font-bold text-primary-foreground shadow-sm"
+            className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/15 text-base font-bold ring-1 ring-white/25"
           >
             QR
-          </div>
-          <h1 className="font-heading text-2xl font-bold text-text">
-            QR Menü · Admin
-          </h1>
-          <p className="mt-1 text-sm text-muted">
-            İşletme hesabınızla giriş yapın.
+          </span>
+          <span className="font-heading text-xl font-semibold">QR Menü</span>
+        </div>
+
+        <div className="relative max-w-md">
+          <h2 className="font-heading text-4xl font-semibold leading-tight tracking-tight">
+            Menünüzü, fiyatlarınızı ve QR kodlarınızı tek yerden yönetin.
+          </h2>
+          <p className="mt-4 text-base leading-relaxed text-primary-foreground/80">
+            Yaptığınız değişiklikler müşterilerinizin gördüğü menüye anında
+            yansır.
           </p>
         </div>
 
-        <div className="rounded-xl border border-border bg-surface p-6 shadow-card">
-          <LoginForm nextPath={nextPath} demoHint={demoHint} />
-        </div>
-
-        <p className="mt-6 text-center text-xs text-muted">
-          Sorun mu yaşıyorsunuz?{" "}
-          <a
-            href="mailto:support@qr-menu.local"
-            className="text-primary hover:underline"
-          >
-            Destek
-          </a>
+        <p className="relative text-sm text-primary-foreground/70">
+          © {new Date().getFullYear()} QR Menü
         </p>
-      </div>
+      </aside>
+
+      {/* Form */}
+      <section className="flex items-center justify-center px-5 py-10 sm:px-8">
+        <div className="w-full max-w-sm">
+          <div
+            aria-hidden
+            className="mb-8 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-base font-bold text-primary-foreground shadow-md lg:hidden"
+          >
+            QR
+          </div>
+          <h1 className="font-heading text-3xl font-semibold tracking-tight text-text">
+            Hoş geldiniz
+          </h1>
+          <p className="mt-2 text-[0.9375rem] text-muted">
+            İşletme hesabınızla giriş yapın.
+          </p>
+
+          <div className="mt-8">
+            <LoginForm nextPath={nextPath} demoHint={demoHint} />
+          </div>
+
+          <p className="mt-8 text-center text-sm text-muted">
+            Sorun mu yaşıyorsunuz?{" "}
+            <a
+              href="mailto:support@qr-menu.local"
+              className="font-medium text-primary underline-offset-4 hover:underline"
+            >
+              Destek
+            </a>
+          </p>
+        </div>
+      </section>
     </main>
   );
 }

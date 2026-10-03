@@ -1,16 +1,36 @@
 import { cookies } from "next/headers";
 import Link from "next/link";
 import {
+  ArrowUpDown,
+  Building2,
   ChefHat,
-  Store,
+  ExternalLink,
+  Eye,
+  EyeOff,
+  FolderTree,
+  Package,
   Palette,
-  Sparkles,
-  Activity,
+  Pencil,
+  Plus,
+  Power,
+  PowerOff,
+  QrCode,
+  Store,
+  Tag,
+  Trash2,
+  UtensilsCrossed,
+  Zap,
+  type LucideIcon,
 } from "lucide-react";
 
 import { AdminEmptyState } from "../../_components/EmptyState";
+import { buttonStyles } from "@/components/ui/Button";
 import { fetchAdminSummary } from "@/lib/api-admin";
-import type { AuditEvent, AuditAction } from "@/types/admin";
+import type {
+  AuditAction,
+  AuditEvent,
+  AuditTargetType,
+} from "@/types/admin";
 
 const DEFAULT_NEXT = "/admin/dashboard";
 
@@ -42,6 +62,28 @@ const ACTION_LABEL: Record<AuditAction, string> = {
   deactivated: "pasife alındı",
   reactivated: "aktifleştirildi",
   reordered: "sıralandı",
+};
+
+/** Icon + tint per action, so the feed can be scanned by shape and colour. */
+const ACTION_STYLE: Record<AuditAction, { icon: LucideIcon; tone: string }> = {
+  created: { icon: Plus, tone: "bg-success-soft text-success" },
+  updated: { icon: Pencil, tone: "bg-primary-soft text-primary" },
+  deleted: { icon: Trash2, tone: "bg-danger-soft text-danger" },
+  price_changed: { icon: Tag, tone: "bg-warning-soft text-warning" },
+  published: { icon: Eye, tone: "bg-success-soft text-success" },
+  unpublished: { icon: EyeOff, tone: "bg-surface-low text-muted" },
+  deactivated: { icon: PowerOff, tone: "bg-surface-low text-muted" },
+  reactivated: { icon: Power, tone: "bg-success-soft text-success" },
+  reordered: { icon: ArrowUpDown, tone: "bg-surface-low text-muted" },
+};
+
+const TARGET_LABEL: Record<AuditTargetType, string> = {
+  menu: "menü",
+  category: "kategori",
+  item: "ürün",
+  branch: "şube",
+  theme: "tema",
+  organization: "işletme",
 };
 
 /**
@@ -77,11 +119,10 @@ function formatRelative(iso: string): string {
 /**
  * /admin/dashboard — landing page after login.
  *
- * Sprint 4C scope:
- *   - Welcome banner
+ *   - Welcome banner with the two shortcuts an owner reaches for first
  *   - Live stat cards (menus/categories/items/branches/active items)
- *   - Recent audit events list (last 10, newest first)
- *   - Quick links (business, theme)
+ *   - Recent audit events (last 10, newest first) as an icon feed
+ *   - Quick links
  *
  * Auth check: the parent layout already verified /api/v1/me with a valid
  * session, so by the time we render here the user is signed in. We
@@ -111,33 +152,80 @@ export default async function DashboardPage() {
     summary = null;
   }
 
+  const slug = summary?.organization?.slug;
+
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-6">
       {/* Welcome */}
-      <header className="rounded-lg border border-[var(--color-border)] bg-surface p-6 shadow-sm">
-        <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-secondary">
-          Hoş Geldin
-        </p>
-        <h1 className="mt-1 font-heading text-3xl font-semibold tracking-tight text-primary">
-          Admin Paneli
-        </h1>
-        <p className="mt-1 text-sm text-muted">
-          {summary?.organization ? (
-            <>
-              <span className="font-medium text-text">{summary.organization.name}</span>{" "}
-              işletmesi için özet.
-            </>
-          ) : (
-            <>Bugün menünüze yeni ürünler ekleyebilir, fiyatları güncelleyebilir veya temanızı özelleştirebilirsiniz.</>
-          )}
-        </p>
+      <header className="relative overflow-hidden rounded-3xl bg-primary px-6 py-8 text-primary-foreground shadow-md sm:px-9 sm:py-10">
+        <div
+          aria-hidden
+          className="absolute -right-12 -top-20 h-64 w-64 rounded-full bg-secondary/50 mix-blend-screen blur-3xl"
+        />
+        <div
+          aria-hidden
+          className="absolute -bottom-28 left-1/3 h-64 w-96 rounded-full bg-accent blur-3xl"
+        />
+        <div
+          aria-hidden
+          className="absolute inset-0 opacity-50 [mask-image:linear-gradient(to_bottom,black,transparent_90%)]"
+          style={{
+            backgroundImage:
+              "radial-gradient(rgb(255 255 255 / 0.2) 1px, transparent 1.5px)",
+            backgroundSize: "20px 20px",
+          }}
+        />
+        <div className="relative">
+          <p className="text-sm font-medium text-primary-foreground/80">
+            Hoş geldin
+          </p>
+          <h1 className="mt-1 font-heading text-3xl font-semibold tracking-tight sm:text-4xl">
+            Admin Paneli
+          </h1>
+          <p className="mt-2 text-[0.9375rem] text-primary-foreground/85">
+            {summary?.organization ? (
+              <>
+                <span className="font-semibold text-primary-foreground">
+                  {summary.organization.name}
+                </span>{" "}
+                işletmesi için özet.
+              </>
+            ) : (
+              <>
+                Bugün menünüze yeni ürünler ekleyebilir, fiyatları
+                güncelleyebilir veya temanızı özelleştirebilirsiniz.
+              </>
+            )}
+          </p>
+          <div className="mt-6 flex flex-wrap gap-2.5">
+            {slug ? (
+              <a
+                href={`/m/${slug}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={buttonStyles({ variant: "outline", size: "md" })}
+              >
+                <ExternalLink className="h-4 w-4" aria-hidden />
+                Menüyü görüntüle
+                <span className="sr-only"> (yeni sekmede açılır)</span>
+              </a>
+            ) : null}
+            <Link
+              href="/admin/qr-codes"
+              className={buttonStyles({ variant: "inverse", size: "md" })}
+            >
+              <QrCode className="h-4 w-4" aria-hidden />
+              QR kodlar
+            </Link>
+          </div>
+        </div>
       </header>
 
       {/* Fetch error banner (non-blocking) */}
       {fetchError ? (
         <div
           role="alert"
-          className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-900"
+          className="rounded-2xl border border-danger/30 bg-danger-soft p-4 text-sm text-danger"
         >
           Özet yüklenirken bir hata oluştu. Sayfayı yenilemeyi deneyin. ({fetchError})
         </div>
@@ -147,16 +235,37 @@ export default async function DashboardPage() {
       {summary ? (
         <section
           aria-label="Hızlı istatistikler"
-          className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5"
+          className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-5"
         >
-          <StatCard label="Menü" value={summary.menu_count} hint="Yayında" />
-          <StatCard label="Kategori" value={summary.category_count} hint="Toplam" />
-          <StatCard label="Ürün" value={summary.item_count} hint="Aktif" />
-          <StatCard label="Şube" value={summary.branch_count} hint="Aktif" />
+          <StatCard
+            label="Menü"
+            value={summary.menu_count}
+            hint="Yayında"
+            icon={<UtensilsCrossed className="h-5 w-5" aria-hidden />}
+          />
+          <StatCard
+            label="Kategori"
+            value={summary.category_count}
+            hint="Toplam"
+            icon={<FolderTree className="h-5 w-5" aria-hidden />}
+          />
+          <StatCard
+            label="Ürün"
+            value={summary.item_count}
+            hint="Aktif"
+            icon={<Package className="h-5 w-5" aria-hidden />}
+          />
+          <StatCard
+            label="Şube"
+            value={summary.branch_count}
+            hint="Aktif"
+            icon={<Store className="h-5 w-5" aria-hidden />}
+          />
           <StatCard
             label="Canlı ürün"
             value={summary.active_item_count}
             hint="Tükenmemiş"
+            icon={<Zap className="h-5 w-5" aria-hidden />}
           />
         </section>
       ) : null}
@@ -165,11 +274,10 @@ export default async function DashboardPage() {
       {summary ? (
         <section
           aria-label="Son aktiviteler"
-          className="rounded-lg border border-[var(--color-border)] bg-surface p-5 shadow-sm"
+          className="rounded-2xl bg-surface p-5 shadow-card ring-1 ring-border/60 sm:p-6"
         >
-          <header className="mb-3 flex items-center justify-between">
-            <h2 className="flex items-center gap-2 font-heading text-base font-semibold text-text">
-              <Activity className="h-4 w-4 text-primary" aria-hidden />
+          <header className="mb-2 flex items-center justify-between gap-3">
+            <h2 className="font-heading text-lg font-semibold text-text">
               Son Aktiviteler
             </h2>
             <span className="text-xs text-muted">
@@ -180,10 +288,10 @@ export default async function DashboardPage() {
             <AdminEmptyState
               title="Henüz aktivite yok"
               message="Menü veya ürün değişiklikleri burada görünecek."
-              icon={<ChefHat className="h-8 w-8" aria-hidden />}
+              icon={<ChefHat className="h-7 w-7" aria-hidden />}
             />
           ) : (
-            <ul className="divide-y divide-[var(--color-border)]">
+            <ul className="divide-y divide-border">
               {summary.recent_events.map((event) => (
                 <EventRow key={event.id} event={event} />
               ))}
@@ -195,13 +303,25 @@ export default async function DashboardPage() {
       {/* Quick links */}
       <section
         aria-label="Hızlı işlemler"
-        className="grid grid-cols-1 gap-4 sm:grid-cols-2"
+        className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4"
       >
+        <QuickLink
+          href="/admin/menus"
+          title="Menüler"
+          description="Kategori ve ürünleri ekleyin, fiyatları güncelleyin."
+          icon={<UtensilsCrossed className="h-5 w-5" aria-hidden />}
+        />
+        <QuickLink
+          href="/admin/qr-codes"
+          title="QR kodlar"
+          description="Masalarınız için QR kod oluşturun ve indirin."
+          icon={<QrCode className="h-5 w-5" aria-hidden />}
+        />
         <QuickLink
           href="/admin/business"
           title="İşletme bilgileri"
           description="Logo, iletişim ve adres bilgilerini düzenleyin."
-          icon={<Store className="h-5 w-5" aria-hidden />}
+          icon={<Building2 className="h-5 w-5" aria-hidden />}
         />
         <QuickLink
           href="/admin/theme"
@@ -210,12 +330,6 @@ export default async function DashboardPage() {
           icon={<Palette className="h-5 w-5" aria-hidden />}
         />
       </section>
-
-      <p className="text-center text-xs text-muted">
-        <Sparkles className="mr-1 inline h-3 w-3 align-text-bottom" />
-        Modern Cafe demo verisiyle dolu. Fiyat değişiklikleri admin&apos;den
-        public menüye anlık yansır.
-      </p>
     </div>
   );
 }
@@ -224,28 +338,39 @@ function StatCard({
   label,
   value,
   hint,
+  icon,
 }: {
   label: string;
   value: number;
   hint?: string;
+  icon: React.ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-[var(--color-border)] bg-surface p-4 shadow-sm transition hover:border-primary/40 hover:shadow-md">
-      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-outline">
-        {label}
-      </p>
-      <p className="mt-2 font-heading text-3xl font-bold tabular-nums text-primary">
+    <div className="rounded-2xl bg-surface p-4 shadow-card ring-1 ring-border/60 transition-shadow duration-200 hover:shadow-md sm:p-5">
+      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-soft text-primary">
+        {icon}
+      </span>
+      <p className="mt-4 font-heading text-3xl font-semibold tabular-nums leading-none text-text">
         {value}
       </p>
-      {hint ? <p className="mt-1 text-xs text-on-surface-variant">{hint}</p> : null}
+      <p className="mt-2 text-sm font-semibold text-text">{label}</p>
+      {hint ? <p className="text-xs text-muted">{hint}</p> : null}
     </div>
   );
 }
 
 function EventRow({ event }: { event: AuditEvent }) {
   const summary = payloadSummary(event.action, event.payload);
+  const { icon: Icon, tone } = ACTION_STYLE[event.action];
+  const actor = event.actor === "system" ? "Sistem" : event.actor;
   return (
-    <li className="flex items-start justify-between gap-4 py-3">
+    <li className="flex items-start gap-3.5 py-3.5">
+      <span
+        aria-hidden
+        className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${tone}`}
+      >
+        <Icon className="h-4 w-4" />
+      </span>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm text-text">
           <span className="font-medium">{event.target_repr}</span>{" "}
@@ -255,12 +380,12 @@ function EventRow({ event }: { event: AuditEvent }) {
           <p className="mt-0.5 font-mono text-xs text-primary">{summary}</p>
         ) : null}
         <p className="mt-0.5 text-xs text-muted">
-          {event.actor} · {event.target_type}
+          {actor} · {TARGET_LABEL[event.target_type] ?? event.target_type}
         </p>
       </div>
       <time
         dateTime={event.created_at}
-        className="shrink-0 text-xs text-muted"
+        className="shrink-0 pt-0.5 text-xs text-muted"
       >
         {formatRelative(event.created_at)}
       </time>
@@ -282,10 +407,10 @@ function QuickLink({
   return (
     <Link
       href={href}
-      className="block rounded-lg border border-[var(--color-border)] bg-surface p-4 shadow-sm transition hover:border-primary/40 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+      className="group block rounded-2xl bg-surface p-4 shadow-card ring-1 ring-border/60 transition-shadow duration-200 hover:shadow-md hover:ring-border-strong sm:p-5"
     >
-      <div className="flex items-start gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+      <div className="flex items-start gap-3.5">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary transition-colors duration-200 group-hover:bg-primary group-hover:text-primary-foreground">
           {icon}
         </span>
         <div className="min-w-0 flex-1">

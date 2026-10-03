@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { useFormState, useFormStatus } from "react-dom";
 import Link from "next/link";
-import { AlertCircle, Loader2 } from "lucide-react";
+import { AlertCircle, ArrowLeft } from "lucide-react";
 
+import { Button } from "@/components/ui/Button";
 import { FormField } from "../_components/FormField";
 import { loginAction, type LoginActionResult } from "../_actions/auth";
 
@@ -30,7 +31,7 @@ export function LoginForm({ nextPath, demoHint }: LoginFormProps) {
   return (
     <form
       action={formAction}
-      className="flex flex-col gap-4"
+      className="flex flex-col gap-5"
       noValidate
       aria-describedby={state?.error ? "login-error" : undefined}
     >
@@ -40,9 +41,9 @@ export function LoginForm({ nextPath, demoHint }: LoginFormProps) {
         <div
           id="login-error"
           role="alert"
-          className="flex items-start gap-2 rounded-md border border-accent/40 bg-accent/5 px-3 py-2 text-sm text-text"
+          className="flex items-start gap-2.5 rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm font-medium text-danger"
         >
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           <span>{state.error}</span>
         </div>
       ) : null}
@@ -71,9 +72,9 @@ export function LoginForm({ nextPath, demoHint }: LoginFormProps) {
       <SubmitButton />
 
       {demoHint ? (
-        <div className="mt-2 rounded-md border border-dashed border-border bg-background/50 px-3 py-2 text-xs text-muted">
+        <div className="rounded-xl border border-dashed border-border-strong bg-surface-low px-4 py-3 text-xs text-muted">
           <p className="font-semibold text-text">Demo hesabı</p>
-          <p className="mt-1 font-mono break-all">
+          <p className="mt-1 break-all font-mono">
             {demoHint.email} · {demoHint.password}
           </p>
           <p className="mt-1">
@@ -82,9 +83,13 @@ export function LoginForm({ nextPath, demoHint }: LoginFormProps) {
         </div>
       ) : null}
 
-      <p className="text-center text-xs text-muted">
-        <Link href="/" className="hover:text-primary">
-          ← Anasayfaya dön
+      <p className="text-center text-sm text-muted">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-1.5 transition-colors hover:text-primary"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
+          Anasayfaya dön
         </Link>
       </p>
     </form>
@@ -94,19 +99,8 @@ export function LoginForm({ nextPath, demoHint }: LoginFormProps) {
 function SubmitButton() {
   const { pending } = useFormStatus();
   return (
-    <button
-      type="submit"
-      disabled={pending}
-      className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
-    >
-      {pending ? (
-        <>
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Giriş yapılıyor…
-        </>
-      ) : (
-        "Giriş yap"
-      )}
-    </button>
+    <Button type="submit" size="lg" fullWidth loading={pending}>
+      {pending ? "Giriş yapılıyor…" : "Giriş yap"}
+    </Button>
   );
 }

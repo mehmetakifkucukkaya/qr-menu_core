@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { AlertTriangle, Loader2, X } from "lucide-react";
+import { AlertTriangle, HelpCircle } from "lucide-react";
+
+import { Button } from "@/components/ui/Button";
+import { Sheet } from "@/components/ui/Sheet";
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -24,9 +26,13 @@ interface ConfirmDialogProps {
 }
 
 /**
- * ConfirmDialog — minimal modal for destructive actions (delete menu,
- * delete category, delete item). Built on a `<dialog>` element so we get
- * backdrop + ESC handling for free, no extra dependencies.
+ * ConfirmDialog — modal for destructive (or otherwise irreversible) actions:
+ * delete menu, delete category, delete item.
+ *
+ * Built on `Sheet`, so it shares the app's one modal behaviour: native
+ * <dialog> focus trap, Escape, tap-outside, and a bottom sheet on phones. Each
+ * instance gets its own heading id — the earlier hand-rolled dialog used a
+ * fixed id, which produced N duplicate ids on lists with one dialog per row.
  *
  * Use `loading` while the underlying fetch is in flight to prevent
  * double-submission.
@@ -42,103 +48,54 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
-  const ref = useRef<HTMLDialogElement | null>(null);
-
-  // Sync the `open` prop with the native <dialog>'s imperative API.
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    if (open && !el.open) {
-      el.showModal();
-    } else if (!open && el.open) {
-      el.close();
-    }
-  }, [open]);
-
-  // ESC handler — native <dialog> calls the `cancel` event; we forward.
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const handler = (e: Event) => {
-      e.preventDefault();
-      onCancel();
-    };
-    el.addEventListener("cancel", handler);
-    return () => el.removeEventListener("cancel", handler);
-  }, [onCancel]);
+  const danger = tone === "danger";
+  const Icon = danger ? AlertTriangle : HelpCircle;
 
   return (
-    <dialog
-      ref={ref}
-      onClose={onCancel}
-      aria-labelledby="confirm-dialog-title"
-      className="rounded-xl border border-border bg-surface p-0 shadow-floating backdrop:bg-text/40"
-    >
-      <div className="flex w-full max-w-md flex-col gap-4 p-6">
-        <header className="flex items-start gap-3">
-          <span
-            aria-hidden
-            className={
-              "flex h-10 w-10 shrink-0 items-center justify-center rounded-full " +
-              (tone === "danger"
-                ? "bg-accent/10 text-accent"
-                : "bg-primary/10 text-primary")
-            }
-          >
-            <AlertTriangle className="h-5 w-5" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <h2
-              id="confirm-dialog-title"
-              className="font-heading text-lg font-bold text-text"
-            >
-              {title}
-            </h2>
-            {description ? (
-              <p className="mt-1 text-sm text-muted">{description}</p>
-            ) : null}
-          </div>
-          <button
-            type="button"
-            onClick={onCancel}
-            aria-label="Kapat"
-            className="rounded-md p-1 text-muted transition hover:bg-background hover:text-text"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </header>
-
-        <footer className="flex justify-end gap-2">
-          <button
-            type="button"
+    <Sheet
+      open={open}
+      // A request in flight must not be abandoned by a stray Escape / backdrop tap.
+      onClose={() => {
+        if (!loading) onCancel();
+      }}
+      title={title}
+      footer={
+        <div className="flex gap-3">
+          <Button
+            variant="outline"
+            size="lg"
             onClick={onCancel}
             disabled={loading}
-            className="rounded-md border border-border bg-surface px-4 py-2 text-sm font-medium text-text transition hover:bg-background disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex-1"
           >
             {cancelLabel}
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant={danger ? "danger" : "primary"}
+            size="lg"
             onClick={onConfirm}
-            disabled={loading}
-            className={
-              "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 " +
-              (tone === "danger"
-                ? "bg-accent text-primary-foreground hover:bg-accent/90 focus:ring-accent"
-                : "bg-primary text-primary-foreground hover:bg-primary/90 focus:ring-primary")
-            }
+            loading={loading}
+            className="flex-1"
           >
-            {loading ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Lütfen bekleyin…
-              </>
-            ) : (
-              confirmLabel
-            )}
-          </button>
-        </footer>
+            {loading ? "Lütfen bekleyin…" : confirmLabel}
+          </Button>
+        </div>
+      }
+    >
+      <div className="flex items-start gap-4 py-2">
+        <span
+          aria-hidden
+          className={
+            "flex h-11 w-11 shrink-0 items-center justify-center rounded-full " +
+            (danger ? "bg-danger-soft text-danger" : "bg-primary-soft text-primary")
+          }
+        >
+          <Icon className="h-5 w-5" />
+        </span>
+        <p className="pt-1.5 text-[0.9375rem] leading-relaxed text-muted">
+          {description ?? "Bu işlemi onaylıyor musunuz?"}
+        </p>
       </div>
-    </dialog>
+    </Sheet>
   );
 }

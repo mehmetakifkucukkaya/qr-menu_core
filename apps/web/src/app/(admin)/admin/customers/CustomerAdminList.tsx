@@ -94,7 +94,7 @@ export function CustomerAdminList({
         aria-label="Müşteri listesi"
         className="overflow-hidden rounded-xl border border-border bg-surface shadow-sm"
       >
-        <table className="w-full table-auto border-collapse text-left">
+        <table className="table-stack w-full table-auto border-collapse text-left">
           <thead className="bg-background text-xs uppercase tracking-wider text-muted">
             <tr>
               <th className="px-4 py-2 font-medium">E-posta</th>
@@ -124,23 +124,23 @@ export function CustomerAdminList({
                     </span>
                   ) : null}
                 </td>
-                <td className="px-4 py-2.5">{c.full_name || "—"}</td>
-                <td className="px-4 py-2.5">
+                <td data-label="Ad Soyad" className="px-4 py-2.5">{c.full_name || "—"}</td>
+                <td data-label="Telefon" className="px-4 py-2.5">
                   {c.phone ? (
                     <span className="tabular-nums">{c.phone}</span>
                   ) : (
                     <span className="italic text-muted">—</span>
                   )}
                 </td>
-                <td className="px-4 py-2.5 text-center">
+                <td data-label="Puan" className="px-4 py-2.5 text-center">
                   <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary tabular-nums">
                     {c.loyalty_balance}
                   </span>
                 </td>
-                <td className="px-4 py-2.5 text-xs text-muted">
+                <td data-label="Son Giriş" className="px-4 py-2.5 text-xs text-muted">
                   {formatDateTime(c.last_login_at)}
                 </td>
-                <td className="px-4 py-2.5 text-xs text-muted">
+                <td data-label="Kayıt" className="px-4 py-2.5 text-xs text-muted">
                   {formatDateTime(c.created_at)}
                 </td>
               </tr>
