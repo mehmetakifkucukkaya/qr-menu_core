@@ -1,3 +1,16 @@
 {
-  "extends": "next/core-web-vitals"
+  "extends": "next/core-web-vitals",
+  "rules": {
+    "no-restricted-syntax": [
+      "error",
+      {
+        "selector": "Literal[value=/\\[var\\(--color-/]",
+        "message": "Design tokens hold bare RGB triplets, so `border-[var(--color-x)]` is INVALID CSS and is silently dropped. Use the registered utilities instead (border-border, bg-surface-low, text-outline, ...). See tailwind.config.ts."
+      },
+      {
+        "selector": "TemplateElement[value.raw=/\\[var\\(--color-/]",
+        "message": "Design tokens hold bare RGB triplets, so `border-[var(--color-x)]` is INVALID CSS and is silently dropped. Use the registered utilities instead (border-border, bg-surface-low, text-outline, ...). See tailwind.config.ts."
+      }
+    ]
+  }
 }
