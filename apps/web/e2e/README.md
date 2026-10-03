@@ -26,6 +26,7 @@ source code or at API responses in isolation can see that.
 | 8e | A refused upload shows the server's message and keeps the photo that was already there | `photos.spec.ts` | a failed upload wiping the preview, or failing silently |
 | 8f | `/media` is read-only (405) and refuses path tricks | `photos.spec.ts` | the public file route being usable for traversal |
 | 8g | A non-picture on the media volume (an imported PDF) is not served through `/media` | `photos.spec.ts` | the public file route leaking private files |
+| 8h | The cover photo is resized, shown in the hero, and has an absolute `og:image`; removing it restores the plain hero | `photos.spec.ts` | a 4–5 MB phone photo sent to every visitor as the first image; link previews with a relative image URL |
 
 Flows 1, 1b, 2, 2b and 2c also run on a phone viewport (Pixel 7): the product is
 used on phones.

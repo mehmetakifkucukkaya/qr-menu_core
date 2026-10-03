@@ -262,4 +262,45 @@ test.describe.serial("optional photos", () => {
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  test("flow 8h: the cover photo is resized and shown in the menu's hero", async ({ page }) => {
+    await loginAsAdmin(page);
+    await page.goto("/admin/business");
+
+    // The cover goes through the same resizing pipeline as dish photos: it is
+    // the first picture every visitor downloads.
+    await page.getByLabel(/Kapak fotoğrafı ekle/).setInputFiles({
+      name: "kapak.png",
+      mimeType: "image/png",
+      buffer: makePng(2400, 1000),
+    });
+    await expect(page.getByText("Fotoğraf yüklendi")).toBeVisible({ timeout: 30_000 });
+    await page.getByRole("button", { name: "Değişiklikleri kaydet" }).click();
+    await expect(page.getByText("Değişiklikler kaydedildi.")).toBeVisible();
+
+    await page.goto("/m/modern-cafe");
+    // Scoped to the hero: other products (flow 5b) may carry photos of their own.
+    const hero = page.locator('section[aria-labelledby="business-name"]');
+    const cover = hero.locator("img").first();
+    await expect(cover).toHaveAttribute("src", /^\/media\/tenants\/.+\.png$/);
+    const width = await loadedImageWidth(cover);
+    expect(width, "the 2400 px cover should have been resized").toBeLessThanOrEqual(1920);
+    // Link previews need an absolute image URL; the stored one is `/media/...`.
+    await expect(page.locator('meta[property="og:image"]')).toHaveAttribute(
+      "content",
+      /^http:\/\/localhost:\d+\/media\/tenants\/.+\.png$/,
+    );
+
+    // Put the seed data back: no cover.
+    await page.goto("/admin/business");
+    await page.getByRole("button", { name: "Fotoğrafı kaldır" }).click();
+    await page.getByRole("button", { name: "Değişiklikleri kaydet" }).click();
+    await expect(page.getByText("Değişiklikler kaydedildi.")).toBeVisible();
+    await page.goto("/m/modern-cafe");
+    await expect(hero.locator("img")).toHaveCount(0);
+    await expect(page.locator('meta[property="og:image"]')).not.toHaveAttribute(
+      "content",
+      /\/media\/tenants\//,
+    );
+  });
 });

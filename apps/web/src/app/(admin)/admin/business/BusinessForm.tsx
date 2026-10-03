@@ -321,7 +321,9 @@ export function BusinessForm({ organization, csrfToken }: BusinessFormProps) {
         </h2>
         <p className="text-xs text-muted">
           Logo ve kapak fotoğrafı menünüzün üst kısmında görünür. İkisi de
-          isteğe bağlıdır. JPG, PNG veya WEBP · en fazla 5 MB.
+          isteğe bağlıdır. JPG, PNG veya WEBP · en fazla 5 MB. Kapak fotoğrafı
+          otomatik olarak küçültülür; logo olduğu gibi saklanır (şeffaf zemin
+          korunur).
         </p>
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
           <div className="flex flex-col gap-2">
@@ -344,6 +346,7 @@ export function BusinessForm({ organization, csrfToken }: BusinessFormProps) {
               onUpload={(serverUrl) => setCoverUrl(serverUrl)}
               csrfToken={csrfToken}
               aspectClassName="aspect-video"
+              processed
               alt={`${organization.name} kapak fotoğrafı`}
               emptyTitle="Kapak fotoğrafı ekle"
               saveHint="Değişiklikleri kaydedince menüde görünür."

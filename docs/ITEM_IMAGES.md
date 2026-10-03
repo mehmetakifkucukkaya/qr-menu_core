@@ -11,7 +11,7 @@
 |---|---|---|
 | Ürün (`Ürün düzenle` → **Fotoğraf**) | kart yalnızca isim + açıklama + fiyat | kartın sağında kare fotoğraf, detay çekmecesinde büyük hali |
 | Kategori (`Kategori düzenle` → **Kategori fotoğrafı**) | yalnızca başlık | başlığın üstünde geniş şerit (banner) |
-| İşletme (`İşletme` → Logo / Kapak) | monogram / düz zemin | logo / kapak (bu alanlar zaten vardı) |
+| İşletme (`İşletme` → Logo / Kapak fotoğrafı) | monogram / düz zemin | logo / menünün üstünde kapak (bu alanlar zaten vardı; kapak artık küçültülüyor) |
 
 Form davranışı (`ImageUpload.tsx`):
 
@@ -42,8 +42,8 @@ Neden işlenmiş hat? Telefon fotoğrafı 3–5 MB'dır; işlenmeden her müşte
 
 | Alan | Hat | Neden |
 |---|---|---|
-| Ürün, kategori | `POST /admin/media/upload/` (işlenmiş) | fotoğraf; küçültme + EXIF düzeltme istenir |
-| Logo, kapak | `POST /admin/media/upload` (olduğu gibi) | işleme, şeffaf PNG'yi siyaha çevirir; logo bozulmasın diye dokunulmaz |
+| Ürün, kategori, **kapak** | `POST /admin/media/upload/` (işlenmiş) | fotoğraf; küçültme + EXIF düzeltme istenir. Kapak her ziyaretçinin indirdiği ilk resimdir: 4032 px'lik telefon fotoğrafı olduğu gibi gitmemeli |
+| Logo | `POST /admin/media/upload` (olduğu gibi) | işleme, şeffaf PNG'yi siyaha çevirir; logo bozulmasın diye dokunulmaz |
 
 `ImageUpload` bunu `processed` prop'uyla seçer (varsayılan: `false`).
 
@@ -94,7 +94,7 @@ origin'i, CDN, R2) **dokunmaz**. `SmartImage` ve `PremiumHero` bunu otomatik uyg
 | `mediaSrc` / `thumbnailSrc` / `absoluteMediaUrl` | `src/lib/media-url.test.ts` (`npm run test:media-url`) |
 | yol doğrulama, `image/*` süzgeci | `src/lib/media-proxy.test.ts` (`npm run test:media-proxy`) |
 | JSON-LD'de mutlak görsel URL'si | `src/lib/seo.test.ts` |
-| uçtan uca: seç → yükle → kaydet → müşteri menüsünde **gerçekten yüklenir** (kart: küçük resim, çekmece: tam dosya, eksik küçük resimde geri dönüş) | `e2e/photos.spec.ts` (flow 8a–8g) |
+| uçtan uca: seç → yükle → kaydet → müşteri menüsünde **gerçekten yüklenir** (kart: küçük resim, çekmece: tam dosya, eksik küçük resimde geri dönüş) | `e2e/photos.spec.ts` (flow 8a–8h) |
 
 E2E düzeneği artık yüklemeleri çalışma kopyasındaki `backend/media`'ya değil, her çalıştırmada silinen geçici bir
 klasöre yazar: `MEDIA_ROOT` ortam değişkeni (`backend/config/settings/base.py`). `production.py` kendi yolunu
