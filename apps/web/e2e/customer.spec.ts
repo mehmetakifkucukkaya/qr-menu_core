@@ -36,6 +36,18 @@ test.describe("customer menu", () => {
     await expect(page.getByRole("heading", { level: 2, name: "Kahveler" })).toHaveCount(0);
   });
 
+  test("flow 1b: the menu fits the screen width (no sideways scrolling)", async ({ page }) => {
+    // The category chip row used to use negative margins that made the page
+    // ~13 px wider than a phone, so the browser zoomed out / scrolled sideways.
+    await page.goto("/m/modern-cafe");
+    await expect(page.getByRole("heading", { level: 1, name: "Modern Cafe" })).toBeVisible();
+
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow, "the page is wider than the viewport").toBeLessThanOrEqual(0);
+  });
+
   test("flow 2b: a returning customer's saved cart is restored without a hydration error", async ({
     page,
   }) => {

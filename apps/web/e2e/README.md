@@ -1,6 +1,6 @@
 # Browser smoke tests (the release gate)
 
-Six flows, driven through a real browser against a **production build** of the
+The flows below, driven through a real browser against a **production build** of the
 web app and a real Django backend. They exist because the first audit found
 that `tsc`, ESLint, 483 backend tests and `next build` were all green while the
 admin could not create a product (HTTP 500), customers could not place an order
@@ -10,12 +10,14 @@ source code or at API responses in isolation can see that.
 | # | Flow | Spec | What it would have caught |
 |---|------|------|---------------------------|
 | 1 | Public menu renders tenant data only; language switch translates it | `customer.spec.ts` | hard-coded demo copy shown to every business (F-13), upsell banner (F-15), broken locale switch |
+| 1b | The public menu never scrolls sideways (phone + desktop) | `customer.spec.ts` | negative-margin chip row making the page wider than the screen |
 | 2 | Add to cart → place an order → order tracking page | `customer.spec.ts` | `POST /public/orders` 404 (F-02), payments UI/flag mismatch (F-06) |
 | 2b | A returning customer's saved cart is restored with no hydration error | `customer.spec.ts` | persisted cart applied during the first client render → React error #418 for every returning customer |
 | 3 | Log in → dashboard loads its data, no error banner | `admin.spec.ts` | `GET /admin/summary` 404 (F-02), broken login/redirect |
 | 4 | Create a product, then edit it | `admin.spec.ts` | the 8 create/edit pages answering HTTP 500 (F-01), admin writes rejected by CSRF |
 | 5 | Change the price → it shows on the public menu | `admin.spec.ts` | stale/cached public menu, write path not reaching the public read path |
 | 6 | Open a QR code and download its PNG | `admin.spec.ts` | broken QR endpoint / auth |
+| 7 | On a phone the admin menu button opens the nav drawer and navigates | `admin.spec.ts` | admin unusable on phones: sidebar hidden below `md` and no way to open navigation |
 
 Flows 1 and 2 also run on a phone viewport (Pixel 7): the product is used on
 phones.

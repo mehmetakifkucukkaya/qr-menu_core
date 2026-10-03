@@ -93,3 +93,25 @@ test.describe.serial("admin panel", () => {
     expect(png.length).toBeGreaterThan(500);
   });
 });
+
+test.describe("admin on a phone", () => {
+  test.use({ viewport: { width: 375, height: 812 } });
+
+  test("flow 7: the menu button opens the navigation drawer and moves between sections", async ({
+    page,
+  }) => {
+    // Below `md` the sidebar is hidden. With no menu button a phone user had no
+    // way to reach any section but the one they landed on.
+    await loginAsAdmin(page);
+
+    await page.getByRole("button", { name: "Menüyü aç" }).click();
+    const drawer = page.getByRole("dialog", { name: "Admin menüsü" });
+    await expect(drawer).toBeVisible();
+
+    await drawer.getByRole("link", { name: "Siparişler" }).click();
+    await page.waitForURL(/\/admin\/orders$/);
+    await expect(page.getByRole("heading", { level: 1, name: "Siparişler" })).toBeVisible();
+    // The drawer closes itself once navigation has happened.
+    await expect(drawer).toBeHidden();
+  });
+});
