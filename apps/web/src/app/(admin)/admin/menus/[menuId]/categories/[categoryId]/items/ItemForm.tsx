@@ -240,7 +240,7 @@ export function ItemForm({
       {error ? (
         <div
           role="alert"
-          className="rounded-md border border-accent/40 bg-accent/5 px-3 py-2 text-sm text-text"
+          className="rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-text"
         >
           {error}
         </div>
@@ -314,7 +314,7 @@ export function ItemForm({
             value={currency}
             onChange={(e) => setCurrency(e.target.value)}
             disabled={submitting}
-            className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-text focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="rounded-xl border border-input bg-surface px-3.5 py-2.5 text-base sm:text-sm text-text focus-visible:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15"
           >
             {CURRENCY_OPTIONS.map((c) => (
               <option key={c} value={c}>
@@ -420,7 +420,7 @@ export function ItemForm({
               value={spiceLevel}
               onChange={(e) => setSpiceLevel(Number.parseInt(e.target.value, 10))}
               disabled={submitting}
-              className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-text focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="rounded-xl border border-input bg-surface px-3.5 py-2.5 text-base sm:text-sm text-text focus-visible:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15"
             >
               {Object.entries(SPICE_LABELS).map(([val, label]) => (
                 <option key={val} value={val}>
@@ -443,7 +443,7 @@ export function ItemForm({
               setSortOrder(Number.parseInt(e.target.value, 10) || 0)
             }
             disabled={submitting}
-            className="w-32 rounded-md border border-border bg-surface px-3 py-2 text-sm text-text focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="w-32 rounded-xl border border-input bg-surface px-3.5 py-2.5 text-base sm:text-sm text-text focus-visible:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15"
           />
         </div>
       </section>

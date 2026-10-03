@@ -138,7 +138,7 @@ export function OrderDetailControls({
                   (a.primary
                     ? "bg-primary text-primary-foreground hover:bg-primary/90 focus:ring-primary"
                     : a.danger
-                      ? "border border-accent/40 bg-accent/5 text-accent hover:bg-accent/10 focus:ring-accent"
+                      ? "border border-danger/30 bg-danger-soft text-danger hover:bg-danger/10 focus-visible:ring-danger"
                       : "border border-border bg-surface text-text hover:bg-background focus:ring-primary")
                 }
               >
@@ -155,7 +155,7 @@ export function OrderDetailControls({
       {error ? (
         <p
           role="alert"
-          className="rounded-md border border-accent/40 bg-accent/5 px-3 py-1.5 text-xs font-medium text-accent"
+          className="rounded-md border border-danger/30 bg-danger-soft px-3 py-1.5 text-xs font-medium text-danger"
         >
           {error}
         </p>

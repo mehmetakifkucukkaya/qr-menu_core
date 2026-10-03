@@ -339,7 +339,7 @@ function QrDownloadButton() {
         <p
           role="alert"
           data-testid="qr-error"
-          className="max-w-xs text-center text-[11px] font-medium text-accent"
+          className="max-w-xs text-center text-[11px] font-medium text-danger"
         >
           {error}
         </p>
@@ -444,7 +444,7 @@ function DemoSeedPanel({
         <p
           role="alert"
           data-testid="demo-seed-error"
-          className="mt-2 text-[11px] font-medium text-accent"
+          className="mt-2 text-[11px] font-medium text-danger"
         >
           {status.message}
         </p>

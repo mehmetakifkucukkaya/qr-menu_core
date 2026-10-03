@@ -82,9 +82,9 @@ export function LoyaltyLedgerTable({
               <td
                 className={`whitespace-nowrap px-4 py-3 text-right font-bold tabular-nums ${
                   txn.points > 0
-                    ? "text-emerald-700"
+                    ? "text-success"
                     : txn.points < 0
-                      ? "text-accent"
+                      ? "text-danger"
                       : "text-text"
                 }`}
               >
@@ -105,14 +105,14 @@ export function LoyaltyLedgerTable({
 function TypeChip({ type }: { type: LoyaltyTransaction["type"] }) {
   const tone =
     type === "earn"
-      ? "bg-emerald-100 text-emerald-800 ring-emerald-200"
+      ? "bg-success-soft text-success ring-success/25"
       : type === "redeem"
-        ? "bg-accent/10 text-accent ring-accent/20"
+        ? "bg-danger-soft text-danger ring-danger/20"
         : type === "expire"
           ? "bg-orange-100 text-orange-800 ring-orange-200"
           : type === "adjust"
             ? "bg-blue-100 text-blue-800 ring-blue-200"
-            : "bg-slate-100 text-slate-800 ring-slate-200";
+            : "bg-surface-low text-text ring-border";
   return (
     <span
       className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ring-1 ${tone}`}

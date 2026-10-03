@@ -129,7 +129,7 @@ export function MenuForm({ menu, organization, csrfToken }: MenuFormProps) {
       {error ? (
         <div
           role="alert"
-          className="rounded-md border border-accent/40 bg-accent/5 px-3 py-2 text-sm text-text"
+          className="rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-text"
         >
           {error}
         </div>
@@ -167,7 +167,7 @@ export function MenuForm({ menu, organization, csrfToken }: MenuFormProps) {
           rows={3}
           placeholder="Müşterilerin göreceği kısa açıklama (opsiyonel)"
           disabled={submitting}
-          className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-muted/70 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
+          className="w-full rounded-xl border border-input bg-surface px-3.5 py-2.5 text-base sm:text-sm text-text placeholder:text-outline focus-visible:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15 disabled:cursor-not-allowed disabled:opacity-60"
         />
       </div>
 
@@ -190,7 +190,7 @@ export function MenuForm({ menu, organization, csrfToken }: MenuFormProps) {
                 setDefaultLocale(e.target.value as AdminLocaleCode)
               }
               disabled={submitting}
-              className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-text focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="rounded-xl border border-input bg-surface px-3.5 py-2.5 text-base sm:text-sm text-text focus-visible:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15"
             >
               {ALL_LOCALES.map((l) => (
                 <option key={l} value={l}>

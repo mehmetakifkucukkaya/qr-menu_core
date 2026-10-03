@@ -134,7 +134,7 @@ export function PdfDraftDetailClient({
                   : draft.status === "confirmed"
                     ? "bg-primary/20 text-primary"
                     : draft.status === "failed"
-                      ? "bg-accent/10 text-accent"
+                      ? "bg-danger-soft text-danger"
                       : "bg-muted/20 text-muted")
               }
             >
@@ -149,7 +149,7 @@ export function PdfDraftDetailClient({
                 className={
                   "rounded-full px-2 py-0.5 font-semibold tabular-nums " +
                   (draft.confidence_avg < 0.5
-                    ? "bg-accent/10 text-accent"
+                    ? "bg-danger-soft text-danger"
                     : "bg-muted/20 text-text")
                 }
               >
@@ -163,7 +163,7 @@ export function PdfDraftDetailClient({
           {draft.error ? (
             <p
               role="alert"
-              className="mt-3 rounded-md border border-accent/40 bg-accent/5 px-3 py-2 text-xs text-accent"
+              className="mt-3 rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-xs text-danger"
             >
               <strong className="mr-1 uppercase tracking-wider">
                 {draft.error.code}

@@ -66,17 +66,21 @@ export default async function AdminLayout({
     throw err;
   }
 
-  // ---- 2. Organization (for sidebar brand) ------------------------------
+  // ---- 2. Organization (for the sidebar / drawer brand + "view menu") ----
   // Failure here shouldn't block the page — fall back to "İşletmem".
   let businessName = "İşletmem";
+  let businessLogo: string | null = null;
+  let businessSlug: string | null = null;
   try {
     const org = await fetchCurrentOrganization({
       internal: true,
       cookieHeader,
     });
     businessName = org.name || businessName;
+    businessLogo = org.logo;
+    businessSlug = org.slug || null;
   } catch {
-    // Best-effort; sidebar will show the default name.
+    // Best-effort; the shell shows the default name and no menu shortcut.
   }
 
   // ---- 3. Trial status (for the TrialBanner) ----------------------------
@@ -96,15 +100,26 @@ export default async function AdminLayout({
   // ---- 4. Shell ---------------------------------------------------------
   return (
     <div className="flex min-h-screen bg-background">
-      <AdminSidebar businessName={businessName} logoutAction={logoutAction} />
+      <AdminSidebar
+        businessName={businessName}
+        businessLogo={businessLogo}
+        businessSlug={businessSlug}
+        logoutAction={logoutAction}
+      />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <TrialBanner status={trialStatus} />
-        <AdminHeader user={user} logoutAction={logoutAction} />
+        <AdminHeader
+          user={user}
+          businessName={businessName}
+          businessLogo={businessLogo}
+          businessSlug={businessSlug}
+          logoutAction={logoutAction}
+        />
 
         <main
           id="main-content"
-          className="flex-1 px-4 py-6 sm:px-6 lg:px-8"
+          className="flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8"
         >
           <div className="mx-auto max-w-6xl">{children}</div>
         </main>

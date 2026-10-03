@@ -1,223 +1,225 @@
-import type { PublicMenuBusiness, PublicMenuTheme } from "@/types/menu";
-import { generatePlaceholderSvg } from "@/lib/placeholder";
+import clsx from "clsx";
+import { MapPin, UtensilsCrossed } from "lucide-react";
 
-interface BusinessHeroProps {
+import { Badge } from "@/components/ui/Badge";
+import type {
+  PublicMenuBusiness,
+  PublicMenuCta,
+  PublicMenuTheme,
+} from "@/types/menu";
+import { BusinessMark } from "./BusinessMark";
+import { ContactActions } from "./ContactActions";
+
+interface PremiumHeroProps {
   business: PublicMenuBusiness;
   theme: PublicMenuTheme | null;
+  cta: PublicMenuCta;
+  /** Name of the menu being shown (a venue can publish several). */
+  menuName?: string | null;
 }
 
 /**
- * PremiumHero — Velouté Hospitality Suite editorial hero (D-035 / Sprint G).
+ * PremiumHero — the venue's identity block at the top of the public menu.
  *
- * Layout (top → bottom):
- *   1. Sub-header strip — the business address and currency chip. Warm
- *      surface-container-low band, hairline bottom border.
- *   2. Editorial cover banner — full-width forest-green panel (the tenant's
- *      cover image when uploaded). Subtle radial glow + bottom-right wash.
- *   3. Logo overlay — square monogram, ring-8 surface ring, hangs off
- *      the cover bottom edge.
- *   4. Title block — Playfair Display name, description, quick-action pill
- *      row (address / call / whatsapp).
+ *   ┌──────────────────────────────────────────┐
+ *   │  cover (photo, or brand artwork)         │  ← the sticky header floats
+ *   │                                          │    over this, transparent
+ *   │ ┌────┐                                   │
+ *   └─┤logo├───────────────────────────────────┘
+ *     └────┘
+ *     Venue name (serif)
+ *     Description · address
+ *     [Yol tarifi] [Ara] [WhatsApp] [Instagram]
  *
- * Everything rendered here comes from the tenant's own data. The design
- * mock's copy ("Servis Aktif", opening hours, "Masa #08", "Sonbahar
- * Menüsü", a chef's name, "Bistro & Pâtisserie") used to be hard-coded and
- * showed up on every business's public page (ANALYSIS_1 F-13).
+ * Everything shown comes from the tenant's own data; an action tile appears
+ * only when its data exists. (The design mock's hard-coded copy — "Servis
+ * Aktif", opening hours, "Masa #08", a chef's name — was removed in Faz 0,
+ * ANALYSIS_1 F-13, and the WhatsApp tile used to be a dead `#contact` link,
+ * F-14: it now opens the tenant's real WhatsApp number.)
  *
- * Per-business theme overrides flow through `--color-*` CSS variables
- * on the wrapper, so a tenant that picks terracotta will see that
- * accent in the quick-action pills without any further plumbing.
+ * Per-business theme: the tenant's colours are applied as CSS variables on
+ * this section. Only the colours the tenant actually set are overridden, and
+ * the text colour used on top of their primary is derived for contrast.
  */
-export function PremiumHero({ business, theme }: BusinessHeroProps) {
-  // Only render the <img> when the tenant uploaded a real cover image.
-  // Inline-SVG placeholders (1.2kB base64 every render) were bloating
-  // the DOM and producing a never-ending "loading" feel.
+export function PremiumHero({ business, theme, cta, menuName }: PremiumHeroProps) {
   const hasRealCover =
-    Boolean(business.cover_image) &&
-    !business.cover_image!.startsWith("data:");
-
-  const hasRealLogo =
-    Boolean(business.logo) && !business.logo!.startsWith("data:");
-
-  const logoSrc = hasRealLogo
-    ? business.logo!
-    : generatePlaceholderSvg({
-        emoji: business.name.charAt(0).toUpperCase() || "M",
-        color1: "#FAF8F5",
-        color2: "#2A4436",
-        size: 256,
-        label: `${business.name} logo`,
-      });
-
-  const themeStyle: React.CSSProperties = theme
-    ? {
-        "--color-primary": hexToRgbTriplet(theme.primary_color ?? undefined),
-        "--color-secondary": hexToRgbTriplet(theme.secondary_color ?? undefined),
-        "--color-accent": hexToRgbTriplet(theme.accent_color ?? undefined),
-        "--color-background": hexToRgbTriplet(theme.background_color ?? undefined),
-        "--color-text": hexToRgbTriplet(theme.text_color ?? undefined),
-      } as React.CSSProperties
-    : {};
+    Boolean(business.cover_image) && !business.cover_image!.startsWith("data:");
 
   const description = business.description?.trim() ?? "";
   const address = business.address?.trim() ?? "";
-  const mapsUrl = business.google_maps_url?.trim() ?? "";
-  const phone = business.phone?.trim() ?? "";
-  const currency = business.currency ?? "TRY";
 
   return (
     <section
-      className="relative w-full overflow-hidden bg-background font-body text-text"
-      style={themeStyle}
+      className="relative w-full bg-background font-body text-text"
+      style={themeVars(theme)}
       aria-labelledby="business-name"
     >
-      {/* ── Sub-header strip (Velouté desktop pattern) ──
-       *  Mobile-first means the strip is *dense* on small screens:
-       *   • single line (no flex-wrap)
-       *   • the address collapses below `md`; the currency chip stays */}
-      <div className="border-b border-[var(--color-border)] bg-[var(--color-surface-low)]">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-2 text-xs sm:px-6 sm:text-sm">
-          <div className="flex min-w-0 items-center gap-3">
-            {address ? (
-              <span className="hidden items-center gap-1 truncate text-outline md:inline-flex">
-                <span aria-hidden>📍</span>
-                <span className="truncate">{address}</span>
-              </span>
-            ) : null}
-          </div>
-
-          <div className="flex shrink-0 items-center gap-1.5">
-            {/* Currency display — Turkish-first, no selector (D-035). */}
-            <div className="inline-flex h-7 items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-[10px] font-bold uppercase tracking-wider text-primary shadow-sm sm:h-8 sm:text-xs">
-              <span aria-hidden>₺</span>
-              <span>{currency}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Editorial cover banner (forest-green panel) ── */}
-      <div className="relative w-full overflow-hidden bg-primary text-primary-foreground">
-        <div
-          className="absolute inset-0 opacity-30"
-          style={{
-            backgroundImage:
-              "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' /%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' /%3E%3C/svg%3E\")",
-          }}
-          aria-hidden
-        />
-        {/* Real cover image — only when the tenant uploaded one.
-         * When there's no image we rely on the gradient + noise + warm
-         * wash layers below for visual depth instead of a 1.2kB SVG
-         * data URI that bloats the DOM. */}
+      {/* ── Cover ─────────────────────────────────────────────── */}
+      <div
+        className={clsx(
+          "relative overflow-hidden bg-primary",
+          // A photo earns more height; brand artwork stays a slim band.
+          hasRealCover ? "h-44 sm:h-60 lg:h-72" : "h-36 sm:h-44 lg:h-48",
+        )}
+      >
         {hasRealCover ? (
           /* eslint-disable-next-line @next/next/no-img-element */
           <img
             src={business.cover_image!}
             alt=""
             aria-hidden
-            className="absolute inset-0 h-full w-full object-cover opacity-25 mix-blend-luminosity"
+            className="absolute inset-0 h-full w-full object-cover"
             loading="eager"
+            fetchPriority="high"
             decoding="async"
           />
-        ) : null}
-        {/* Right-side warm wash */}
-        <div
-          aria-hidden
-          className="absolute -right-12 -bottom-16 h-72 w-72 rounded-full bg-secondary/20 blur-3xl"
-        />
-        <div
-          aria-hidden
-          className="absolute inset-y-0 right-0 w-1/3 bg-gradient-to-l from-white/15 to-transparent"
-        />
-
-        {/* Decorative band only: it fixes the cover height so the logo
-         *  overlay below hangs off a stable edge. No copy lives here. */}
-        <div aria-hidden className="relative z-10 h-24 sm:h-32 md:h-40" />
-      </div>
-
-      {/* ── Logo overlay — hangs off cover bottom edge ── */}
-      <div className="relative z-20 -mt-12 flex justify-center px-4">
-        <div className="ring-8 ring-background overflow-hidden rounded-xl bg-surface shadow-floating w-24 h-24 flex items-center justify-center sm:w-28 sm:h-28">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={logoSrc}
-            alt={`${business.name} logo`}
-            className="h-full w-full object-cover"
+        ) : (
+          <CoverArtwork />
+        )}
+        {/* Darkens a photo so the floating header buttons stay legible on any
+            image. The artwork is already dark, so it needs no scrim. */}
+        {hasRealCover ? (
+          <div
+            aria-hidden
+            className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/25"
           />
-        </div>
+        ) : null}
       </div>
 
-      {/* ── Title block + quick-action pill row ──
-       *  Mobile: title bumps to 2xl, description 2 lines, pills fill
-       *  the row edge-to-edge (gap-2 instead of centered). */}
-      <div className="relative mx-auto max-w-6xl px-4 pt-4 pb-6 text-center sm:px-6 sm:pt-6 sm:pb-10">
-        <h1
-          id="business-name"
-          className="font-heading text-2xl font-semibold tracking-tight text-primary sm:text-4xl md:text-5xl"
-        >
-          {business.name}
-        </h1>
-        {description ? (
-          <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-on-surface-variant sm:text-base">
-            {description}
-          </p>
-        ) : null}
+      {/* ── Identity ──────────────────────────────────────────── */}
+      <div className="mx-auto max-w-6xl px-4 pb-7 sm:px-6 sm:pb-10">
+        <BusinessMark
+          name={business.name}
+          logo={business.logo}
+          loading="eager"
+          className="relative z-raised -mt-11 h-[5.5rem] w-[5.5rem] rounded-3xl bg-surface shadow-lg ring-4 ring-background sm:-mt-14 sm:h-28 sm:w-28"
+          initialClassName="text-4xl sm:text-5xl"
+        />
 
-        {/* Quick-action pill row — mobile full-width stack, sm+ inline */}
-        <div className="mt-5 grid grid-cols-1 gap-2 sm:mt-6 sm:flex sm:flex-wrap sm:items-center sm:justify-center sm:gap-2">
-          {address ? (
-            <a
-              href={mapsUrl || "#"}
-              target={mapsUrl ? "_blank" : undefined}
-              rel={mapsUrl ? "noopener noreferrer" : undefined}
-              className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-pill border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-sm font-medium text-text shadow-sm transition hover:bg-[var(--color-surface-low)] active:scale-[0.98]"
+        <div className="mt-4 sm:mt-5">
+          {menuName ? (
+            <Badge
+              tone="primary"
+              icon={<UtensilsCrossed className="h-3 w-3" aria-hidden />}
+              className="mb-3"
             >
-              <span aria-hidden>📍</span>
-              <span className="line-clamp-1">{address}</span>
-            </a>
+              {menuName}
+            </Badge>
           ) : null}
-          {phone ? (
-            <a
-              href={`tel:${phone.replace(/\s+/g, "")}`}
-              className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-pill border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-sm font-medium text-text shadow-sm transition hover:bg-[var(--color-surface-low)] active:scale-[0.98]"
-            >
-              <span aria-hidden>📞</span>
-              <span>Ara</span>
-            </a>
-          ) : null}
-          <a
-            href="#contact"
-            className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-pill border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-sm font-medium text-text shadow-sm transition hover:bg-[var(--color-surface-low)] active:scale-[0.98]"
+          <h1
+            id="business-name"
+            className="font-heading text-[2rem] font-semibold leading-[1.1] tracking-tight text-text sm:text-5xl"
           >
-            <span aria-hidden>💬</span>
-            <span>WhatsApp</span>
-          </a>
+            {business.name}
+          </h1>
+          {description ? (
+            <p className="mt-2.5 max-w-2xl text-base leading-relaxed text-muted">
+              {description}
+            </p>
+          ) : null}
+          {address ? (
+            <p className="mt-3 flex max-w-2xl items-start gap-2 text-sm text-muted">
+              <MapPin
+                className="mt-0.5 h-4 w-4 shrink-0 text-outline"
+                aria-hidden
+              />
+              <span>{address}</span>
+            </p>
+          ) : null}
         </div>
+
+        <ContactActions
+          variant="tiles"
+          business={business}
+          cta={cta}
+          className="mt-6 sm:max-w-xl"
+        />
       </div>
     </section>
   );
 }
 
 /**
- * Convert "#RRGGBB" or "#RGB" → "R G B" (space-separated) so the value can
- * be dropped into `rgb(var(--color-x) / <alpha>)` Tailwind utilities.
- * Returns the input untouched if it doesn't look like a hex color.
+ * Brand artwork shown when the venue has no cover photo: layered brand-colour
+ * glows over a dotted grid. Pure CSS (no image request, no data-URI weight).
  */
-function hexToRgbTriplet(hex: string | null | undefined): string {
-  if (!hex) return "42 68 54"; // default Velouté Deep Reserve Forest
+function CoverArtwork() {
+  return (
+    <div aria-hidden className="absolute inset-0">
+      <div className="absolute inset-0 bg-gradient-to-br from-primary via-primary to-accent" />
+      <div className="absolute -right-12 -top-24 h-72 w-72 rounded-full bg-secondary/50 mix-blend-screen blur-3xl" />
+      <div className="absolute -bottom-32 left-1/4 h-80 w-96 rounded-full bg-accent blur-3xl" />
+      <div
+        className="absolute inset-0 opacity-60 [mask-image:linear-gradient(to_bottom,black,transparent_85%)]"
+        style={{
+          backgroundImage:
+            "radial-gradient(rgb(255 255 255 / 0.22) 1px, transparent 1.5px)",
+          backgroundSize: "20px 20px",
+        }}
+      />
+    </div>
+  );
+}
+
+/* ── Tenant theme → CSS variables ──────────────────────────────────────── */
+
+type Rgb = [number, number, number];
+
+/** "#RRGGBB" / "#RGB" → [r, g, b], or null when it isn't a hex colour. */
+function parseHex(hex: string | null | undefined): Rgb | null {
+  if (!hex) return null;
   const cleaned = hex.replace("#", "").trim();
-  let r: number, g: number, b: number;
-  if (cleaned.length === 3) {
-    r = parseInt(cleaned[0] + cleaned[0], 16);
-    g = parseInt(cleaned[1] + cleaned[1], 16);
-    b = parseInt(cleaned[2] + cleaned[2], 16);
-  } else if (cleaned.length === 6) {
-    r = parseInt(cleaned.slice(0, 2), 16);
-    g = parseInt(cleaned.slice(2, 4), 16);
-    b = parseInt(cleaned.slice(4, 6), 16);
-  } else {
-    return "42 68 54";
+  const full =
+    cleaned.length === 3
+      ? cleaned
+          .split("")
+          .map((c) => c + c)
+          .join("")
+      : cleaned;
+  if (!/^[0-9a-fA-F]{6}$/.test(full)) return null;
+  return [
+    parseInt(full.slice(0, 2), 16),
+    parseInt(full.slice(2, 4), 16),
+    parseInt(full.slice(4, 6), 16),
+  ];
+}
+
+/** WCAG relative luminance. */
+function luminance([r, g, b]: Rgb): number {
+  const channel = (c: number) => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  };
+  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+}
+
+function contrast(a: Rgb, b: Rgb): number {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+/** White or near-black text, whichever reads better on `background`. */
+function readableOn(background: Rgb): Rgb {
+  const white: Rgb = [255, 255, 255];
+  const ink: Rgb = [26, 30, 33];
+  return contrast(background, white) >= contrast(background, ink) ? white : ink;
+}
+
+function themeVars(theme: PublicMenuTheme | null): React.CSSProperties {
+  if (!theme) return {};
+  const vars: Record<string, string> = {};
+  const fields: Array<[string | null | undefined, string]> = [
+    [theme.primary_color, "--color-primary"],
+    [theme.secondary_color, "--color-secondary"],
+    [theme.accent_color, "--color-accent"],
+    [theme.background_color, "--color-background"],
+    [theme.text_color, "--color-text"],
+  ];
+  for (const [hex, name] of fields) {
+    const rgb = parseHex(hex);
+    if (rgb) vars[name] = rgb.join(" ");
   }
-  return `${r} ${g} ${b}`;
+  const primary = parseHex(theme.primary_color);
+  if (primary) vars["--color-primary-foreground"] = readableOn(primary).join(" ");
+  return vars as React.CSSProperties;
 }

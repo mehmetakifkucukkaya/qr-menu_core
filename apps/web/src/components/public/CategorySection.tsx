@@ -4,16 +4,23 @@ import { ItemCard } from "./ItemCard";
 interface CategorySectionProps {
   category: PublicMenuCategory;
   onItemSelect?: (item: PublicMenuItem) => void;
+  allergenNames?: Record<string, string>;
 }
 
 /**
- * CategorySection — anchor target for CategoryNav + heading + items grid.
+ * CategorySection — anchor target for the category chips / rail, plus the
+ * section heading and its list of dishes.
  *
- * The `data-category-anchor` attribute is what CategoryNav's
- * IntersectionObserver watches (see CategoryNav.tsx). The section id
- * is `#category-{slug}` so direct hash links also work.
+ * `id="category-{slug}"` makes direct hash links work; `useCategorySpy` reads
+ * the same ids for the active-chip highlight. The landing offset under the
+ * sticky header + chip row comes from `scroll-padding-top` on <html>
+ * (globals.css), so no per-section scroll margin is needed.
  */
-export function CategorySection({ category, onItemSelect }: CategorySectionProps) {
+export function CategorySection({
+  category,
+  onItemSelect,
+  allergenNames,
+}: CategorySectionProps) {
   if (category.items.length === 0) return null;
 
   return (
@@ -21,26 +28,34 @@ export function CategorySection({ category, onItemSelect }: CategorySectionProps
       id={`category-${category.slug}`}
       data-category-anchor={category.slug}
       aria-labelledby={`category-${category.slug}-title`}
-      className="scroll-mt-16"
     >
-      <header className="mb-3 flex items-baseline justify-between">
-        <h2
-          id={`category-${category.slug}-title`}
-          className="font-heading text-xl font-semibold text-text sm:text-2xl"
-        >
-          {category.name}
-        </h2>
-        <span className="text-xs text-muted">
+      <header className="mb-4 flex items-end justify-between gap-4">
+        <div className="min-w-0">
+          <h2
+            id={`category-${category.slug}-title`}
+            className="font-heading text-2xl font-semibold tracking-tight text-text sm:text-[1.75rem]"
+          >
+            {category.name}
+          </h2>
+          {category.description ? (
+            <p className="mt-1 line-clamp-2 max-w-prose text-sm text-muted">
+              {category.description}
+            </p>
+          ) : null}
+        </div>
+        <span className="shrink-0 pb-1 text-xs font-medium text-outline">
           {category.items.length} ürün
         </span>
       </header>
-      {category.description ? (
-        <p className="mb-4 text-sm text-muted">{category.description}</p>
-      ) : null}
       <ul className="space-y-3">
         {category.items.map((item) => (
           <li key={item.id}>
-            <ItemCard item={item} category={category} onSelect={onItemSelect} />
+            <ItemCard
+              item={item}
+              category={category}
+              onSelect={onItemSelect}
+              allergenNames={allergenNames}
+            />
           </li>
         ))}
       </ul>

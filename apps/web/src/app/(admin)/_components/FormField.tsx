@@ -1,6 +1,9 @@
 "use client";
 
 import { useId } from "react";
+import { AlertCircle } from "lucide-react";
+
+import { Input } from "@/components/ui/Input";
 
 interface FormFieldProps {
   label: string;
@@ -17,12 +20,12 @@ interface FormFieldProps {
 }
 
 /**
- * Reusable form field — label + input + error message.
+ * Reusable form field — label + input + hint / error message.
  *
- * Controlled component (parent owns state). Used by every form in the
- * admin panel (login, business settings, theme settings, menus/items in
- * Sprint 4B). Keeps the visual treatment consistent without dragging in
- * a form library for V1.
+ * Controlled component (parent owns state). Used by every form in the admin
+ * panel (login, business settings, theme settings, menus/items). The control
+ * itself is the shared `Input`, so borders, focus halo and invalid styling are
+ * defined once. An error is announced with an icon + text, never colour alone.
  */
 export function FormField({
   label,
@@ -43,18 +46,16 @@ export function FormField({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <label
-        htmlFor={id}
-        className="text-sm font-medium text-text"
-      >
+      <label htmlFor={id} className="text-sm font-semibold text-text">
         {label}
         {required ? (
-          <span aria-hidden className="ml-0.5 text-accent">
+          <span aria-hidden className="ml-0.5 text-danger">
             *
           </span>
         ) : null}
       </label>
-      <input
+      <Input
+        density="compact"
         id={id}
         name={name}
         type={type}
@@ -70,10 +71,6 @@ export function FormField({
             .filter(Boolean)
             .join(" ") || undefined
         }
-        className={
-          "w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-muted/70 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60" +
-          (error ? " border-accent focus:border-accent focus:ring-accent/30" : "")
-        }
       />
       {hint && !error ? (
         <p id={hintId} className="text-xs text-muted">
@@ -81,8 +78,13 @@ export function FormField({
         </p>
       ) : null}
       {error ? (
-        <p id={errorId} role="alert" className="text-xs font-medium text-accent">
-          {error}
+        <p
+          id={errorId}
+          role="alert"
+          className="flex items-start gap-1.5 text-sm font-medium text-danger"
+        >
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+          <span>{error}</span>
         </p>
       ) : null}
     </div>

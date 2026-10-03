@@ -36,7 +36,7 @@ export function LoyaltyBadge({
       : "px-2 py-0.5 text-xs gap-1";
 
   const tone = hasPoints
-    ? "bg-amber-100 text-amber-800 ring-amber-200 hover:bg-amber-200"
+    ? "bg-warning-soft text-warning ring-warning/25 hover:bg-warning/10"
     : "bg-muted/10 text-muted ring-border";
 
   const Tag = onClick ? "button" : "span";

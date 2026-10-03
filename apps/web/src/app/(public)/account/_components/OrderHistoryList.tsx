@@ -38,10 +38,10 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
 const STATUS_TONE: Record<OrderStatus, string> = {
   pending: "bg-blue-100 text-blue-800 ring-blue-200",
   confirmed: "bg-indigo-100 text-indigo-800 ring-indigo-200",
-  preparing: "bg-amber-100 text-amber-800 ring-amber-200",
-  ready: "bg-emerald-100 text-emerald-800 ring-emerald-200",
-  delivered: "bg-green-100 text-green-800 ring-green-200",
-  cancelled: "bg-red-100 text-red-800 ring-red-200",
+  preparing: "bg-warning-soft text-warning ring-warning/25",
+  ready: "bg-success-soft text-success ring-success/25",
+  delivered: "bg-success-soft text-success ring-success/25",
+  cancelled: "bg-danger-soft text-danger ring-danger/25",
 };
 
 export function OrderHistoryList({
@@ -62,7 +62,7 @@ export function OrderHistoryList({
         </p>
         <Link
           href="/"
-          className="mt-2 inline-flex items-center justify-center rounded-full bg-primary px-4 py-2 text-xs font-bold uppercase tracking-wider text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+          className="mt-2 inline-flex items-center justify-center rounded-full bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
         >
           Menüyü gör
         </Link>

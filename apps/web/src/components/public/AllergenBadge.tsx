@@ -21,7 +21,7 @@ export function AllergenBadge({ allergen, locale }: AllergenBadgeProps) {
     <span
       title={label}
       aria-label={label}
-      className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-900 ring-1 ring-amber-200"
+      className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2.5 py-1 text-xs font-medium text-warning ring-1 ring-warning/25"
     >
       <span aria-hidden>{ICON_HINTS[allergen.icon] ?? "⚠️"}</span>
       <span>{label}</span>

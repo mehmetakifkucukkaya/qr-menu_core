@@ -1,107 +1,79 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
 import clsx from "clsx";
+import { useEffect, useRef } from "react";
+
 import type { PublicMenuCategory } from "@/types/menu";
 
 interface CategoryNavProps {
   categories: PublicMenuCategory[];
+  /** Slug of the section the reader is on (from `useCategorySpy`). */
+  activeSlug: string | null;
 }
 
 /**
- * CategoryNav — Velouté sticky segmented pill track (D-035 / Sprint G).
+ * CategoryNav — sticky chip row for phones and tablets.
  *
- * Desktop: an elevated white track (`bg-surface`) sits over the linen
- * page bg. Active pill is `bg-primary text-primary-foreground`; inactive
- * pills are subtle `bg-[var(--color-surface-low)]` that flip to forest on
- * hover. 44px min-height on every chip.
+ * The bar is full width (so the glass background reaches both screen edges)
+ * and the chips live in an inner scroller with its own padding. The earlier
+ * version used negative margins to fake this, which pushed the page ~13 px
+ * wider than the screen on phones.
  *
- * Mobile: same look, slightly smaller padding so 5-6 categories fit on a
- * 360px viewport.
+ * The active chip follows the reader: as sections scroll past, the chip row
+ * scrolls horizontally to keep the active one centred.
  *
- * IntersectionObserver picks the section with the largest visible area
- * inside the top 56px + bottom-55% band (matches the sticky chrome
- * height + the natural reading zone).
+ * Hidden from `lg`: the desktop layout has the category rail instead.
  */
-export function CategoryNav({ categories }: CategoryNavProps) {
+export function CategoryNav({ categories, activeSlug }: CategoryNavProps) {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
-  const [activeSlug, setActiveSlug] = useState<string | null>(
-    categories[0]?.slug ?? null,
-  );
 
+  // Keep the active chip centred inside the scroller. Scrolling the scroller
+  // itself (not `scrollIntoView`) avoids dragging the whole page with it.
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const sections = Array.from(
-      document.querySelectorAll<HTMLElement>("[data-category-anchor]"),
+    const scroller = scrollerRef.current;
+    if (!scroller || !activeSlug) return;
+    const chip = scroller.querySelector<HTMLElement>(
+      `[data-chip="${CSS.escape(activeSlug)}"]`,
     );
-    if (sections.length === 0) return;
-
-    // rootMargin = "-{sticky-chrome}px 0px -{bottom-half}px 0px".
-    // We pick sections whose visible middle intersects the reading
-    // zone (top 50px) so the chip follows the user's reading line.
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
-        if (visible[0]) {
-          const slug = visible[0].target.getAttribute(
-            "data-category-anchor",
-          );
-          if (slug) setActiveSlug(slug);
-        }
-      },
-      {
-        // top - sticky header (48px) - sticky pill row (~40px) = -88px on sm+
-        // mobile: -48px (header only)
-        rootMargin:
-          typeof window !== "undefined" && window.innerWidth >= 640
-            ? "-88px 0px -55% 0px"
-            : "-48px 0px -55% 0px",
-        threshold: [0, 0.25, 0.5, 0.75, 1],
-      },
-    );
-
-    sections.forEach((el) => observer.observe(el));
-    return () => observer.disconnect();
-  }, [categories]);
+    if (!chip) return;
+    const target = chip.offsetLeft - (scroller.clientWidth - chip.offsetWidth) / 2;
+    scroller.scrollTo({ left: Math.max(0, target), behavior: "smooth" });
+  }, [activeSlug]);
 
   if (categories.length === 0) return null;
 
   return (
     <nav
       aria-label="Kategoriler"
-      className="sticky top-12 z-20 -mx-3 mt-3 border-b border-[var(--color-border)] bg-background/85 px-3 backdrop-blur supports-[backdrop-filter]:bg-background/70 sm:top-14 sm:-mx-6 sm:mt-6 sm:px-6"
+      data-category-nav
+      className="glass sticky top-[var(--header-h)] z-nav border-b border-border/70 lg:hidden"
     >
-      <div className="flex flex-1 snap-x snap-mandatory items-center gap-1.5 overflow-x-auto py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:gap-2 sm:py-3">
+      <div
+        ref={scrollerRef}
+        className="no-scrollbar mx-auto flex max-w-6xl snap-x items-center gap-2 overflow-x-auto px-4 py-2.5 sm:px-6"
+      >
         {categories.map((cat) => {
           const isActive = cat.slug === activeSlug;
           return (
             <a
               key={cat.id}
+              data-chip={cat.slug}
               href={`#category-${cat.slug}`}
               aria-current={isActive ? "true" : undefined}
               className={clsx(
-                "inline-flex min-h-[36px] shrink-0 snap-start items-center rounded-pill px-3 text-xs font-semibold uppercase tracking-wider transition focus:outline-none focus:ring-2 focus:ring-primary sm:min-h-[44px] sm:px-4 sm:text-sm",
+                "inline-flex h-10 shrink-0 snap-start items-center rounded-pill px-4 text-sm font-semibold",
+                "transition-[background-color,color,box-shadow] duration-200",
                 isActive
                   ? "bg-primary text-primary-foreground shadow-sm"
-                  : "bg-[var(--color-surface-low)] text-on-surface-variant hover:bg-[var(--color-surface)] hover:text-text",
+                  : "bg-surface-low text-muted hover:bg-surface-high hover:text-text",
               )}
             >
               {cat.name}
-              <span
-                className={clsx(
-                  "ml-2 rounded-pill px-1.5 py-0.5 text-[10px] font-bold",
-                  isActive
-                    ? "bg-primary-foreground/20 text-primary-foreground"
-                    : "bg-[var(--color-surface)] text-outline",
-                )}
-              >
-                {cat.items.length}
-              </span>
             </a>
           );
         })}
+        {/* Trailing spacer so the last chip can scroll fully clear of the edge. */}
+        <span aria-hidden className="w-2 shrink-0" />
       </div>
     </nav>
   );

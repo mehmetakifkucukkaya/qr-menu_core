@@ -1,10 +1,15 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { X, Minus, Plus, Trash2, ShoppingBag, Receipt } from "lucide-react";
-import type { PublicMenuItem } from "@/types/menu";
-import { formatPrice } from "@/lib/format";
+import { useState } from "react";
+import { Info, Minus, Plus, Receipt, ShoppingBag, Trash2 } from "lucide-react";
+
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Sheet } from "@/components/ui/Sheet";
+import { SmartImage } from "@/components/ui/SmartImage";
 import { useCartStore } from "@/lib/cart-store";
+import { formatPrice } from "@/lib/format";
+import type { PublicMenuItem } from "@/types/menu";
 import { CheckoutForm } from "./CheckoutForm";
 
 interface CartDrawerProps {
@@ -37,19 +42,21 @@ interface CartDrawerProps {
 }
 
 /**
- * CartDrawer — floating cart panel.
+ * CartDrawer — the customer's basket.
  *
- * Mobile: bottom sheet sliding up from below (full width, half height).
- * Desktop (sm+): right-side drawer.
+ * Phones: a bottom sheet. Larger screens: a right-hand drawer. Both come from
+ * `Sheet` (native modal <dialog>), which brings the focus trap, Escape,
+ * tap-outside and drag-down-to-dismiss.
  *
  * Composition:
- *   - Header: title + item count + close
- *   - Items list: thumbnail + name + qty controls + subtotal + remove
- *   - Empty state when no items
- *   - Footer: total + "Sipariş Ver" → opens CheckoutForm modal
+ *   - Header: title + item count
+ *   - Items: thumbnail (only when the dish has a photo) + name + quantity
+ *     stepper + line total + remove
+ *   - Empty state when there is nothing in the cart
+ *   - Footer: total + "Sipariş Ver" → opens the CheckoutForm sheet
  *
- * State (open/close) is owned by the Zustand cart store so the
- * "Sepete ekle" action from ItemCard can flip it open automatically.
+ * Open/closed state lives in the Zustand cart store so the "Sepete ekle"
+ * action can open it automatically.
  */
 export function CartDrawer({
   businessSlug,
@@ -67,197 +74,136 @@ export function CartDrawer({
   const totalAmount = useCartStore((s) => s.totalAmount());
 
   const [checkoutOpen, setCheckoutOpen] = useState(false);
-  const closeBtnRef = useRef<HTMLButtonElement | null>(null);
-
-  // Lock body scroll + listen for Escape when drawer is open.
-  useEffect(() => {
-    if (!isOpen) return;
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !checkoutOpen) closeDrawer();
-    };
-    document.addEventListener("keydown", onKey);
-    queueMicrotask(() => closeBtnRef.current?.focus());
-    return () => {
-      document.body.style.overflow = prevOverflow;
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [isOpen, closeDrawer, checkoutOpen]);
-
-  if (!isOpen) return null;
 
   const itemCount = items.reduce((sum, i) => sum + i.quantity, 0);
   const cur = items[0]?.currency ?? currency;
 
   return (
     <>
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="cart-drawer-title"
-        className="fixed inset-0 z-40 flex items-end justify-center bg-text/40 backdrop-blur-sm sm:items-stretch sm:justify-end"
-        onClick={closeDrawer}
-      >
-        <div
-          className="safe-bottom flex max-h-[90dvh] w-full flex-col overflow-hidden rounded-t-xl bg-surface shadow-lg ring-1 ring-[var(--color-border)] sm:max-h-full sm:h-full sm:w-96 sm:rounded-none sm:ring-0"
-          onClick={(e) => e.stopPropagation()}
-          style={{ animation: "slideup 0.22s ease-out" }}
-        >
-          {/* Header */}
-          <header className="sticky top-0 flex items-center justify-between gap-2 border-b border-[var(--color-border)] bg-surface px-4 py-3">
-            <div className="flex items-center gap-2">
-              <ShoppingBag className="h-5 w-5 text-primary" aria-hidden />
-              <h2
-                id="cart-drawer-title"
-                className="font-heading text-base font-bold text-text sm:text-lg"
-              >
-                Sepetim
-              </h2>
-              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
-                {itemCount} ürün
-              </span>
-            </div>
-            <button
-              ref={closeBtnRef}
-              type="button"
-              onClick={closeDrawer}
-              aria-label="Kapat"
-              className="touch-target inline-flex items-center justify-center rounded-full p-2 text-muted hover:bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-            >
-              <X className="h-5 w-5" aria-hidden />
-            </button>
-          </header>
-
-          {/* Items */}
-          <div className="flex-1 overflow-y-auto px-4 py-3">
-            {items.length === 0 ? (
-              <EmptyCart />
-            ) : (
-              <ul className="space-y-3">
-                {items.map((item) => {
-                  const cat = catalogLookup?.[item.menuItemId];
-                  const subtotal =
-                    Number.parseFloat(item.price) * item.quantity;
-                  return (
-                    <li
-                      key={item.menuItemId}
-                      className="flex items-start gap-3 rounded-lg border border-border bg-background p-3"
-                    >
-                      <div className="h-14 w-14 shrink-0 overflow-hidden rounded-md bg-surface">
-                        {item.image || cat?.image ? (
-                          /* eslint-disable-next-line @next/next/no-img-element */
-                          <img
-                            src={(item.image ?? cat?.image) as string}
-                            alt=""
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center text-2xl">
-                            🍽️
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex min-w-0 flex-1 flex-col">
-                        <p
-                          className="truncate text-sm font-semibold text-text"
-                          title={item.name}
-                        >
-                          {item.name}
-                        </p>
-                        <p className="text-xs text-muted">
-                          {formatPrice(item.price, item.currency)}
-                        </p>
-                        <div className="mt-1.5 flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              updateQuantity(item.menuItemId, item.quantity - 1)
-                            }
-                            aria-label="Azalt"
-                            className="flex h-7 w-7 items-center justify-center rounded-full border border-border bg-surface text-text transition hover:border-primary hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary"
-                          >
-                            <Minus className="h-3 w-3" aria-hidden />
-                          </button>
-                          <span
-                            aria-live="polite"
-                            className="min-w-[1.25rem] text-center font-heading text-sm font-semibold tabular-nums text-text"
-                          >
-                            {item.quantity}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              updateQuantity(item.menuItemId, item.quantity + 1)
-                            }
-                            aria-label="Arttır"
-                            className="flex h-7 w-7 items-center justify-center rounded-full border border-border bg-surface text-text transition hover:border-primary hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary"
-                          >
-                            <Plus className="h-3 w-3" aria-hidden />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => remove(item.menuItemId)}
-                            aria-label={`${item.name} sepetten çıkar`}
-                            className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted transition hover:text-accent focus:outline-none focus:ring-2 focus:ring-accent"
-                          >
-                            <Trash2 className="h-3 w-3" aria-hidden />
-                            Çıkar
-                          </button>
-                        </div>
-                        {item.notes ? (
-                          <p className="mt-1 line-clamp-1 text-[11px] italic text-muted">
-                            Not: {item.notes}
-                          </p>
-                        ) : null}
-                      </div>
-                      <span className="shrink-0 text-sm font-bold text-primary tabular-nums">
-                        {formatPrice(subtotal.toFixed(2), item.currency)}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-
-          {/* Footer */}
-          {items.length > 0 ? (
-            <footer className="sticky bottom-0 border-t border-[var(--color-border)] bg-surface/95 px-4 py-3 backdrop-blur">
-              <div className="mb-3 flex items-end justify-between">
-                <span className="text-xs uppercase tracking-wider text-muted">
-                  Toplam
-                </span>
-                <span className="font-heading text-xl font-bold text-primary tabular-nums">
+      <Sheet
+        open={isOpen}
+        onClose={closeDrawer}
+        variant="drawer"
+        title="Sepetim"
+        headerExtra={
+          itemCount > 0 ? <Badge tone="primary">{itemCount} ürün</Badge> : null
+        }
+        bodyClassName="px-5 py-1"
+        footer={
+          items.length > 0 ? (
+            <div className="space-y-3.5">
+              <div className="flex items-baseline justify-between">
+                <span className="text-sm font-medium text-muted">Toplam</span>
+                <span className="font-heading text-2xl font-semibold tabular-nums text-primary">
                   {formatPrice(totalAmount.toFixed(2), cur)}
                 </span>
               </div>
               {/* Sprint B3b — the order submission CTA is gated on
-                  `orders_enabled`. With the feature off, the cart
-                  remains usable for browsing but the customer can no
-                  longer submit — the spec note in CartDrawerProps
-                  explains the rationale. */}
+                  `orders_enabled`. With the feature off, the cart remains
+                  usable for browsing but the customer can no longer submit. */}
               {ordersEnabled ? (
-                <button
-                  type="button"
+                <Button
+                  size="lg"
+                  fullWidth
                   onClick={() => setCheckoutOpen(true)}
-                  className="flex w-full min-h-[44px] items-center justify-center gap-2 rounded-md bg-primary px-4 py-3 text-sm font-bold uppercase tracking-wider text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+                  leadingIcon={<Receipt className="h-[1.125rem] w-[1.125rem]" aria-hidden />}
                 >
-                  <Receipt className="h-4 w-4" aria-hidden />
                   Sipariş Ver
-                </button>
+                </Button>
               ) : (
                 <p
                   role="status"
-                  className="rounded-md border border-border bg-background px-3 py-2 text-center text-xs text-muted"
+                  className="flex items-center justify-center gap-2 rounded-xl bg-surface-low px-4 py-3 text-sm text-muted"
                 >
+                  <Info className="h-4 w-4 shrink-0" aria-hidden />
                   Sipariş verme bu pakete dahil değil.
                 </p>
               )}
-            </footer>
-          ) : null}
-        </div>
-      </div>
+            </div>
+          ) : null
+        }
+      >
+        {items.length === 0 ? (
+          <EmptyCart />
+        ) : (
+          <ul className="divide-y divide-border">
+            {items.map((item) => {
+              const cat = catalogLookup?.[item.menuItemId];
+              const thumb = item.image ?? cat?.image ?? null;
+              const subtotal = Number.parseFloat(item.price) * item.quantity;
+              return (
+                <li key={item.menuItemId} className="flex gap-3.5 py-4">
+                  {thumb ? (
+                    <SmartImage
+                      src={thumb}
+                      alt=""
+                      aria-hidden
+                      wrapperClassName="h-16 w-16 shrink-0 rounded-xl"
+                    />
+                  ) : null}
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="line-clamp-2 font-semibold leading-snug text-text">
+                        {item.name}
+                      </p>
+                      <span className="shrink-0 font-semibold tabular-nums text-primary">
+                        {formatPrice(subtotal.toFixed(2), item.currency)}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-sm tabular-nums text-muted">
+                      {formatPrice(item.price, item.currency)}
+                    </p>
+                    {item.notes ? (
+                      <p className="mt-1 line-clamp-1 text-xs italic text-outline">
+                        Not: {item.notes}
+                      </p>
+                    ) : null}
+                    <div className="mt-2.5 flex items-center justify-between gap-2">
+                      <div className="flex h-10 items-center rounded-pill bg-surface-low ring-1 ring-border">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateQuantity(item.menuItemId, item.quantity - 1)
+                          }
+                          aria-label="Azalt"
+                          className="flex h-10 w-10 items-center justify-center rounded-full text-primary transition hover:bg-surface-high active:scale-90"
+                        >
+                          <Minus className="h-4 w-4" aria-hidden />
+                        </button>
+                        <span
+                          aria-live="polite"
+                          className="min-w-[1.5rem] text-center text-sm font-bold tabular-nums text-text"
+                        >
+                          {item.quantity}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateQuantity(item.menuItemId, item.quantity + 1)
+                          }
+                          aria-label="Arttır"
+                          className="flex h-10 w-10 items-center justify-center rounded-full text-primary transition hover:bg-surface-high active:scale-90"
+                        >
+                          <Plus className="h-4 w-4" aria-hidden />
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => remove(item.menuItemId)}
+                        aria-label={`${item.name} sepetten çıkar`}
+                        className="inline-flex h-10 items-center gap-1.5 rounded-xl px-3 text-sm font-medium text-muted transition hover:bg-danger-soft hover:text-danger"
+                      >
+                        <Trash2 className="h-4 w-4" aria-hidden />
+                        Çıkar
+                      </button>
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </Sheet>
 
       <CheckoutForm
         open={checkoutOpen}
@@ -267,13 +213,6 @@ export function CartDrawer({
         customerProfile={customerProfile}
         customerLoyalty={customerLoyalty}
       />
-
-      <style>{`
-        @keyframes slideup {
-          from { transform: translateY(24px); opacity: 0; }
-          to   { transform: translateY(0);    opacity: 1; }
-        }
-      `}</style>
     </>
   );
 }
@@ -282,15 +221,15 @@ function EmptyCart() {
   return (
     <div
       role="status"
-      className="flex flex-col items-center justify-center py-12 text-center"
+      className="flex flex-col items-center justify-center px-4 py-14 text-center"
     >
-      <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
-        <ShoppingBag className="h-7 w-7" aria-hidden />
+      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary-soft text-primary">
+        <ShoppingBag className="h-8 w-8" aria-hidden />
       </div>
-      <p className="font-heading text-base font-semibold text-text">
+      <p className="font-heading text-lg font-semibold text-text">
         Sepetiniz boş
       </p>
-      <p className="mt-1 max-w-[18rem] text-xs text-muted">
+      <p className="mt-1.5 max-w-[18rem] text-sm text-muted">
         Menüden beğendiğiniz ürünleri ekleyin, &ldquo;Sipariş Ver&rdquo; ile
         tamamlayalım.
       </p>

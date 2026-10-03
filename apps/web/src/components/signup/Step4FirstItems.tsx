@@ -103,7 +103,7 @@ export function Step4FirstItems() {
       </div>
 
       {!canAdvance ? (
-        <p className="text-xs text-accent" role="alert">
+        <p className="text-xs text-danger" role="alert">
           En az bir ürünün adını yazmanız gerekiyor. İsterseniz &quot;Bu
           adımı atla&quot; ile boş başlayabilirsiniz.
         </p>
@@ -178,7 +178,7 @@ function ItemRow({
             type="button"
             onClick={onDelete}
             aria-label={`Ürün ${index + 1} sil`}
-            className="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted transition-colors hover:bg-background hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted transition-colors hover:bg-background hover:text-danger focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
             <Trash2 className="h-3.5 w-3.5" />
           </button>
@@ -199,7 +199,7 @@ function ItemRow({
             onChange={(e) => onNameChange(e.target.value)}
             maxLength={ITEM_NAME_MAX}
             placeholder="Örn. Türk Kahvesi"
-            className="mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-muted/70 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="mt-1 w-full rounded-xl border border-input bg-surface px-3.5 py-2.5 text-base sm:text-sm text-text placeholder:text-outline focus-visible:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15"
           />
         </div>
         <div>
@@ -216,7 +216,7 @@ function ItemRow({
             onChange={(e) => onPriceChange(e.target.value)}
             placeholder="0,00"
             inputMode="decimal"
-            className="mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-muted/70 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="mt-1 w-full rounded-xl border border-input bg-surface px-3.5 py-2.5 text-base sm:text-sm text-text placeholder:text-outline focus-visible:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15"
           />
         </div>
       </div>
@@ -235,7 +235,7 @@ function ItemRow({
           rows={2}
           placeholder="Kısa açıklama…"
           className={clsx(
-            "mt-1 w-full resize-y rounded-md border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-muted/70 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30",
+            "mt-1 w-full resize-y rounded-xl border border-input bg-surface px-3.5 py-2.5 text-base sm:text-sm text-text placeholder:text-outline focus-visible:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15",
           )}
         />
         <p className="mt-1 text-right text-[11px] text-muted">

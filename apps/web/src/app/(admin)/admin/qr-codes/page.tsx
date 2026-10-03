@@ -60,7 +60,7 @@ export default async function QRCodesListPage() {
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-secondary">
+          <p className="text-xs font-semibold tracking-wide text-secondary">
             Pazarlama
           </p>
           <h1 className="font-heading text-3xl font-semibold tracking-tight text-primary">
@@ -74,7 +74,7 @@ export default async function QRCodesListPage() {
         </div>
         <Link
           href="/admin/qr-codes/new"
-          className="inline-flex min-h-[44px] items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-bold uppercase tracking-wider text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+          className="inline-flex min-h-[44px] items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
         >
           <Plus className="h-4 w-4" />
           Yeni QR Kod
@@ -105,11 +105,11 @@ export default async function QRCodesListPage() {
       ) : (
         <section
           aria-label="QR kod listesi"
-          className="overflow-hidden rounded-lg border border-[var(--color-border)] bg-surface shadow-sm"
+          className="overflow-hidden rounded-lg border border-border bg-surface shadow-sm"
         >
-          <table className="w-full table-auto border-collapse text-left">
-            <thead className="bg-[var(--color-surface-low)]">
-              <tr className="text-[10px] font-bold uppercase tracking-[0.18em] text-outline">
+          <table className="table-stack w-full table-auto border-collapse text-left">
+            <thead className="bg-surface-low">
+              <tr className="text-xs font-semibold tracking-wide text-outline">
                 <th className="px-4 py-3 font-bold">Etiket</th>
                 <th className="px-4 py-3 font-bold">Menü</th>
                 <th className="px-4 py-3 font-bold">Şube</th>
@@ -128,7 +128,7 @@ export default async function QRCodesListPage() {
         </section>
       )}
 
-      <p className="rounded-md border border-dashed border-[var(--color-border)] bg-[var(--color-surface-low)] px-3 py-2 text-center text-xs text-on-surface-variant">
+      <p className="rounded-md border border-dashed border-border bg-surface-low px-3 py-2 text-center text-xs text-on-surface-variant">
         QR kodları PNG olarak indirin, yazdırın ve masalarınıza yerleştirin.
         Her tarama otomatik olarak <code className="font-mono">?qr=&lt;id&gt;</code>{" "}
         parametresi ile izlenir.

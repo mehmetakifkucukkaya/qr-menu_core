@@ -45,7 +45,7 @@ export function QrListItem({ qr, csrfToken }: QrListItemProps) {
       </td>
 
       {/* Menu name */}
-      <td className="px-4 py-3 align-middle">
+      <td data-label="Menü" className="px-4 py-3 align-middle">
         <span className="text-text">{qr.menu.name}</span>
         <span className="block font-mono text-[10px] uppercase tracking-wider text-muted">
           /{qr.menu.slug}
@@ -53,7 +53,7 @@ export function QrListItem({ qr, csrfToken }: QrListItemProps) {
       </td>
 
       {/* Branch name (optional) */}
-      <td className="px-4 py-3 align-middle">
+      <td data-label="Şube" className="px-4 py-3 align-middle">
         {branchName ? (
           <span className="inline-flex items-center gap-1 text-sm text-muted">
             <MapPin className="h-3 w-3" aria-hidden />
@@ -65,7 +65,7 @@ export function QrListItem({ qr, csrfToken }: QrListItemProps) {
       </td>
 
       {/* Table number */}
-      <td className="px-4 py-3 align-middle">
+      <td data-label="Masa" className="px-4 py-3 align-middle">
         {qr.table_number ? (
           <span className="inline-flex items-center gap-1 text-xs text-text">
             <Hash className="h-3 w-3 text-muted" aria-hidden />
@@ -77,14 +77,14 @@ export function QrListItem({ qr, csrfToken }: QrListItemProps) {
       </td>
 
       {/* Scan count */}
-      <td className="px-4 py-3 text-center align-middle">
+      <td data-label="Tarama" className="px-4 py-3 text-center align-middle">
         <span className="rounded-full bg-muted/20 px-2 py-0.5 text-xs font-semibold tabular-nums text-text">
           {qr.scan_count.toLocaleString("tr-TR")}
         </span>
       </td>
 
       {/* Active badge */}
-      <td className="px-4 py-3 align-middle">
+      <td data-label="Durum" className="px-4 py-3 align-middle">
         <span
           className={
             "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider " +
@@ -98,7 +98,7 @@ export function QrListItem({ qr, csrfToken }: QrListItemProps) {
       </td>
 
       {/* Actions */}
-      <td className="px-4 py-3 align-middle">
+      <td data-span="full" className="px-4 py-3 align-middle">
         <div className="flex items-center justify-end gap-1.5">
           <Link
             href={`/admin/qr-codes/${qr.id}`}

@@ -231,9 +231,9 @@ export function Step1BusinessInfo() {
       {formError ? (
         <div
           role="alert"
-          className="flex items-start gap-2 rounded-md border border-accent/40 bg-accent/5 px-3 py-2 text-sm text-text"
+          className="flex items-start gap-2 rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-text"
         >
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-danger" />
           <span>{formError}</span>
         </div>
       ) : null}
@@ -256,7 +256,7 @@ export function Step1BusinessInfo() {
           className="text-sm font-medium text-text"
         >
           Şifre
-          <span aria-hidden className="ml-0.5 text-accent">*</span>
+          <span aria-hidden className="ml-0.5 text-danger">*</span>
         </label>
         <div className="relative mt-1.5">
           <input
@@ -271,8 +271,8 @@ export function Step1BusinessInfo() {
             className={clsx(
               "w-full rounded-md border bg-surface px-3 py-2 pr-10 text-sm text-text placeholder:text-muted/70 focus:outline-none focus:ring-2",
               fieldErrors.password
-                ? "border-accent focus:border-accent focus:ring-accent/30"
-                : "border-border focus:border-primary focus:ring-primary/30",
+                ? "border-danger focus:border-danger focus-visible:ring-danger/15"
+                : "border-input focus-visible:border-primary focus-visible:ring-4 focus-visible:ring-primary/15",
             )}
             placeholder="En az 8 karakter"
           />
@@ -290,7 +290,7 @@ export function Step1BusinessInfo() {
           </button>
         </div>
         {fieldErrors.password ? (
-          <p role="alert" className="mt-1 text-xs font-medium text-accent">
+          <p role="alert" className="mt-1 text-xs font-medium text-danger">
             {fieldErrors.password}
           </p>
         ) : null}
@@ -321,17 +321,17 @@ export function Step1BusinessInfo() {
           className="text-sm font-medium text-text"
         >
           Slug (URL)
-          <span aria-hidden className="ml-0.5 text-accent">*</span>
+          <span aria-hidden className="ml-0.5 text-danger">*</span>
         </label>
         <div
           className={clsx(
-            "mt-1.5 flex items-center rounded-md border bg-surface px-3 py-2 text-sm transition-colors focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/30",
+            "mt-1.5 flex items-center rounded-xl border bg-surface px-3.5 py-2.5 text-base transition-[border-color,box-shadow] duration-200 sm:text-sm focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/15",
             fieldErrors.slug || slugStatus.kind === "taken" || slugStatus.kind === "reserved"
-              ? "border-accent focus-within:border-accent focus-within:ring-accent/30"
-              : "border-border",
+              ? "border-danger focus-within:border-danger focus-within:ring-danger/15"
+              : "border-input",
           )}
         >
-          <span className="select-none text-muted">qr-menu.app/m/</span>
+          <span className="shrink-0 select-none whitespace-nowrap text-muted">qr-menu.app/m/</span>
           <input
             id="signup-slug"
             name="slug"
@@ -355,13 +355,13 @@ export function Step1BusinessInfo() {
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
-            className="ml-1 flex-1 bg-transparent text-text placeholder:text-muted/70 focus:outline-none"
+            className="ml-1 min-w-0 flex-1 bg-transparent text-text placeholder:text-outline focus:outline-none"
           />
           <SlugStatusIcon status={slugStatus} />
         </div>
         <SlugStatusHint status={slugStatus} touched={slugTouched} />
         {fieldErrors.slug ? (
-          <p role="alert" className="mt-1 text-xs font-medium text-accent">
+          <p role="alert" className="mt-1 text-xs font-medium text-danger">
             {fieldErrors.slug}
           </p>
         ) : null}
@@ -416,7 +416,7 @@ function BusinessNameField({
     <div className="flex flex-col gap-1.5">
       <label htmlFor={id} className="text-sm font-medium text-text">
         İşletme Adı
-        <span aria-hidden className="ml-0.5 text-accent">*</span>
+        <span aria-hidden className="ml-0.5 text-danger">*</span>
       </label>
       <input
         id={id}
@@ -431,12 +431,12 @@ function BusinessNameField({
         aria-invalid={error ? "true" : undefined}
         aria-describedby={error ? errorId : undefined}
         className={
-          "w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-muted/70 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30" +
-          (error ? " border-accent focus:border-accent focus:ring-accent/30" : "")
+          "w-full rounded-xl border border-input bg-surface px-3.5 py-2.5 text-base sm:text-sm text-text placeholder:text-outline focus-visible:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15" +
+          (error ? " border-danger focus:border-danger focus-visible:ring-danger/15" : "")
         }
       />
       {error ? (
-        <p id={errorId} role="alert" className="text-xs font-medium text-accent">
+        <p id={errorId} role="alert" className="text-xs font-medium text-danger">
           {error}
         </p>
       ) : null}
@@ -466,7 +466,7 @@ function SlugStatusIcon({ status }: { status: SlugStatus }) {
     return (
       <AlertCircle
         aria-hidden
-        className="ml-2 h-4 w-4 shrink-0 text-accent"
+        className="ml-2 h-4 w-4 shrink-0 text-danger"
         aria-label="Slug kullanılamaz"
       />
     );
@@ -505,21 +505,21 @@ function SlugStatusHint({
   }
   if (status.kind === "taken") {
     return (
-      <p className="mt-1 text-xs text-accent" aria-live="polite">
+      <p className="mt-1 text-xs text-danger" aria-live="polite">
         ✗ Bu slug zaten kullanımda. Farklı bir tane deneyin.
       </p>
     );
   }
   if (status.kind === "reserved") {
     return (
-      <p className="mt-1 text-xs text-accent" aria-live="polite">
+      <p className="mt-1 text-xs text-danger" aria-live="polite">
         ✗ Bu slug sistem için ayrılmış.
       </p>
     );
   }
   if (status.kind === "invalid") {
     return (
-      <p className="mt-1 text-xs text-accent" aria-live="polite">
+      <p className="mt-1 text-xs text-danger" aria-live="polite">
         ✗ Geçersiz format. Sadece küçük harf, rakam ve tire kullanın.
       </p>
     );

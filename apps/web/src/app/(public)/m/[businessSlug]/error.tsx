@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect } from "react";
+import { Clock, RefreshCw, SearchX, TriangleAlert, WifiOff } from "lucide-react";
+
+import { Button } from "@/components/ui/Button";
 import { PublicMenuError } from "@/lib/api";
 
 interface ErrorProps {
@@ -11,9 +14,15 @@ interface ErrorProps {
 /**
  * Segment-level error boundary for the public menu route.
  *
- * Surfaces a human-friendly message for the structured PublicMenuError
- * (404 vs 5xx vs throttle) and offers a retry button. Falls back to a
- * generic Turkish message for anything unexpected.
+ * Shows a friendly, fixed Turkish message per failure kind (offline, missing,
+ * throttled, anything else) and offers a retry. The raw `error.message` is
+ * never shown to the customer: for a server-side failure React replaces it
+ * with an English "An error occurred in the Server Components render…" text,
+ * which meant nothing to a person scanning a QR code. A server error also
+ * arrives here as a plain `Error` (class identity is lost across the
+ * boundary), so the structured `PublicMenuError` branch only applies to
+ * client-side failures; the reference `digest` is shown instead so support can
+ * find the matching server log line.
  */
 export default function PublicMenuErrorBoundary({ error, reset }: ErrorProps) {
   useEffect(() => {
@@ -25,33 +34,60 @@ export default function PublicMenuErrorBoundary({ error, reset }: ErrorProps) {
 
   const isStructured = error instanceof PublicMenuError;
   const status = isStructured ? error.status : 500;
-  const code = isStructured ? error.code : "unexpected";
-  const title =
+  const reference = error.digest ?? (isStructured ? error.code : undefined);
+
+  const view =
     status === 0
-      ? "İnternet bağlantısı yok gibi görünüyor."
+      ? {
+          icon: WifiOff,
+          title: "İnternet bağlantısı yok gibi görünüyor",
+          text: "Bağlantınızı kontrol edip tekrar deneyin.",
+        }
       : status === 404
-        ? "Menü bulunamadı."
+        ? {
+            icon: SearchX,
+            title: "Menü bulunamadı",
+            text: "QR kodunuzdaki bağlantı geçersiz olabilir.",
+          }
         : status === 429
-          ? "Çok fazla istek. Lütfen biraz bekleyin."
-          : "Bir şeyler ters gitti.";
+          ? {
+              icon: Clock,
+              title: "Çok fazla istek",
+              text: "Lütfen birkaç saniye bekleyip tekrar deneyin.",
+            }
+          : {
+              icon: TriangleAlert,
+              title: "Bir şeyler ters gitti",
+              text: "Menü şu anda yüklenemedi. Lütfen tekrar deneyin.",
+            };
+  const Icon = view.icon;
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-background p-6">
-      <div className="max-w-md rounded-lg border border-border bg-surface p-6 text-center shadow-card">
-        <h1 className="font-heading text-xl font-bold text-text">{title}</h1>
-        <p className="mt-2 text-sm text-muted">
-          {error.message || "Lütfen tekrar deneyin."}
+      <div className="w-full max-w-sm rounded-3xl bg-surface p-8 text-center shadow-lg ring-1 ring-border/60">
+        <span className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-secondary-soft text-secondary">
+          <Icon className="h-7 w-7" aria-hidden />
+        </span>
+        <h1 className="font-heading text-2xl font-semibold text-text">
+          {view.title}
+        </h1>
+        <p className="mt-2 text-[0.9375rem] leading-relaxed text-muted">
+          {view.text}
         </p>
-        <p className="mt-1 font-mono text-[10px] uppercase tracking-wider text-muted">
-          {code}
-        </p>
-        <button
-          type="button"
+        {reference ? (
+          <p className="mt-3 font-mono text-xs text-outline">
+            Referans: {reference}
+          </p>
+        ) : null}
+        <Button
+          size="lg"
+          fullWidth
           onClick={reset}
-          className="touch-target mt-5 inline-flex items-center justify-center rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+          className="mt-6"
+          leadingIcon={<RefreshCw className="h-[1.125rem] w-[1.125rem]" aria-hidden />}
         >
           Tekrar dene
-        </button>
+        </Button>
       </div>
     </main>
   );

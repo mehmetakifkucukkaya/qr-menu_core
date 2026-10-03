@@ -134,7 +134,7 @@ export default async function OrdersListPage({ searchParams }: PageProps) {
           <select
             name="status"
             defaultValue={status ?? ""}
-            className="min-w-[10rem] rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-text focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="min-w-[10rem] rounded-xl border border-input bg-surface px-2 py-1.5 text-base sm:text-sm text-text focus-visible:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15"
           >
             {STATUS_OPTIONS.map((opt) => (
               <option key={opt.value || "all"} value={opt.value}>
@@ -149,7 +149,7 @@ export default async function OrdersListPage({ searchParams }: PageProps) {
             type="date"
             name="date"
             defaultValue={date ?? ""}
-            className="rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-text focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="rounded-xl border border-input bg-surface px-2 py-1.5 text-base sm:text-sm text-text focus-visible:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15"
           />
         </label>
         <button
@@ -194,7 +194,7 @@ export default async function OrdersListPage({ searchParams }: PageProps) {
           aria-label="Sipariş listesi"
           className="overflow-hidden rounded-xl border border-border bg-surface shadow-sm"
         >
-          <table className="w-full table-auto border-collapse text-left">
+          <table className="table-stack w-full table-auto border-collapse text-left">
             <thead className="bg-background">
               <tr className="text-xs uppercase tracking-wider text-muted">
                 <th className="px-4 py-2 font-medium">Sipariş No</th>
@@ -220,7 +220,7 @@ export default async function OrdersListPage({ searchParams }: PageProps) {
                       {o.order_number}
                     </Link>
                   </td>
-                  <td className="px-4 py-2.5">
+                  <td data-label="Müşteri" data-span="full" className="px-4 py-2.5">
                     <div className="flex flex-col">
                       <span className="font-medium">{o.customer_name}</span>
                       <span className="text-xs text-muted">
@@ -228,7 +228,7 @@ export default async function OrdersListPage({ searchParams }: PageProps) {
                       </span>
                     </div>
                   </td>
-                  <td className="px-4 py-2.5">
+                  <td data-label="Masa" className="px-4 py-2.5">
                     {o.table_number ? (
                       <span className="rounded-md bg-background px-2 py-0.5 text-xs font-semibold tabular-nums">
                         {o.table_number}
@@ -237,16 +237,16 @@ export default async function OrdersListPage({ searchParams }: PageProps) {
                       <span className="text-xs italic text-muted">—</span>
                     )}
                   </td>
-                  <td className="px-4 py-2.5 text-center tabular-nums">
+                  <td data-label="Ürün" className="px-4 py-2.5 text-center tabular-nums">
                     {o.item_count}
                   </td>
-                  <td className="px-4 py-2.5 text-right font-semibold tabular-nums">
+                  <td data-label="Tutar" className="px-4 py-2.5 text-right font-semibold tabular-nums">
                     {formatPrice(o.total_amount, o.currency)}
                   </td>
-                  <td className="px-4 py-2.5">
+                  <td data-label="Durum" className="px-4 py-2.5">
                     <OrderStatusBadge status={o.status} />
                   </td>
-                  <td className="px-4 py-2.5 text-xs text-muted">
+                  <td data-label="Tarih" className="px-4 py-2.5 text-xs text-muted">
                     {new Date(o.placed_at).toLocaleString("tr-TR", {
                       day: "2-digit",
                       month: "2-digit",

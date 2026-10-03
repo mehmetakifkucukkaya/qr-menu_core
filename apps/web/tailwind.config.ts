@@ -1,17 +1,23 @@
 import type { Config } from "tailwindcss";
 
 /**
- * Tailwind config — Modern Cafe palette exposed as CSS variables so the
- * per-business theme can override tokens at runtime via inline style on the
- * BusinessHero wrapper. See docs/SPRINT_3_PLAN.md ("Theme Tokens").
+ * Tailwind config — Velouté palette exposed as CSS variables so the
+ * per-business theme can override tokens at runtime via an inline style on
+ * the public menu wrapper. Token values live in src/styles/tokens.css.
  *
- * Sprint 12A additions:
- *   • Box-shadow scale (xs/sm/md/lg/xl) plus legacy aliases
- *   • Border-radius scale (xl/pill) — DEFAULT/sm/md/lg kept for back-compat
- *   • Animation + keyframes (pulse-soft kitchen ambient, fade-in, slide-up
- *     for bottom-sheet draw-downs in 12B+)
- *   • `fontFamily.heading` / `fontFamily.body` re-pinned to the Google Fonts
- *     pair (Playfair Display SC + Karla)
+ * Every colour below is registered with the `rgb(var(--x) / <alpha-value>)`
+ * pattern. That is what makes `bg-surface-low`, `border-border`, `text-outline`
+ * and opacity modifiers (`bg-background/80`) work. Writing the variable by hand
+ * (`border-[var(--color-border)]`) produces INVALID CSS, because the variables
+ * hold bare RGB triplets — see the ESLint rule in .eslintrc.json.
+ *
+ * Modernisation pass:
+ *   • surface-low / surface-high / border-strong / input / outline were used in
+ *     components but never registered → silently dropped. Now defined.
+ *   • danger / success / warning (+ -soft) so error states stop borrowing the
+ *     olive `accent`.
+ *   • Softer radius scale (12–28 px) and layered, warm shadow scale.
+ *   • z-index scale, sheet / pop / shimmer keyframes.
  */
 const config: Config = {
   content: [
@@ -22,18 +28,34 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Tailwind utilities that reference the CSS variables defined in
-        // src/styles/tokens.css. Components should prefer these semantic
-        // tokens over raw hex values so the per-business theme can swap them.
+        // Brand
         primary: "rgb(var(--color-primary) / <alpha-value>)",
         "primary-foreground": "rgb(var(--color-primary-foreground) / <alpha-value>)",
+        "primary-soft": "rgb(var(--color-primary-soft) / <alpha-value>)",
         secondary: "rgb(var(--color-secondary) / <alpha-value>)",
+        "secondary-soft": "rgb(var(--color-secondary-soft) / <alpha-value>)",
         accent: "rgb(var(--color-accent) / <alpha-value>)",
+        // Surfaces & text
         background: "rgb(var(--color-background) / <alpha-value>)",
         surface: "rgb(var(--color-surface) / <alpha-value>)",
+        "surface-low": "rgb(var(--color-surface-low) / <alpha-value>)",
+        "surface-high": "rgb(var(--color-surface-high) / <alpha-value>)",
         text: "rgb(var(--color-text) / <alpha-value>)",
         muted: "rgb(var(--color-muted) / <alpha-value>)",
+        outline: "rgb(var(--color-outline) / <alpha-value>)",
+        // Legacy alias: `text-on-surface-variant` was used for secondary copy.
+        "on-surface-variant": "rgb(var(--color-muted) / <alpha-value>)",
+        // Lines
         border: "rgb(var(--color-border) / <alpha-value>)",
+        "border-strong": "rgb(var(--color-border-strong) / <alpha-value>)",
+        input: "rgb(var(--color-input) / <alpha-value>)",
+        // Status
+        danger: "rgb(var(--color-danger) / <alpha-value>)",
+        "danger-soft": "rgb(var(--color-danger-soft) / <alpha-value>)",
+        success: "rgb(var(--color-success) / <alpha-value>)",
+        "success-soft": "rgb(var(--color-success-soft) / <alpha-value>)",
+        warning: "rgb(var(--color-warning) / <alpha-value>)",
+        "warning-soft": "rgb(var(--color-warning-soft) / <alpha-value>)",
       },
       fontFamily: {
         heading: ["var(--font-heading)", "Georgia", "serif"],
@@ -41,33 +63,54 @@ const config: Config = {
       },
       borderRadius: {
         DEFAULT: "var(--radius)",
-        lg: "var(--radius)",
-        md: "calc(var(--radius) * 0.75)",
-        sm: "calc(var(--radius) * 0.5)",
-        // New radius scale (Sprint 12A).
         xs: "var(--radius-xs)",
+        sm: "var(--radius-sm)",
+        md: "var(--radius-md)",
+        lg: "var(--radius-lg)",
         xl: "var(--radius-xl)",
+        "2xl": "var(--radius-2xl)",
+        "3xl": "2rem",
         pill: "var(--radius-pill)",
       },
       boxShadow: {
-        // Legacy aliases — kept so existing `shadow-card` / `shadow-floating`
+        // Legacy aliases kept so existing `shadow-card` / `shadow-floating`
         // usages continue to work without per-component rewrites.
         card: "var(--shadow-card)",
         floating: "var(--shadow-floating)",
-        // New layered scale (Sprint 12A).
         xs: "var(--shadow-xs)",
         sm: "var(--shadow-sm)",
         md: "var(--shadow-md)",
         lg: "var(--shadow-lg)",
         xl: "var(--shadow-xl)",
+        ring: "var(--shadow-ring)",
       },
-      // Animation tokens (Sprint 12A).
+      ringColor: {
+        DEFAULT: "rgb(var(--color-primary) / 0.5)",
+      },
+      // One z-index scale for every sticky / floating layer. Native <dialog>
+      // sheets live in the browser's top layer and need no z-index at all.
+      zIndex: {
+        raised: "10",
+        nav: "20",
+        header: "30",
+        dock: "40",
+        toast: "60",
+        skip: "100",
+      },
+      transitionTimingFunction: {
+        "out-expo": "var(--ease-out-cubic)",
+        spring: "var(--ease-spring)",
+      },
       animation: {
         "pulse-soft": "pulse-soft 2.5s ease-in-out infinite",
         "fade-in": "fade-in var(--transition-base) var(--ease-out-cubic)",
         "slide-up": "slide-up var(--transition-base) var(--ease-out-cubic)",
-        // Legacy kitchen pulse kept for the existing
-        // `.kitchen-ticket-pending` rule in globals.css.
+        "sheet-up": "sheet-up 320ms var(--ease-out-cubic)",
+        "sheet-right": "sheet-right 320ms var(--ease-out-cubic)",
+        "sheet-left": "sheet-left 320ms var(--ease-out-cubic)",
+        pop: "pop 260ms var(--ease-spring)",
+        shimmer: "shimmer 1.6s ease-in-out infinite",
+        // Legacy kitchen pulse kept for the `.kitchen-ticket-pending` rule.
         "kitchen-pulse": "kitchen-pulse 2s ease-in-out infinite",
       },
       keyframes: {
@@ -80,8 +123,28 @@ const config: Config = {
           to: { opacity: "1" },
         },
         "slide-up": {
+          from: { transform: "translateY(8px)", opacity: "0" },
+          to: { transform: "translateY(0)", opacity: "1" },
+        },
+        "sheet-up": {
           from: { transform: "translateY(100%)" },
           to: { transform: "translateY(0)" },
+        },
+        "sheet-right": {
+          from: { transform: "translateX(100%)" },
+          to: { transform: "translateX(0)" },
+        },
+        "sheet-left": {
+          from: { transform: "translateX(-100%)" },
+          to: { transform: "translateX(0)" },
+        },
+        pop: {
+          "0%": { transform: "scale(0.8)", opacity: "0" },
+          "100%": { transform: "scale(1)", opacity: "1" },
+        },
+        shimmer: {
+          "0%": { backgroundPosition: "200% 0" },
+          "100%": { backgroundPosition: "-200% 0" },
         },
         "kitchen-pulse": {
           "0%, 100%": { boxShadow: "0 0 0 0 rgba(224, 120, 86, 0)" },

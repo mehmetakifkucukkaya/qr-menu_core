@@ -105,7 +105,7 @@ export function LoyaltyRedemptionCheckbox({
       aria-label="Sadakat puanı kullan"
       className={`rounded-lg border p-3 transition ${
         enabled
-          ? "border-amber-200 bg-amber-50"
+          ? "border-warning/30 bg-warning-soft"
           : "border-border bg-background"
       }`}
     >
@@ -123,11 +123,11 @@ export function LoyaltyRedemptionCheckbox({
         />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <Crown className="h-4 w-4 text-amber-600" aria-hidden />
+            <Crown className="h-4 w-4 text-warning" aria-hidden />
             <span className="text-sm font-semibold text-text">
               Sadakat puanı kullan
             </span>
-            <span className="ml-auto inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold tabular-nums text-amber-800 ring-1 ring-amber-200">
+            <span className="ml-auto inline-flex items-center rounded-full bg-warning-soft px-2 py-0.5 text-[10px] font-bold tabular-nums text-warning ring-1 ring-warning/25">
               {balance.toLocaleString("tr-TR")} puan
             </span>
           </div>
@@ -143,11 +143,11 @@ export function LoyaltyRedemptionCheckbox({
                   value={points}
                   onChange={(e) => handlePointsChange(e.target.value)}
                   disabled={!checked}
-                  className="w-24 rounded-md border border-border bg-surface px-2 py-1.5 text-sm tabular-nums text-text focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="w-24 rounded-xl border border-input bg-surface px-2 py-1.5 text-base sm:text-sm tabular-nums text-text focus-visible:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15 disabled:cursor-not-allowed disabled:opacity-50"
                   aria-label="Kullanılacak puan miktarı"
                 />
                 <span className="text-xs text-muted">puan</span>
-                <span className="ml-auto text-xs font-semibold text-emerald-700 tabular-nums">
+                <span className="ml-auto text-xs font-semibold text-success tabular-nums">
                   {formatMoney(Number.parseFloat(discount), currency)} indirim
                 </span>
               </div>
@@ -156,7 +156,7 @@ export function LoyaltyRedemptionCheckbox({
                 kullanabilirsiniz.
               </p>
               {checked ? (
-                <p className="text-[11px] font-medium text-amber-800">
+                <p className="text-[11px] font-medium text-warning">
                   Ödeme tutarından {formatMoney(Number.parseFloat(discount), currency)}{" "}
                   düşülecek.
                 </p>

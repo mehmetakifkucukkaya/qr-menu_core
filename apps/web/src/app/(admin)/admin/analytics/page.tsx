@@ -103,7 +103,7 @@ export default async function AnalyticsPage() {
       {fetchError ? (
         <div
           role="alert"
-          className="rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-900"
+          className="rounded-xl border border-danger/30 bg-danger-soft p-4 text-sm text-danger"
         >
           Analitik verileri yüklenirken bir hata oluştu. Sayfayı yenilemeyi
           deneyin. ({fetchError})

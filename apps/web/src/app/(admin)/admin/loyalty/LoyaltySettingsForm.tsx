@@ -138,7 +138,7 @@ export function LoyaltySettingsForm({ initial, csrfToken }: LoyaltySettingsFormP
       {error ? (
         <div
           role="alert"
-          className="rounded-md border border-accent/40 bg-accent/5 px-3 py-2 text-sm text-text"
+          className="rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-text"
         >
           {error}
         </div>
@@ -251,7 +251,7 @@ export function LoyaltySettingsForm({ initial, csrfToken }: LoyaltySettingsFormP
       {!isValid && (parsedPointsPerUnit || parsedRedemptionRate || parsedMinPoints) ? (
         <ul
           role="alert"
-          className="space-y-1 rounded-md border border-accent/30 bg-accent/5 px-3 py-2 text-xs text-accent"
+          className="space-y-1 rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-xs text-danger"
         >
           {validationErrors.map((e) => (
             <li key={e}>• {e}</li>

@@ -96,28 +96,28 @@ export function UpgradeBanner({
       <div
         role="region"
         aria-label="Plan yükseltme önerisi"
-        className="sticky top-0 z-40 w-full border-b border-amber-200 bg-amber-50/95 backdrop-blur supports-[backdrop-filter]:bg-amber-50/80 motion-reduce:transition-none dark:border-amber-800/60 dark:bg-amber-950/80 dark:supports-[backdrop-filter]:bg-amber-950/60"
+        className="sticky top-0 z-40 w-full border-b border-warning/30 bg-warning-soft backdrop-blur supports-[backdrop-filter]:bg-warning-soft motion-reduce:transition-none"
       >
         <div className="mx-auto flex max-w-2xl items-start gap-3 px-4 py-2.5">
           <span
             aria-hidden
-            className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300"
+            className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-warning-soft text-warning"
           >
             <Sparkles className="h-4 w-4" />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium leading-snug text-amber-900 dark:text-amber-100">
+            <p className="text-sm font-medium leading-snug text-warning">
               <span className="font-semibold">{featureLabel}</span> özelliği{" "}
               <span className="font-semibold">{planLabel}</span> planına dahil.
             </p>
-            <p className="mt-0.5 text-[11px] leading-snug text-amber-800 dark:text-amber-200">
+            <p className="mt-0.5 text-[11px] leading-snug text-warning">
               Paketinizi yükselterek bu özelliği açabilirsiniz.
             </p>
           </div>
           <Link
             href="/admin/billing"
             prefetch={false}
-            className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-600 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-white shadow-sm transition hover:bg-amber-700 active:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 focus:ring-offset-amber-50 motion-reduce:transition-none dark:focus:ring-offset-amber-950"
+            className="inline-flex shrink-0 items-center gap-1 rounded-full bg-warning px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-white shadow-sm transition hover:bg-warning/90 active:bg-warning/80 focus:outline-none focus:ring-2 focus:ring-warning focus:ring-offset-2 focus:ring-offset-warning-soft motion-reduce:transition-none"
           >
             <TrendingUp className="h-3.5 w-3.5" aria-hidden />
             <span>Yükselt</span>
@@ -127,7 +127,7 @@ export function UpgradeBanner({
               type="button"
               onClick={onDismiss}
               aria-label="Kapat"
-              className="touch-target inline-flex shrink-0 items-center justify-center rounded-full p-1 text-amber-700 transition hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-600 motion-reduce:transition-none dark:text-amber-300 dark:hover:bg-amber-900/60"
+              className="touch-target inline-flex shrink-0 items-center justify-center rounded-full p-1 text-warning transition hover:bg-warning/10 focus:outline-none focus:ring-2 focus:ring-warning motion-reduce:transition-none"
             >
               <X className="h-4 w-4" aria-hidden />
             </button>
@@ -141,20 +141,20 @@ export function UpgradeBanner({
   return (
     <Card
       variant="outline"
-      className="border-amber-200 bg-amber-50/95 dark:border-amber-800/60 dark:bg-amber-950/60"
+      className="border-warning/30 bg-warning-soft"
     >
       <div className="flex items-start gap-3">
         <span
           aria-hidden
-          className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300"
+          className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-warning-soft text-warning"
         >
           <Sparkles className="h-4 w-4" />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="font-heading text-sm font-semibold text-amber-900 dark:text-amber-100">
+          <p className="font-heading text-sm font-semibold text-warning">
             {featureLabel} özelliği {planLabel} planına dahil.
           </p>
-          <p className="mt-1 text-xs text-amber-800 dark:text-amber-200">
+          <p className="mt-1 text-xs text-warning">
             Online ödeme bu pakette mevcut değil — sipariş kasada nakit
             olarak tahsil edilir.
           </p>

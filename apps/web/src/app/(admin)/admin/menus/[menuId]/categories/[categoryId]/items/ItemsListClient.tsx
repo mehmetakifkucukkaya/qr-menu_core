@@ -125,7 +125,7 @@ export function ItemsListClient({
       {error ? (
         <div
           role="alert"
-          className="rounded-md border border-accent/40 bg-accent/5 px-3 py-2 text-sm text-text"
+          className="rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-text"
         >
           {error}
         </div>
@@ -188,7 +188,7 @@ export function ItemsListClient({
         </p>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-border bg-surface shadow-sm">
-          <table className="w-full text-sm">
+          <table className="table-stack w-full text-sm">
             <thead className="border-b border-border bg-background text-xs uppercase tracking-wider text-muted">
               <tr>
                 <th scope="col" className="px-3 py-2 text-left font-semibold">
@@ -236,14 +236,14 @@ export function ItemsListClient({
                             </span>
                           ) : null}
                           {it.is_new ? (
-                            <span className="rounded-full bg-accent/10 px-1.5 py-0.5 text-accent">
+                            <span className="rounded-full bg-success-soft px-1.5 py-0.5 text-success">
                               yeni
                             </span>
                           ) : null}
                         </p>
                       ) : null}
                     </td>
-                    <td className="px-3 py-2 align-top">
+                    <td data-label="Fiyat" className="px-3 py-2 align-top">
                       <PriceEditor
                         value={it.price}
                         currency={it.currency}
@@ -256,7 +256,7 @@ export function ItemsListClient({
                         </p>
                       ) : null}
                     </td>
-                    <td className="px-3 py-2 align-top">
+                    <td data-label="Durum" className="px-3 py-2 align-top">
                       <div className="flex flex-col gap-1">
                         <ToggleChip
                           label={it.is_active ? "Aktif" : "Pasif"}
@@ -272,7 +272,7 @@ export function ItemsListClient({
                         />
                       </div>
                     </td>
-                    <td className="px-3 py-2 align-top">
+                    <td data-span="full" className="px-3 py-2 align-top">
                       <div className="flex justify-end gap-1">
                         <Link
                           href={`/admin/menus/${menuId}/categories/${categoryId}/items/${it.id}/edit`}
@@ -285,7 +285,7 @@ export function ItemsListClient({
                           type="button"
                           onClick={() => setDeleting(it)}
                           disabled={busy}
-                          className="inline-flex items-center justify-center rounded-md border border-accent/40 bg-accent/5 p-1.5 text-accent transition hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-60"
+                          className="inline-flex items-center justify-center rounded-md border border-danger/30 bg-danger-soft p-1.5 text-danger transition hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
                           aria-label="Ürünü sil"
                         >
                           {busy ? (

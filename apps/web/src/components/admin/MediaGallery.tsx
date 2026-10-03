@@ -244,7 +244,7 @@ export function MediaGallery({
         <p
           role="alert"
           data-testid="media-gallery-error"
-          className="rounded-md border border-accent/40 bg-accent/10 px-3 py-2 text-sm text-accent"
+          className="rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-danger"
         >
           {error}
         </p>
@@ -318,7 +318,7 @@ export function MediaGallery({
                     onClick={() => onSelect(asset)}
                     aria-label={`Kullan: ${asset.original_filename}`}
                     data-testid="media-gallery-select"
-                    className="inline-flex items-center gap-1 rounded-full bg-primary px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground shadow-sm transition hover:bg-primary/90"
+                    className="inline-flex items-center gap-1 rounded-full bg-primary px-2 py-1 text-[10px] font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90"
                   >
                     <Check className="h-3 w-3" aria-hidden />
                     Kullan

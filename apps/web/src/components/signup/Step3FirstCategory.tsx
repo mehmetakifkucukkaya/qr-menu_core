@@ -94,7 +94,7 @@ export function Step3FirstCategory() {
           className="text-sm font-medium text-text"
         >
           Kategori adı
-          <span aria-hidden className="ml-0.5 text-accent">*</span>
+          <span aria-hidden className="ml-0.5 text-danger">*</span>
         </label>
         <input
           id="signup-category-name"
@@ -110,8 +110,8 @@ export function Step3FirstCategory() {
           className={clsx(
             "mt-1.5 w-full rounded-md border bg-surface px-3 py-2 text-sm text-text placeholder:text-muted/70 focus:outline-none focus:ring-2",
             validation.name
-              ? "border-accent focus:border-accent focus:ring-accent/30"
-              : "border-border focus:border-primary focus:ring-primary/30",
+              ? "border-danger focus:border-danger focus-visible:ring-danger/15"
+              : "border-input focus-visible:border-primary focus-visible:ring-4 focus-visible:ring-primary/15",
           )}
         />
         <div className="mt-1 flex items-center justify-between text-xs text-muted">
@@ -119,7 +119,7 @@ export function Step3FirstCategory() {
             {form.first_category.name.length} / {CATEGORY_NAME_MAX}
           </span>
           {validation.name ? (
-            <span id="category-name-error" role="alert" className="font-medium text-accent">
+            <span id="category-name-error" role="alert" className="font-medium text-danger">
               {validation.name}
             </span>
           ) : null}
@@ -146,7 +146,7 @@ export function Step3FirstCategory() {
             onChange={(e) => updateCategory({ icon: e.target.value })}
             placeholder="emoji"
             aria-label="Kategori ikonu"
-            className="w-20 rounded-md border border-border bg-surface px-3 py-2 text-sm text-text focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="w-20 rounded-xl border border-input bg-surface px-3.5 py-2.5 text-base sm:text-sm text-text focus-visible:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15"
             maxLength={4}
           />
           <span className="text-xs text-muted">
@@ -195,7 +195,7 @@ export function Step3FirstCategory() {
           onChange={(e) =>
             updateCategory({ order: Number.parseInt(e.target.value, 10) || 0 })
           }
-          className="mt-1.5 w-24 rounded-md border border-border bg-surface px-3 py-2 text-sm text-text focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+          className="mt-1.5 w-24 rounded-xl border border-input bg-surface px-3.5 py-2.5 text-base sm:text-sm text-text focus-visible:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15"
         />
         <p className="mt-1 text-xs text-muted">
           Düşük sayılar menüde önce görünür.

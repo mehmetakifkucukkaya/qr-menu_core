@@ -196,16 +196,16 @@ export function ImportItemRow({
   const lowConfidence = item.confidence < 0.5;
 
   const cellClass =
-    "block w-full rounded-md border border-transparent bg-surface px-2 py-1 text-sm text-text transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-70";
+    "block w-full rounded-md border border-transparent bg-surface px-2 py-1 text-sm text-text transition focus-visible:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15 disabled:cursor-not-allowed disabled:opacity-70";
   const errorCellClass =
-    "block w-full rounded-md border border-accent bg-surface px-2 py-1 text-sm text-text transition focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/30";
+    "block w-full rounded-md border border-danger bg-surface px-2 py-1 text-sm text-text transition focus:border-danger focus:outline-none focus:ring-2 focus-visible:ring-danger/15";
 
   return (
     <tr
       className={
         "border-t border-border align-top text-sm transition " +
         (lowConfidence
-          ? "bg-accent/5 hover:bg-accent/10"
+          ? "bg-danger-soft hover:bg-danger/10"
           : "hover:bg-background/60")
       }
     >
@@ -232,7 +232,7 @@ export function ImportItemRow({
           className={errorField === "name" ? errorCellClass : cellClass}
         />
         {errorField === "name" && errorMsg ? (
-          <p role="alert" className="mt-1 text-[11px] text-accent">
+          <p role="alert" className="mt-1 text-[11px] text-danger">
             {errorMsg}
           </p>
         ) : null}
@@ -254,7 +254,7 @@ export function ImportItemRow({
           className={(errorField === "description" ? errorCellClass : cellClass) + " resize-y"}
         />
         {errorField === "description" && errorMsg ? (
-          <p role="alert" className="mt-1 text-[11px] text-accent">
+          <p role="alert" className="mt-1 text-[11px] text-danger">
             {errorMsg}
           </p>
         ) : null}
@@ -290,7 +290,7 @@ export function ImportItemRow({
           </span>
         </div>
         {errorField === "price" && errorMsg ? (
-          <p role="alert" className="mt-1 text-[11px] text-accent">
+          <p role="alert" className="mt-1 text-[11px] text-danger">
             {errorMsg}
           </p>
         ) : null}
@@ -306,7 +306,7 @@ export function ImportItemRow({
               {item.allergens.map((a) => (
                 <span
                   key={`a-${a}`}
-                  className="inline-flex items-center rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-accent"
+                  className="inline-flex items-center rounded-full bg-warning-soft px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-warning"
                   title={`Alerjen: ${a}`}
                 >
                   {a}
@@ -334,7 +334,7 @@ export function ImportItemRow({
               className={
                 "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold tabular-nums " +
                 (lowConfidence
-                  ? "bg-accent/10 text-accent"
+                  ? "bg-danger-soft text-danger"
                   : item.confidence < 0.8
                     ? "bg-muted/30 text-text"
                     : "bg-primary/10 text-primary")
@@ -347,7 +347,7 @@ export function ImportItemRow({
               <span
                 title="AI bu satırdan emin değil — lütfen manuel doğrulayın"
                 aria-label="Düşük güven skoru"
-                className="text-[10px] uppercase tracking-wider text-accent"
+                className="text-[10px] uppercase tracking-wider text-danger"
               >
                 düşük
               </span>
@@ -368,7 +368,7 @@ export function ImportItemRow({
               <span>orijinal</span>
             )}
             {errorField ? (
-              <span className="inline-flex items-center gap-1 text-accent">
+              <span className="inline-flex items-center gap-1 text-danger">
                 <X className="h-3 w-3" aria-hidden />
                 hata
               </span>

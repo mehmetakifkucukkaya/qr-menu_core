@@ -26,9 +26,9 @@ function barTone(pct: number | null): { bar: string; text: string } {
   if (pct === null) {
     return { bar: "bg-muted/40", text: "text-muted" };
   }
-  if (pct < 60) return { bar: "bg-emerald-500", text: "text-emerald-700" };
-  if (pct < 80) return { bar: "bg-amber-500", text: "text-amber-700" };
-  return { bar: "bg-red-500", text: "text-red-700" };
+  if (pct < 60) return { bar: "bg-success", text: "text-success" };
+  if (pct < 80) return { bar: "bg-warning", text: "text-warning" };
+  return { bar: "bg-danger", text: "text-danger" };
 }
 
 /**

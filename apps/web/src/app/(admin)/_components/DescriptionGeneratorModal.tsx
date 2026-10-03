@@ -139,7 +139,7 @@ export function DescriptionGeneratorModal({
             <p className="mt-1 text-sm text-muted">
               Hedef dil: <span className="font-semibold uppercase">{locale}</span>
               {isAlreadyEdited ? (
-                <span className="ml-2 rounded-full border border-accent/40 bg-accent/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-accent">
+                <span className="ml-2 rounded-full border border-danger/30 bg-danger-soft px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-danger">
                   Daha önce düzenlenmiş
                 </span>
               ) : null}
@@ -169,7 +169,7 @@ export function DescriptionGeneratorModal({
             rows={6}
             disabled={loading && !draft}
             className={clsx(
-              "w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30",
+              "w-full rounded-xl border border-input bg-background px-3.5 py-2.5 text-base sm:text-sm text-text focus-visible:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15",
               loading && !draft && "opacity-60",
             )}
             placeholder="AI önerisi burada görünecek…"
@@ -208,7 +208,7 @@ export function DescriptionGeneratorModal({
             />
           </div>
           {error ? (
-            <p role="alert" className="text-xs text-accent">
+            <p role="alert" className="text-xs text-danger">
               {error}
             </p>
           ) : null}

@@ -106,7 +106,7 @@ export function UpgradePreviewModal({
           ) : error ? (
             <div
               role="alert"
-              className="rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900"
+              className="rounded-md border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger"
             >
               {error}
             </div>
@@ -145,7 +145,7 @@ function PreviewBody({ preview }: PreviewBodyProps) {
 
   if (noChanges) {
     return (
-      <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+      <div className="rounded-md border border-warning/30 bg-warning-soft px-4 py-3 text-sm text-warning">
         Bu plana geçiş mevcut özellik veya limit kümesini değiştirmiyor.
       </div>
     );
@@ -212,7 +212,7 @@ function FeatureDeltaRow({ delta }: { delta: FeatureDelta }) {
         <span
           className={
             delta.before
-              ? "rounded bg-emerald-100 px-2 py-0.5 text-emerald-700"
+              ? "rounded bg-success-soft px-2 py-0.5 text-success"
               : "rounded bg-muted/30 px-2 py-0.5 text-muted"
           }
         >
@@ -222,7 +222,7 @@ function FeatureDeltaRow({ delta }: { delta: FeatureDelta }) {
         <span
           className={
             delta.after
-              ? "rounded bg-emerald-100 px-2 py-0.5 font-semibold text-emerald-700"
+              ? "rounded bg-success-soft px-2 py-0.5 font-semibold text-success"
               : "rounded bg-muted/30 px-2 py-0.5 text-muted"
           }
         >
@@ -232,8 +232,8 @@ function FeatureDeltaRow({ delta }: { delta: FeatureDelta }) {
           className={
             "ml-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase " +
             (isUp
-              ? "bg-emerald-100 text-emerald-700"
-              : "bg-amber-100 text-amber-700")
+              ? "bg-success-soft text-success"
+              : "bg-warning-soft text-warning")
           }
         >
           {isUp ? "Eklendi" : "Kaldırıldı"}

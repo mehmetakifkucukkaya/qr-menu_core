@@ -2,7 +2,11 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { X, Receipt, CheckCircle2, Banknote } from "lucide-react";
+import { AlertCircle, Banknote, CheckCircle2 } from "lucide-react";
+
+import { Button } from "@/components/ui/Button";
+import { Input, Textarea } from "@/components/ui/Input";
+import { Sheet } from "@/components/ui/Sheet";
 import { useCartStore } from "@/lib/cart-store";
 import { createOrder, OrdersApiError } from "@/lib/api-orders";
 import { formatPrice } from "@/lib/format";
@@ -29,8 +33,10 @@ interface CheckoutFormProps {
   } | null;
 }
 
+const FORM_ID = "checkout-form";
+
 /**
- * CheckoutForm — customer info modal.
+ * CheckoutForm — customer info sheet.
  *
  * Fields:
  *   - name (required)
@@ -45,6 +51,10 @@ interface CheckoutFormProps {
  *     see the live status (V1 polls every 15s).
  *   - On failure: surfaces the error inline (throttle, unavailable item,
  *     validation). The cart is NOT cleared.
+ *
+ * Layout: a `Sheet` (native modal <dialog>). The <form> lives in the sheet
+ * body and the submit button in the sheet footer is tied to it with the HTML
+ * `form` attribute, so Enter still submits and the footer stays pinned.
  */
 export function CheckoutForm({
   open,
@@ -62,11 +72,10 @@ export function CheckoutForm({
   const totalAmount = useCartStore((s) => s.totalAmount());
 
   // Sprint B3b — payment feature flag. When the tenant doesn't have
-  // payments_enabled on (PRO and below), the modal shows an Upgrade-
-  // Banner at the top + a "cash-only" confirmation box so the customer
-  // knows the order will be settled at the till rather than online.
-  // The flag is read through the provider mounted by MenuViewClient;
-  // CheckoutForm must be rendered inside that subtree.
+  // payments_enabled on (PRO and below), the sheet shows a "cash-only"
+  // confirmation box so the customer knows the order will be settled at the
+  // till rather than online. The flag is read through the provider mounted by
+  // MenuViewClient; CheckoutForm must be rendered inside that subtree.
   const paymentsEnabled = useFeatureFlag("payments_enabled");
   /** Sprint B3b — cash-only confirmation. The customer must tick this
    *  before submitting an order on a tenant without payments_enabled —
@@ -87,7 +96,12 @@ export function CheckoutForm({
   const [error, setError] = useState<string | null>(null);
   const nameRef = useRef<HTMLInputElement | null>(null);
 
-  // Pre-fill table number from ?table= once, when the modal first opens.
+  const nameId = useId();
+  const phoneId = useId();
+  const tableId = useId();
+  const notesId = useId();
+
+  // Pre-fill table number from ?table= once, when the sheet first opens.
   // Also pre-fill name + phone from the customer profile (Sprint 10B).
   useEffect(() => {
     if (!open) return;
@@ -108,20 +122,12 @@ export function CheckoutForm({
     // customer re-confirms every new order (the previous order's tick
     // box shouldn't silently carry over).
     setCashOnlyConfirmed(false);
-    queueMicrotask(() => nameRef.current?.focus());
+    // Focus the name field — but only with a precise pointer. On a phone this
+    // would raise the on-screen keyboard over the order summary immediately.
+    if (window.matchMedia("(pointer: fine)").matches) {
+      queueMicrotask(() => nameRef.current?.focus());
+    }
   }, [open, tableNumber, setTableNumber, customerProfile]);
-
-  // Escape closes (unless a submit is in flight).
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !submitting) onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open, submitting, onClose]);
-
-  if (!open) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -157,7 +163,7 @@ export function CheckoutForm({
 
       const result = await createOrder(payload);
 
-      // Successful order — wipe cart, close drawer + modal, redirect.
+      // Successful order — wipe cart, close drawer + sheet, redirect.
       clear();
       onClose();
       router.push(
@@ -185,294 +191,242 @@ export function CheckoutForm({
   };
 
   const cur = items[0]?.currency ?? currency;
+  const canSubmit =
+    !submitting &&
+    items.length > 0 &&
+    name.trim() !== "" &&
+    phone.trim() !== "" &&
+    (paymentsEnabled || cashOnlyConfirmed);
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="checkout-title"
-      className="fixed inset-0 z-50 flex items-end justify-center bg-text/40 backdrop-blur-sm sm:items-center sm:p-6"
-      onClick={() => !submitting && onClose()}
-    >
-      <form
-        onSubmit={handleSubmit}
-        onClick={(e) => e.stopPropagation()}
-        className="flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl bg-surface shadow-floating sm:max-w-md sm:rounded-2xl"
-        style={{ animation: "slideup 0.22s ease-out" }}
-      >
-        <header className="flex items-center justify-between gap-2 border-b border-border bg-surface/95 px-4 py-3 backdrop-blur">
-          <div className="flex items-center gap-2">
-            <Receipt className="h-5 w-5 text-primary" aria-hidden />
-            <h2
-              id="checkout-title"
-              className="font-heading text-base font-bold text-text sm:text-lg"
-            >
-              Sipariş Onayı
-            </h2>
-          </div>
-          <button
-            type="button"
+    <Sheet
+      open={open}
+      onClose={() => {
+        if (!submitting) onClose();
+      }}
+      title="Sipariş Onayı"
+      footer={
+        <div className="flex gap-3">
+          <Button
+            variant="outline"
+            size="lg"
             onClick={onClose}
             disabled={submitting}
-            aria-label="Kapat"
-            className="touch-target inline-flex items-center justify-center rounded-full p-2 text-muted hover:bg-background focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+            className="flex-1"
           >
-            <X className="h-5 w-5" aria-hidden />
-          </button>
-        </header>
-
-        <div className="flex-1 overflow-y-auto px-4 py-4">
-          {/* Sprint B3b — payment feature flag. When payments_enabled
-              is off, show the "cash-only" confirmation box. (The
-              owner-facing "upgrade your plan" banner used to render
-              here too; customers must never see it - ANALYSIS_1 F-15.)
-              With payments on, this section renders nothing and the
-              order flow proceeds as before; the Sprint 11A payment
-              step (when it lands) owns the rest of the payment UX. */}
-          {!paymentsEnabled ? (
-            <div className="mb-4 space-y-3">
-              <label
-                className="flex cursor-pointer items-start gap-3 rounded-lg border border-amber-200 bg-amber-50/70 p-3 text-sm text-amber-900 transition hover:bg-amber-100/70 focus-within:ring-2 focus-within:ring-amber-600 motion-reduce:transition-none dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-100 dark:hover:bg-amber-950/60"
+            Vazgeç
+          </Button>
+          <Button
+            type="submit"
+            form={FORM_ID}
+            size="lg"
+            loading={submitting}
+            disabled={!canSubmit}
+            leadingIcon={<CheckCircle2 className="h-[1.125rem] w-[1.125rem]" aria-hidden />}
+            className="flex-[2]"
+          >
+            {submitting
+              ? "Gönderiliyor…"
+              : paymentsEnabled
+                ? "Onayla"
+                : "Siparişi Onayla"}
+          </Button>
+        </div>
+      }
+    >
+      <form id={FORM_ID} onSubmit={handleSubmit} className="space-y-5">
+        {/* Sprint B3b — payment feature flag. When payments_enabled is off,
+            show the "cash-only" confirmation box. (The owner-facing "upgrade
+            your plan" banner used to render here too; customers must never
+            see it - ANALYSIS_1 F-15.) */}
+        {!paymentsEnabled ? (
+          <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-warning/25 bg-warning-soft p-4 text-warning transition-colors hover:border-warning/40 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-warning">
+            <input
+              type="checkbox"
+              checked={cashOnlyConfirmed}
+              onChange={(e) => setCashOnlyConfirmed(e.target.checked)}
+              className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer rounded-md accent-warning focus-visible:outline-none"
+              aria-describedby="cash-only-hint"
+            />
+            <span className="min-w-0 flex-1">
+              <span className="flex items-center gap-1.5 text-sm font-semibold">
+                <Banknote className="h-4 w-4" aria-hidden />
+                Kapıda nakit ödeme
+              </span>
+              <span
+                id="cash-only-hint"
+                className="mt-1 block text-[0.8125rem] leading-snug"
               >
-                <input
-                  type="checkbox"
-                  checked={cashOnlyConfirmed}
-                  onChange={(e) => setCashOnlyConfirmed(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 shrink-0 rounded border-amber-300 text-amber-600 focus:ring-amber-600"
-                  aria-describedby="cash-only-hint"
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-1.5 font-semibold">
-                    <Banknote
-                      className="h-3.5 w-3.5 text-amber-700 dark:text-amber-300"
-                      aria-hidden
-                    />
-                    Kapıda nakit ödeme
-                  </span>
-                  <span
-                    id="cash-only-hint"
-                    className="mt-0.5 block text-[11px] leading-snug text-amber-800 dark:text-amber-200"
-                  >
-                    Bu işletme online ödeme almıyor — siparişinizi
-                    teslim alırken kasada nakit olarak ödeyeceksiniz.
-                    Onaylıyor musunuz?
-                  </span>
-                </span>
-              </label>
-            </div>
-          ) : null}
-
-          {/* Order summary */}
-          <section
-            aria-label="Sipariş özeti"
-            className="mb-4 rounded-lg border border-border bg-background p-3"
-          >
-            <ul className="space-y-1.5 text-sm">
-              {items.map((i) => (
-                <li
-                  key={i.menuItemId}
-                  className="flex items-baseline justify-between gap-2"
-                >
-                  <span className="min-w-0 truncate text-text">
-                    {i.quantity} × {i.name}
-                  </span>
-                  <span className="shrink-0 font-semibold tabular-nums text-text">
-                    {formatPrice(
-                      (Number.parseFloat(i.price) * i.quantity).toFixed(2),
-                      i.currency,
-                    )}
-                  </span>
-                </li>
-              ))}
-            </ul>
-            <div className="mt-3 flex items-baseline justify-between border-t border-border pt-2">
-              <span className="text-xs uppercase tracking-wider text-muted">
-                Toplam
+                Bu işletme online ödeme almıyor — siparişinizi teslim alırken
+                kasada nakit olarak ödeyeceksiniz. Onaylıyor musunuz?
               </span>
-              <span className="font-heading text-lg font-bold text-primary tabular-nums">
-                {formatPrice(totalAmount.toFixed(2), cur)}
-              </span>
-            </div>
-            {loyaltyRedeem.enabled && Number.parseFloat(loyaltyRedeem.discountAmount) > 0 ? (
-              <div className="mt-2 flex items-baseline justify-between rounded-md bg-emerald-50 px-2 py-1.5 text-xs text-emerald-800">
-                <span className="font-semibold">
-                  Sadakat indirimi ({loyaltyRedeem.points} puan)
-                </span>
-                <span className="tabular-nums">
-                  −{formatPrice(loyaltyRedeem.discountAmount, cur)}
-                </span>
-              </div>
-            ) : null}
-            <p className="mt-1 text-[10px] italic text-muted">
-              Toplam tutar işletme tarafından onaylanır; nihai tutar
-              sipariş onayında görüntülenir.
-            </p>
-          </section>
+            </span>
+          </label>
+        ) : null}
 
-          {/* Sprint 10B — Loyalty redemption island. Hidden when
-              either the customer isn't logged in or loyalty is not
-              configured / below threshold (the checkbox renders its
-              own muted state internally). */}
-          {customerLoyalty?.settings && customerProfile ? (
-            <div className="mb-4">
-              <LoyaltyRedemptionCheckbox
-                balance={customerLoyalty.balance}
-                settings={customerLoyalty.settings}
-                currency={cur}
-                onChange={setLoyaltyRedeem}
-              />
-            </div>
-          ) : null}
-
-          {/* Sprint 10B — authenticated customer badge */}
-          {customerProfile ? (
-            <div className="mb-4 flex items-center justify-between gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
-              <span className="font-medium">
-                {customerProfile.email}
+        {/* Order summary */}
+        <section
+          aria-label="Sipariş özeti"
+          className="rounded-2xl bg-surface-low p-4"
+        >
+          <ul className="space-y-2 text-sm">
+            {items.map((i) => (
+              <li
+                key={i.menuItemId}
+                className="flex items-baseline justify-between gap-3"
+              >
+                <span className="min-w-0 truncate text-text">
+                  {i.quantity} × {i.name}
+                </span>
+                <span className="shrink-0 font-semibold tabular-nums text-text">
+                  {formatPrice(
+                    (Number.parseFloat(i.price) * i.quantity).toFixed(2),
+                    i.currency,
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-3 flex items-baseline justify-between border-t border-border-strong/70 pt-3">
+            <span className="text-sm font-medium text-muted">Toplam</span>
+            <span className="font-heading text-2xl font-semibold tabular-nums text-primary">
+              {formatPrice(totalAmount.toFixed(2), cur)}
+            </span>
+          </div>
+          {loyaltyRedeem.enabled &&
+          Number.parseFloat(loyaltyRedeem.discountAmount) > 0 ? (
+            <div className="mt-3 flex items-baseline justify-between rounded-xl bg-success-soft px-3 py-2 text-sm text-success">
+              <span className="font-semibold">
+                Sadakat indirimi ({loyaltyRedeem.points} puan)
               </span>
-              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
-                Üye
+              <span className="tabular-nums">
+                −{formatPrice(loyaltyRedeem.discountAmount, cur)}
               </span>
             </div>
           ) : null}
+          <p className="mt-3 text-xs leading-snug text-muted">
+            Toplam tutar işletme tarafından onaylanır; nihai tutar sipariş
+            onayında görüntülenir.
+          </p>
+        </section>
 
-          {/* Fields */}
-          <div className="space-y-3">
-            <Field
-              label="Ad Soyad"
-              required
-              value={name}
-              onChange={setName}
+        {/* Sprint 10B — Loyalty redemption island. Hidden when either the
+            customer isn't logged in or loyalty is not configured / below
+            threshold (the checkbox renders its own muted state internally). */}
+        {customerLoyalty?.settings && customerProfile ? (
+          <LoyaltyRedemptionCheckbox
+            balance={customerLoyalty.balance}
+            settings={customerLoyalty.settings}
+            currency={cur}
+            onChange={setLoyaltyRedeem}
+          />
+        ) : null}
+
+        {/* Sprint 10B — authenticated customer badge */}
+        {customerProfile ? (
+          <div className="flex items-center justify-between gap-2 rounded-xl bg-success-soft px-4 py-2.5 text-sm text-success">
+            <span className="min-w-0 truncate font-medium">
+              {customerProfile.email}
+            </span>
+            <span className="shrink-0 rounded-pill bg-success/10 px-2.5 py-0.5 text-xs font-semibold">
+              Üye
+            </span>
+          </div>
+        ) : null}
+
+        {/* Fields */}
+        <div className="space-y-4">
+          <Field label="Ad Soyad" htmlFor={nameId} required>
+            <Input
               ref={nameRef}
+              id={nameId}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
               placeholder="Mehmet Yılmaz"
               autoComplete="name"
             />
-            <Field
-              label="Telefon"
-              required
+          </Field>
+          <Field
+            label="Telefon"
+            htmlFor={phoneId}
+            required
+            hint="İşletme siparişiniz için sizi arayabilir."
+          >
+            <Input
+              id={phoneId}
               type="tel"
+              inputMode="tel"
               value={phone}
-              onChange={setPhone}
+              onChange={(e) => setPhone(e.target.value)}
+              required
               placeholder="+90 532 555 0123"
               autoComplete="tel"
-              hint="İşletme siparişiniz için sizi arayabilir."
             />
-            <Field
-              label="Masa No"
+          </Field>
+          <Field
+            label="Masa No"
+            htmlFor={tableId}
+            hint="İsterseniz boş bırakabilirsiniz."
+          >
+            <Input
+              id={tableId}
               value={tableNumber}
-              onChange={setTableNumber}
+              onChange={(e) => setTableNumber(e.target.value)}
               placeholder="örn. 4"
-              hint="İsterseniz boş bırakabilirsiniz."
+              inputMode="text"
             />
-            <div className="flex flex-col gap-1.5">
-              <label
-                htmlFor="checkout-notes"
-                className="text-sm font-medium text-text"
-              >
-                Sipariş Notu
-              </label>
-              <textarea
-                id="checkout-notes"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={2}
-                placeholder="Genel notlar (opsiyonel)"
-                className="w-full resize-none rounded-md border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-muted/70 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-              />
-            </div>
-          </div>
-
-          {error ? (
-            <p
-              role="alert"
-              className="mt-3 rounded-md border border-accent/40 bg-accent/5 px-3 py-2 text-xs font-medium text-accent"
-            >
-              {error}
-            </p>
-          ) : null}
+          </Field>
+          <Field label="Sipariş Notu" htmlFor={notesId}>
+            <Textarea
+              id={notesId}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={2}
+              placeholder="Genel notlar (opsiyonel)"
+            />
+          </Field>
         </div>
 
-        <footer className="sticky bottom-0 flex gap-2 border-t border-border bg-surface/95 px-4 py-3 backdrop-blur">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={submitting}
-            className="flex-1 rounded-full border border-border bg-surface px-4 py-3 text-sm font-semibold text-text transition hover:bg-background focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+        {error ? (
+          <p
+            role="alert"
+            className="flex items-start gap-2 rounded-xl bg-danger-soft px-4 py-3 text-sm font-medium text-danger"
           >
-            Vazgeç
-          </button>
-          <button
-            type="submit"
-            disabled={
-              submitting ||
-              items.length === 0 ||
-              !name.trim() ||
-              !phone.trim() ||
-              (!paymentsEnabled && !cashOnlyConfirmed)
-            }
-            className="flex-[2] inline-flex items-center justify-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-bold uppercase tracking-wider text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {submitting ? (
-              "Gönderiliyor…"
-            ) : (
-              <>
-                <CheckCircle2 className="h-4 w-4" aria-hidden />
-                {paymentsEnabled ? "Onayla" : "Siparişi Onayla"}
-              </>
-            )}
-          </button>
-        </footer>
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+            <span>{error}</span>
+          </p>
+        ) : null}
       </form>
-
-      <style>{`
-        @keyframes slideup {
-          from { transform: translateY(16px); opacity: 0; }
-          to   { transform: translateY(0);    opacity: 1; }
-        }
-      `}</style>
-    </div>
+    </Sheet>
   );
 }
 
-const Field = (
-  props: {
-    label: string;
-    value: string;
-    onChange: (v: string) => void;
-    required?: boolean;
-    type?: "text" | "tel";
-    placeholder?: string;
-    autoComplete?: string;
-    hint?: string;
-  } & { ref?: React.Ref<HTMLInputElement> },
-) => {
-  const id = useId();
+function Field({
+  label,
+  htmlFor,
+  required,
+  hint,
+  children,
+}: {
+  label: string;
+  htmlFor: string;
+  required?: boolean;
+  hint?: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-sm font-medium text-text">
-        {props.label}
-        {props.required ? (
-          <span aria-hidden className="ml-0.5 text-accent">
+      <label htmlFor={htmlFor} className="text-sm font-semibold text-text">
+        {label}
+        {required ? (
+          <span aria-hidden className="ml-0.5 text-danger">
             *
           </span>
         ) : null}
       </label>
-      <input
-        ref={props.ref}
-        id={id}
-        type={props.type ?? "text"}
-        value={props.value}
-        onChange={(e) => props.onChange(e.target.value)}
-        required={props.required}
-        placeholder={props.placeholder}
-        autoComplete={props.autoComplete}
-        className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-muted/70 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-      />
-      {props.hint ? (
-        <p className="text-[11px] text-muted">{props.hint}</p>
-      ) : null}
+      {children}
+      {hint ? <p className="text-xs text-muted">{hint}</p> : null}
     </div>
   );
-};
-
-// Local useId shim removed — useId is imported at the top of the file.
+}

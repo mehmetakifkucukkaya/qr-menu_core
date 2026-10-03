@@ -82,7 +82,7 @@ export default async function ThemeSettingsPage() {
           code="theme.fetch_failed"
         />
       ) : (
-        <div className="rounded-lg border border-[var(--color-border)] bg-surface p-6 shadow-sm">
+        <div className="rounded-lg border border-border bg-surface p-6 shadow-sm">
           <ThemeForm theme={theme ?? null} csrfToken={csrfToken} />
         </div>
       )}

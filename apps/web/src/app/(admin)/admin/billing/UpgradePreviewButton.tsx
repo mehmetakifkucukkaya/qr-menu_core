@@ -69,7 +69,7 @@ export function UpgradePreviewButton({ csrfToken }: UpgradePreviewButtonProps) {
         <select
           value={target}
           onChange={(e) => setTarget(e.target.value as Plan)}
-          className="block w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          className="block w-full rounded-xl border border-input bg-surface px-3.5 py-2.5 text-base sm:text-sm text-text shadow-sm focus-visible:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15"
         >
           {(Object.keys(PLAN_LABEL) as Plan[]).map((p) => (
             <option key={p} value={p}>

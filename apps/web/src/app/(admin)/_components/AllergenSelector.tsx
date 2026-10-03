@@ -92,8 +92,8 @@ export function AllergenSelector({
             className={clsx(
               "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-60",
               selected
-                ? "border-amber-300 bg-amber-100 text-amber-900"
-                : "border-border bg-surface text-muted hover:border-amber-200 hover:bg-amber-50",
+                ? "border-warning/30 bg-warning-soft text-warning"
+                : "border-border bg-surface text-muted hover:border-warning/30 hover:bg-warning/10",
             )}
           >
             <span aria-hidden>{EMOJI_FALLBACK[a.icon] ?? "⚠️"}</span>

@@ -122,7 +122,7 @@ export function AITranslatePreviewModal({
                   AI çeviriyor…
                 </span>
               ) : errorMessage ? (
-                <span className="text-accent">{errorMessage}</span>
+                <span className="text-danger">{errorMessage}</span>
               ) : result ? (
                 <span>{result.translated}</span>
               ) : (

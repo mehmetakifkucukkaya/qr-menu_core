@@ -4,7 +4,7 @@
  * .print-root / .print-category / .print-header / .print-footer
  * helper classes used by /m/[slug]/print. Imported globally so the
  * main public menu page picks up the print rules when the customer
- * clicks the 🖨️ Yazdır button. */
+ * clicks the Yazdır button. */
 @import "../styles/print.css";
 
 @tailwind base;
@@ -12,23 +12,43 @@
 @tailwind utilities;
 
 /* ---------------------------------------------------------------------------
- * Base layer — modern polish reset (Sprint 12A).
+ * Base layer.
  *
  * Focus rings: a single global `:focus-visible` rule keeps every interactive
- * element accessible without per-component repetition. The outline uses the
- * brand primary so it stays consistent across light/dark themes (D-014).
- *
- * Scrollbar: a thin, themed scrollbar on the html element for webkit + firefox.
- * Keeps long admin tables / menus easy to scan without paying for a heavy
- * custom chrome.
+ * element accessible without per-component repetition. It deliberately does
+ * NOT touch border-radius — an earlier version forced `border-radius: 4px`,
+ * which turned every pill / circular button into a small rectangle the moment
+ * it received keyboard focus.
  * ------------------------------------------------------------------------- */
 @layer base {
+  :root {
+    /* Native controls (select popups, scrollbars, date pickers) follow the
+     * APP theme, not the OS preference. Without this a light page on a dark OS
+     * got dark dropdowns. */
+    color-scheme: light;
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+  }
+
   html {
     -webkit-text-size-adjust: 100%;
     -webkit-tap-highlight-color: transparent;
+    /* Anchored sections (#category-…) land below the sticky header + category
+     * row instead of underneath them. */
+    scroll-padding-top: calc(var(--header-h) + var(--nav-h) + 0.5rem);
+    /* Opening a modal sheet hides the page scrollbar; reserving the gutter
+     * keeps the layout from jumping sideways when that happens. */
+    scrollbar-gutter: stable;
     /* Firefox — use the thin scrollbar variant. */
     scrollbar-width: thin;
     scrollbar-color: rgb(var(--color-muted) / 0.5) transparent;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
   }
 
   /* Webkit + Chromium — match the same minimal look. */
@@ -51,6 +71,14 @@
 
   body {
     @apply bg-background text-text font-body antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* While a modal <dialog> (sheet / drawer) is open the page behind must not
+   * scroll. `:has()` is supported by every browser that supports <dialog>
+   * modals in practice (Safari 15.4+, Chrome 105+, Firefox 121+). */
+  body:has(dialog[open]) {
+    overflow: hidden;
   }
 
   h1,
@@ -58,21 +86,24 @@
   h3,
   h4 {
     @apply font-heading;
+    text-wrap: balance;
   }
 
-  /* Single source of truth for keyboard focus rings. Components that need
-   * custom focus styles (e.g. the icon-only ThemeToggle pill) can still
-   * override with `focus-visible:ring-2 focus-visible:ring-offset-2`. */
+  p {
+    text-wrap: pretty;
+  }
+
+  ::selection {
+    background-color: rgb(var(--color-primary) / 0.18);
+  }
+
   *:focus-visible {
     outline: 2px solid rgb(var(--color-primary));
     outline-offset: 2px;
-    border-radius: 4px;
   }
 
   /* Skip-to-content link — only visible when keyboard-focused. The link
-   * itself lives in the root layout (placed before `<main id="main-content">`).
-   * We anchor a global style here so it doesn't drift as components are
-   * reorganised. */
+   * itself lives in the root layout (placed before `<main id="main-content">`). */
   .skip-to-content {
     position: fixed;
     top: 1rem;
@@ -102,6 +133,65 @@
   }
 }
 
+/* ---------------------------------------------------------------------------
+ * .table-stack — a data table that turns into a list of cards on phones.
+ *
+ * Below `md` the header row is hidden visually (still read by assistive tech),
+ * every <tr> becomes a two-column card and each <td> shows its column name
+ * above its value, taken from its `data-label` attribute. The first cell
+ * spans the full width as the card's title; add `data-span="full"` to make any
+ * other cell (long text, action buttons) span too. From `md` up nothing
+ * changes — it is an ordinary table.
+ *
+ * Opt in with `class="table-stack"` on the <table> and put `data-label` on the
+ * cells that need a caption.
+ * ------------------------------------------------------------------------- */
+@layer components {
+  @media (max-width: 767.98px) {
+    .table-stack,
+    .table-stack tbody {
+      display: block;
+    }
+    .table-stack thead {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+    }
+    .table-stack tr {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.625rem 1rem;
+      padding: 0.9375rem 1rem;
+    }
+    .table-stack tr + tr {
+      border-top: 1px solid rgb(var(--color-border));
+    }
+    .table-stack td {
+      display: block;
+      min-width: 0;
+      max-width: none !important;
+      padding: 0 !important;
+      text-align: left !important;
+    }
+    .table-stack td:first-child,
+    .table-stack td[data-span="full"] {
+      grid-column: 1 / -1;
+    }
+    .table-stack td[data-label]::before {
+      content: attr(data-label);
+      display: block;
+      margin-bottom: 0.125rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: rgb(var(--color-outline));
+    }
+  }
+}
+
 @layer utilities {
   .touch-target {
     /* Mobile-friendly tap target: Apple HIG ≥ 44px, Material ≥ 48px. */
@@ -111,9 +201,8 @@
 
   /* ----- iOS / Android safe-area helpers (D-036 mobile-first) -------
    * Modern phones have notch / home-indicator insets. Hard-coding
-   * `bottom: 0` on a floating FAB lands the FAB under the home
-   * indicator — these utilities add the device's safe area to any
-   * fixed/sticky element without per-component logic. */
+   * `bottom: 0` on a floating dock lands it under the home indicator —
+   * these utilities add the device's safe area without per-component logic. */
   .safe-bottom {
     padding-bottom: max(env(safe-area-inset-bottom), 0.5rem);
   }
@@ -125,33 +214,70 @@
   }
 
   /* No-zoom font-size — Safari/Android auto-zooms text fields below 16px
-   * on focus. Forcing body copy to 16px is the canonical fix. */
+   * on focus. Forcing the value to 16px is the canonical fix. */
   .no-zoom {
     font-size: max(1rem, 16px);
   }
 
-  /* Glassmorphism surface — used by the admin nav, modals, and the
-   * `<Card variant="glass">` primitive. The blur + saturate combo is the
-   * standard SaaS pattern (Linear / Vercel / Notion). Backdrop-filter is
-   * feature-detected; the solid overlay colour already provides contrast
-   * even where the filter is dropped. */
+  /* Hide a horizontal scroller's scrollbar without disabling scrolling. */
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* ----- Glass: floating header / dock / category row only. ----------
+   * The tint is opaque enough (≥ 0.8) that text keeps ≥ 4.5:1 contrast over
+   * any photo scrolling underneath; the blur is a bonus where supported. */
+  .glass {
+    background: var(--glass-bg);
+    -webkit-backdrop-filter: var(--glass-blur);
+    backdrop-filter: var(--glass-blur);
+  }
+  .glass-strong {
+    background: var(--glass-bg-strong);
+    -webkit-backdrop-filter: var(--glass-blur);
+    backdrop-filter: var(--glass-blur);
+  }
+
+  /* Glassmorphism surface — admin nav, `<Card variant="glass">`. */
   .surface-overlay {
-    background: rgb(var(--color-bg-overlay) / 0.7);
+    background: rgb(var(--color-bg-overlay) / 0.78);
     backdrop-filter: blur(12px) saturate(180%);
     -webkit-backdrop-filter: blur(12px) saturate(180%);
+  }
+
+  /* Make a link inside a card cover the whole card (keyboard- and
+   * screen-reader-friendly "clickable card"). The card needs `relative`;
+   * controls that must stay independently clickable need `relative z-raised`. */
+  .stretched-link::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+  }
+
+  /* Skeleton placeholder — shimmer is a transform-free background sweep and is
+   * switched off by the reduced-motion rule below. */
+  .skeleton {
+    background-image: linear-gradient(
+      100deg,
+      rgb(var(--color-surface-low)) 30%,
+      rgb(var(--color-surface-high)) 50%,
+      rgb(var(--color-surface-low)) 70%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.6s ease-in-out infinite;
   }
 }
 
 /* ---------------------------------------------------------------------------
  * Kitchen display (Sprint 8C, refreshed in Sprint 12A)
  *
- * Subtle pulse on pending/confirmed tickets. The accent color (`#E07856`)
- * is the Modern Cafe warm tone — gives operators a peripheral cue that
- * a new / in-flight order exists without being loud enough to distract.
- *
- * Tuned for a tablet kiosk view (typically 1–2 m from the screen). The
- * shadow stays soft (`0.15` alpha) and the cycle is slow (2 s) so it
- * registers as ambient, not blinking.
+ * Subtle pulse on pending/confirmed tickets. The accent colour (`#E07856`)
+ * gives operators a peripheral cue that a new / in-flight order exists
+ * without being loud enough to distract. Tuned for a tablet kiosk 1–2 m away.
  * ------------------------------------------------------------------------- */
 @keyframes kitchen-pulse {
   0%,
@@ -168,12 +294,12 @@
 }
 
 /* ---------------------------------------------------------------------------
- * prefers-reduced-motion — Sprint 12A global guard.
+ * prefers-reduced-motion — global guard.
  *
- * Honour the OS-level "reduce motion" preference across the board. We collapse
- * both the Tailwind-declared animations (pulse-soft / fade-in / slide-up) and
- * the legacy kitchen pulse into a 0.01ms window. Animations remain on the
- * class list (no JS teardown) so the look stays identical — just instantaneous.
+ * Honour the OS-level "reduce motion" preference across the board: every
+ * animation / transition collapses into a 0.01 ms window and smooth scrolling
+ * is switched off. Animations stay on the class list (no JS teardown) so the
+ * end state is identical — just instantaneous.
  * ------------------------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -186,6 +312,10 @@
   }
 
   .kitchen-ticket-pending {
+    animation: none;
+  }
+
+  .skeleton {
     animation: none;
   }
 }

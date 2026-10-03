@@ -80,7 +80,7 @@ function ErrorState({
   return (
     <div className="mx-auto flex w-full flex-col gap-4 rounded-2xl border border-border bg-surface p-6 shadow-sm">
       <header className="flex items-center gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-danger-soft text-danger">
           <AlertCircle className="h-5 w-5" aria-hidden />
         </span>
         <div>
@@ -91,7 +91,7 @@ function ErrorState({
       <div className="flex flex-col gap-2">
         <Link
           href="/account/login"
-          className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-bold uppercase tracking-wider text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+          className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
         >
           <MailCheck className="h-4 w-4" aria-hidden />
           Yeni giriş bağlantısı iste
