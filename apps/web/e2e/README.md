@@ -17,6 +17,7 @@ source code or at API responses in isolation can see that.
 | 3 | Log in → dashboard loads its data, no error banner | `admin.spec.ts` | `GET /admin/summary` 404 (F-02), broken login/redirect |
 | 4 | Create a product, then edit it | `admin.spec.ts` | the 8 create/edit pages answering HTTP 500 (F-01), admin writes rejected by CSRF |
 | 5 | Change the price → it shows on the public menu | `admin.spec.ts` | stale/cached public menu, write path not reaching the public read path |
+| 5b | The detail sheet of a dish with a photo keeps its close button inside it | `admin.spec.ts` | the floating close button sitting in the page flow, half outside the sheet (only reachable with a photo, which the seed data has none of) |
 | 6 | Open a QR code and download its PNG | `admin.spec.ts` | broken QR endpoint / auth |
 | 7 | On a phone the admin menu button opens the nav drawer and navigates | `admin.spec.ts` | admin unusable on phones: sidebar hidden below `md` and no way to open navigation |
 

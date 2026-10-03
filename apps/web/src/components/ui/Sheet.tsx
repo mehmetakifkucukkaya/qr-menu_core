@@ -211,15 +211,14 @@ export function Sheet({
         ) : null}
 
         {floatingClose ? (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onClose}
-            aria-label="Kapat"
-            className="absolute right-3 top-3 z-raised bg-surface/90 shadow-md backdrop-blur hover:bg-surface"
-          >
-            <X className="h-5 w-5" aria-hidden />
-          </Button>
+          // Positioned by a wrapper: Button is `relative`, so an `absolute` in
+          // its own className loses and the button sat in the flow (a blank
+          // strip above the photo, the X shifted half outside the sheet).
+          <div className="absolute right-3 top-3 z-raised">
+            <Button variant="floating" size="icon" onClick={onClose} aria-label="Kapat">
+              <X className="h-5 w-5" aria-hidden />
+            </Button>
+          </div>
         ) : (
           <header
             {...(variant === "left" ? {} : dragProps)}
