@@ -12,6 +12,7 @@ import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
  *   ghost     text only — tertiary / toolbar actions
  *   danger    destructive actions (delete, cancel order)
  *   inverse   translucent white — for use ON a primary-coloured surface (banners)
+ *   floating  frosted surface chip — a close button over a photograph
  *
  * Sizes keep the 44 px touch target on md and up; `sm` (36 px) is for dense
  * admin toolbars and must not be the only way to reach an action on a phone.
@@ -23,6 +24,8 @@ import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
  * Don't override a variant's colours through `className`: two competing
  * `text-*` / `bg-*` classes are resolved by stylesheet order, not by the order
  * they are written. Add a variant instead (that is why `inverse` exists).
+ * The same goes for `position`: a Button is always `relative`, so `absolute`
+ * in `className` silently loses. Put the Button in a positioned wrapper.
  */
 
 export type ButtonVariant =
@@ -32,7 +35,8 @@ export type ButtonVariant =
   | "outline"
   | "ghost"
   | "danger"
-  | "inverse";
+  | "inverse"
+  | "floating";
 export type ButtonSize = "sm" | "md" | "lg" | "icon" | "icon-sm";
 
 const base =
@@ -52,6 +56,7 @@ const variants: Record<ButtonVariant, string> = {
   ghost: "text-text hover:bg-surface-low",
   danger: "bg-danger text-white shadow-sm hover:bg-danger/90",
   inverse: "bg-white/15 text-primary-foreground hover:bg-white/25",
+  floating: "bg-surface/90 text-text shadow-md backdrop-blur hover:bg-surface",
 };
 
 const sizes: Record<ButtonSize, string> = {

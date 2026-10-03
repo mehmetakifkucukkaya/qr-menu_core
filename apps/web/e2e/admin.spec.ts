@@ -1,4 +1,4 @@
-import { ADMIN_EMAIL, API_ORIGIN, errorBanners, expect, loginAsAdmin, test } from "./support";
+import { ADMIN_EMAIL, API_ORIGIN, clickCentered, errorBanners, expect, loginAsAdmin, test } from "./support";
 
 /**
  * Flows 3-6 - what the business owner does in the admin panel. They build on
@@ -73,6 +73,53 @@ test.describe.serial("admin panel", () => {
     await page.goto("/m/modern-cafe");
     await expect(card).toContainText("₺99,50");
     await expect(card).not.toContainText("₺42,50");
+  });
+
+  test("flow 5b: the sheet of a dish with a photo keeps its close button inside it", async ({
+    page,
+  }) => {
+    // A dish with a photo opens a sheet whose header is replaced by a close
+    // button floating over the picture. That button was positioned with
+    // `absolute`, but a Button is always `relative`, so the class lost: the
+    // button sat in the page flow and was shifted half outside the sheet. The
+    // layout is only reached by a dish WITH a photo, which the seed data has none of.
+    expect(editUrl, "flow 4 must have created the product").not.toBe("");
+    await loginAsAdmin(page);
+
+    await page.goto(editUrl);
+    const uploaded = page.waitForResponse(
+      (response) => response.url().includes("/api/v1/admin/media/upload") && response.status() < 300,
+    );
+    await page.locator('input[type="file"]').setInputFiles({
+      name: "kahve.png",
+      mimeType: "image/png",
+      buffer: Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEUlEQVR4nGM4UWGDFTEMLQkAQfNfAVTFtrMAAAAASUVORK5CYII=",
+        "base64",
+      ),
+    });
+    await uploaded;
+    await page.getByRole("button", { name: "Değişiklikleri kaydet" }).click();
+    await page.waitForURL(/\/categories\/1\/items$/);
+
+    await page.goto("/m/modern-cafe");
+    const card = page.locator("article").filter({
+      has: page.getByRole("heading", { level: 3, name: productName }),
+    });
+    await clickCentered(card.getByRole("button", { name: productName, exact: true }));
+    const sheet = page.getByRole("dialog", { name: productName });
+    await expect(sheet).toBeVisible();
+
+    const panel = (await sheet.locator(":scope > div").first().boundingBox())!;
+    const close = (await sheet.getByRole("button", { name: "Kapat" }).boundingBox())!;
+    const slack = 1.5; // the sheet may still be easing in
+    expect(close.x, "close button inside the sheet (left edge)").toBeGreaterThanOrEqual(panel.x - slack);
+    expect(close.x + close.width, "close button inside the sheet (right edge)").toBeLessThanOrEqual(
+      panel.x + panel.width + slack,
+    );
+    expect(close.y, "close button inside the sheet (top edge)").toBeGreaterThanOrEqual(panel.y - slack);
+    await sheet.getByRole("button", { name: "Kapat" }).click();
+    await expect(sheet).toBeHidden();
   });
 
   test("flow 6: a QR code can be opened and its PNG downloaded", async ({ page }) => {

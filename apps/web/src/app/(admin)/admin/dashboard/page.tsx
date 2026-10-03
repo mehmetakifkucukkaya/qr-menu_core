@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import Link from "next/link";
 import {
+  Activity,
   ArrowUpDown,
   Building2,
   ChefHat,
@@ -15,6 +16,7 @@ import {
   Power,
   PowerOff,
   QrCode,
+  ShoppingBag,
   Store,
   Tag,
   Trash2,
@@ -26,11 +28,7 @@ import {
 import { AdminEmptyState } from "../../_components/EmptyState";
 import { buttonStyles } from "@/components/ui/Button";
 import { fetchAdminSummary } from "@/lib/api-admin";
-import type {
-  AuditAction,
-  AuditEvent,
-  AuditTargetType,
-} from "@/types/admin";
+import type { AuditEvent } from "@/types/admin";
 
 const DEFAULT_NEXT = "/admin/dashboard";
 
@@ -48,11 +46,18 @@ function readCookieHeader(): string {
 }
 
 /**
- * Human-friendly label for an AuditAction. The i18n keys would normally live
+ * Human-friendly label for an audit action. The i18n keys would normally live
  * in a translation file; for V1 we keep them inline (admin-only surface,
  * one locale).
+ *
+ * The backend records far more actions than the first nine (orders, AI menu
+ * import, billing, loyalty, sign-up...), and it keeps adding them. Every lookup
+ * below is therefore total: an action nobody has dressed yet gets a neutral
+ * label and icon. Indexing a fixed table and destructuring the result used to
+ * take the whole dashboard down ("Application error: a server-side exception
+ * has occurred") the moment a customer placed an order.
  */
-const ACTION_LABEL: Record<AuditAction, string> = {
+const ACTION_LABEL: Record<string, string> = {
   created: "oluşturuldu",
   updated: "güncellendi",
   deleted: "silindi",
@@ -62,10 +67,27 @@ const ACTION_LABEL: Record<AuditAction, string> = {
   deactivated: "pasife alındı",
   reactivated: "aktifleştirildi",
   reordered: "sıralandı",
+  // Orders: the events a restaurant sees most.
+  order_placed: "sipariş alındı",
+  order_confirmed: "sipariş onaylandı",
+  order_preparing: "hazırlanıyor",
+  order_ready: "hazır",
+  order_delivered: "teslim edildi",
+  order_cancelled: "iptal edildi",
+  order_paid: "ödemesi alındı",
+  order_refunded: "iade edildi",
 };
+const FALLBACK_ACTION_LABEL = "işlem yapıldı";
+
+interface ActionStyle {
+  icon: LucideIcon;
+  tone: string;
+}
+
+const ORDER_STYLE: ActionStyle = { icon: ShoppingBag, tone: "bg-primary-soft text-primary" };
 
 /** Icon + tint per action, so the feed can be scanned by shape and colour. */
-const ACTION_STYLE: Record<AuditAction, { icon: LucideIcon; tone: string }> = {
+const ACTION_STYLE: Record<string, ActionStyle> = {
   created: { icon: Plus, tone: "bg-success-soft text-success" },
   updated: { icon: Pencil, tone: "bg-primary-soft text-primary" },
   deleted: { icon: Trash2, tone: "bg-danger-soft text-danger" },
@@ -75,15 +97,32 @@ const ACTION_STYLE: Record<AuditAction, { icon: LucideIcon; tone: string }> = {
   deactivated: { icon: PowerOff, tone: "bg-surface-low text-muted" },
   reactivated: { icon: Power, tone: "bg-success-soft text-success" },
   reordered: { icon: ArrowUpDown, tone: "bg-surface-low text-muted" },
+  order_placed: { ...ORDER_STYLE, tone: "bg-success-soft text-success" },
+  order_confirmed: ORDER_STYLE,
+  order_preparing: ORDER_STYLE,
+  order_ready: ORDER_STYLE,
+  order_delivered: ORDER_STYLE,
+  order_paid: ORDER_STYLE,
+  order_cancelled: { ...ORDER_STYLE, tone: "bg-danger-soft text-danger" },
+  order_refunded: { ...ORDER_STYLE, tone: "bg-danger-soft text-danger" },
+};
+const FALLBACK_ACTION_STYLE: ActionStyle = {
+  icon: Activity,
+  tone: "bg-surface-low text-muted",
 };
 
-const TARGET_LABEL: Record<AuditTargetType, string> = {
+const TARGET_LABEL: Record<string, string> = {
   menu: "menü",
   category: "kategori",
   item: "ürün",
   branch: "şube",
   theme: "tema",
   organization: "işletme",
+  order: "sipariş",
+  payment: "ödeme",
+  customer: "müşteri",
+  menu_import_draft: "menü içe aktarma",
+  plan_settings: "plan",
 };
 
 /**
@@ -91,7 +130,7 @@ const TARGET_LABEL: Record<AuditTargetType, string> = {
  * common actions (price_changed) — everything else falls back to a generic
  * "X işlemi gerçekleşti" string.
  */
-function payloadSummary(action: AuditAction, payload: Record<string, unknown>): string | null {
+function payloadSummary(action: string, payload: Record<string, unknown>): string | null {
   if (action === "price_changed") {
     const oldVal = typeof payload.old === "string" ? payload.old : null;
     const newVal = typeof payload.new === "string" ? payload.new : null;
@@ -361,7 +400,7 @@ function StatCard({
 
 function EventRow({ event }: { event: AuditEvent }) {
   const summary = payloadSummary(event.action, event.payload);
-  const { icon: Icon, tone } = ACTION_STYLE[event.action];
+  const { icon: Icon, tone } = ACTION_STYLE[event.action] ?? FALLBACK_ACTION_STYLE;
   const actor = event.actor === "system" ? "Sistem" : event.actor;
   return (
     <li className="flex items-start gap-3.5 py-3.5">
@@ -374,7 +413,9 @@ function EventRow({ event }: { event: AuditEvent }) {
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm text-text">
           <span className="font-medium">{event.target_repr}</span>{" "}
-          <span className="text-muted">{ACTION_LABEL[event.action]}</span>
+          <span className="text-muted">
+            {ACTION_LABEL[event.action] ?? FALLBACK_ACTION_LABEL}
+          </span>
         </p>
         {summary ? (
           <p className="mt-0.5 font-mono text-xs text-primary">{summary}</p>
