@@ -27,6 +27,7 @@
  */
 
 import type { PublicMenuPayload } from "@/types/menu";
+import { absoluteMediaUrl } from "./media-url.ts";
 
 // ---------------------------------------------------------------------------
 // Locale format mapping
@@ -245,8 +246,10 @@ export function buildJsonLdRestaurant(input: BuildJsonLdInput): JsonLdGraph {
     url: menuUrl,
     servesCuisine: menu?.name ?? business.name,
   };
-  if (business.logo) {
-    restaurant.image = business.logo;
+  // Schema.org wants an absolute image URL; uploads are stored as `/media/…`.
+  const logoUrl = absoluteMediaUrl(origin, business.logo);
+  if (logoUrl) {
+    restaurant.image = logoUrl;
   }
   if (cta && typeof cta === "object") {
     const phone = (cta as { call_phone?: string | null }).call_phone;
@@ -274,8 +277,9 @@ export function buildJsonLdRestaurant(input: BuildJsonLdInput): JsonLdGraph {
       if (Array.isArray(item.dietary_tags) && item.dietary_tags.length > 0) {
         menuItem.suitableForDiet = item.dietary_tags;
       }
-      if (item.image) {
-        menuItem.image = item.image;
+      const imageUrl = absoluteMediaUrl(origin, item.image);
+      if (imageUrl) {
+        menuItem.image = imageUrl;
       }
       return menuItem;
     });

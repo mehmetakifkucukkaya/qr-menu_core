@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Save, Sparkles } from "lucide-react";
 
+import { Badge } from "@/components/ui/Badge";
 import { FormField } from "@/app/(admin)/_components/FormField";
 import { TranslationTabs, translationsToArray } from "@/app/(admin)/_components/TranslationTabs";
 import { AllergenSelector } from "@/app/(admin)/_components/AllergenSelector";
@@ -53,7 +54,7 @@ interface ItemFormProps {
  * Fields:
  *   - name + description (TranslationTabs TR/EN)
  *   - price + compare_at_price + currency
- *   - image (preview only in V1 — see ImageUpload)
+ *   - photo (optional — see ImageUpload; an item may have none)
  *   - allergens + dietary_tags (multi-select chips)
  *   - is_active / is_available / is_featured / is_popular / is_new
  *   - spice_level (0-3 dropdown) + sort_order
@@ -325,20 +326,26 @@ export function ItemForm({
         </div>
       </section>
 
-      {/* Image */}
-      <section aria-label="Görsel" className="flex flex-col gap-2">
-        <h2 className="font-heading text-base font-semibold text-text">Görsel</h2>
+      {/* Photo — optional: an item without one is a text-only card on the menu. */}
+      <section aria-label="Fotoğraf" className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="font-heading text-base font-semibold text-text">Fotoğraf</h2>
+          <Badge tone="neutral">İsteğe bağlı</Badge>
+        </div>
+        <p className="text-xs text-muted">
+          Fotoğraf eklemek zorunlu değil. Eklemezseniz ürün, menüde yalnızca
+          isim ve açıklamayla görünür. Fotoğraf eklerseniz otomatik olarak
+          küçültülür; telefonla çekilmiş bir fotoğraf doğrudan yüklenebilir.
+        </p>
         <ImageUpload
-          value={item?.image ?? null}
-          onUpload={(serverUrl) => setImageUrl(serverUrl)}
+          value={imageUrl}
+          onUpload={setImageUrl}
           csrfToken={csrfToken}
-          alt={item?.name ?? "Ürün görseli"}
+          alt={item?.name ?? "Ürün fotoğrafı"}
+          processed
+          emptyTitle="Ürün fotoğrafı ekle"
+          saveHint="Ürünü kaydedince menüde görünür."
         />
-        {imageUrl && imageUrl !== (item?.image ?? null) ? (
-          <p className="text-xs italic text-muted">
-            Yeni görsel yüklendi — kaydet butonuna basınca ürüne işlenir.
-          </p>
-        ) : null}
       </section>
 
       {/* Allergens */}

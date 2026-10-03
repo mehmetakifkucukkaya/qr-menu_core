@@ -442,3 +442,40 @@ test("serializeJsonLd leaves ordinary output byte-for-byte unchanged", () => {
   // Sample data has no <, >, & or separators, so nothing may be rewritten.
   assert.equal(serializeJsonLd(graph), JSON.stringify(graph));
 });
+
+test("buildJsonLdRestaurant makes uploaded image URLs absolute (Schema.org wants absolute URLs)", () => {
+  // Uploads are stored as `/media/…`; an older row can still carry the loopback
+  // origin it was uploaded from. Neither is usable by a crawler as is.
+  const payload = structuredClone(SAMPLE_PAYLOAD);
+  payload.business.logo = "/media/tenants/modern-cafe/image/logo.jpg";
+  payload.categories[0].items[0].image = "http://localhost:3000/media/uploads/1/v60.jpg";
+
+  const nodes = collectNodes(
+    buildJsonLdRestaurant({
+      host: SAMPLE_HOST,
+      basePath: SAMPLE_PATH,
+      payload,
+      locale: "tr",
+    }),
+  );
+  const restaurant = nodes.find((n) => n["@type"] === "Restaurant");
+  const item = nodes.find((n) => n["@type"] === "MenuItem");
+  assert.equal(restaurant?.image, "https://menu.example.com/media/tenants/modern-cafe/image/logo.jpg");
+  assert.equal(item?.image, "https://menu.example.com/media/uploads/1/v60.jpg");
+});
+
+test("buildJsonLdRestaurant leaves an already-absolute CDN image alone and omits missing ones", () => {
+  const nodes = collectNodes(
+    buildJsonLdRestaurant({
+      host: SAMPLE_HOST,
+      basePath: SAMPLE_PATH,
+      payload: SAMPLE_PAYLOAD,
+      locale: "tr",
+    }),
+  );
+  assert.equal(
+    nodes.find((n) => n["@type"] === "Restaurant")?.image,
+    "https://cdn.example.com/modern-cafe-logo.webp",
+  );
+  assert.equal("image" in (nodes.find((n) => n["@type"] === "MenuItem") ?? {}), false);
+});

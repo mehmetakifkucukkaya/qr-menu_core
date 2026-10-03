@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Save } from "lucide-react";
 
+import { Badge } from "@/components/ui/Badge";
 import { FormField } from "@/app/(admin)/_components/FormField";
 import { TranslationTabs, translationsToArray } from "@/app/(admin)/_components/TranslationTabs";
 import { ImageUpload } from "@/app/(admin)/_components/ImageUpload";
@@ -37,11 +38,9 @@ interface CategoryFormProps {
  * On submit we flatten the tabs value into a MenuTranslation[] array the
  * backend expects on POST/PATCH.
  *
- * Image upload:
- *   - V1 limitation (D-011): file upload needs multipart/form-data which
- *     our JSON admin client doesn't support. We display the preview and
- *     accept the File in component state, but for now the actual upload
- *     only lands when we add the multipart route in Sprint 5.
+ * Photo: optional. ImageUpload uploads the file as soon as it is picked and
+ * hands back its URL; that URL is saved with the rest of the form. Removing
+ * the photo saves an empty string, which the public menu renders as no banner.
  */
 export function CategoryForm({
   menu,
@@ -223,17 +222,28 @@ export function CategoryForm({
         </div>
       </div>
 
-      <ImageUpload
-        value={category?.image ?? null}
-        onUpload={(serverUrl) => setImageUrl(serverUrl)}
-        csrfToken={csrfToken}
-        alt={category?.name ?? "Kategori görseli"}
-      />
-      {imageUrl && imageUrl !== (category?.image ?? null) ? (
-        <p className="text-xs italic text-muted">
-          Yeni görsel yüklendi — kaydet butonuna basınca kategoriye işlenir.
+      {/* Banner — optional: a category without one is just a title on the menu. */}
+      <section aria-label="Kategori fotoğrafı" className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="text-sm font-medium text-text">Kategori fotoğrafı</h2>
+          <Badge tone="neutral">İsteğe bağlı</Badge>
+        </div>
+        <p className="text-xs text-muted">
+          Menüde kategori başlığının üstünde geniş bir şerit olarak görünür; yatay
+          fotoğraflar en iyi sonucu verir. Eklemezseniz yalnızca başlık görünür.
         </p>
-      ) : null}
+        <ImageUpload
+          value={imageUrl}
+          onUpload={setImageUrl}
+          csrfToken={csrfToken}
+          alt={category?.name ?? "Kategori fotoğrafı"}
+          processed
+          aspectClassName="aspect-[3/1] min-h-[9rem]"
+          widthClassName="max-w-md"
+          emptyTitle="Kategori fotoğrafı ekle"
+          saveHint="Kategoriyi kaydedince menüde görünür."
+        />
+      </section>
 
       <label className="inline-flex cursor-pointer items-center gap-2">
         <input

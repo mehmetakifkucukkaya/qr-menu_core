@@ -32,6 +32,8 @@ const API_ORIGIN = `http://localhost:${BACKEND_PORT}`;
 const PYTHON = process.env.E2E_PYTHON ?? "python3";
 const BACKEND_DIR = path.resolve(__dirname, "../../backend");
 const DB_FILE = path.join(os.tmpdir(), `qrmenu-e2e-${BACKEND_PORT}.sqlite3`);
+// Uploaded photos land here, not in backend/media, and are wiped on every run.
+const MEDIA_DIR = path.join(os.tmpdir(), `qrmenu-e2e-${BACKEND_PORT}-media`);
 
 // Throwaway credentials, generated once per run. The main Playwright process
 // sets them before the workers are spawned, so every process sees the same
@@ -41,6 +43,7 @@ process.env.E2E_ADMIN_EMAIL ??= "e2e-admin@modern-cafe.local";
 process.env.E2E_ADMIN_PASSWORD ??= randomBytes(12).toString("hex");
 process.env.E2E_SECRET ??= randomBytes(24).toString("hex");
 process.env.E2E_API_ORIGIN = API_ORIGIN;
+process.env.E2E_MEDIA_DIR = MEDIA_DIR;
 
 const skipBuild = process.env.E2E_SKIP_BUILD === "1";
 
@@ -79,7 +82,7 @@ export default defineConfig({
       name: "backend",
       cwd: BACKEND_DIR,
       command:
-        `rm -f "${DB_FILE}" && ` +
+        `rm -f "${DB_FILE}" && rm -rf "${MEDIA_DIR}" && ` +
         `${PYTHON} manage.py migrate --noinput && ` +
         `${PYTHON} manage.py seed_demo && ` +
         `${PYTHON} manage.py runserver 127.0.0.1:${BACKEND_PORT} --noreload`,
@@ -92,6 +95,7 @@ export default defineConfig({
         DJANGO_SECRET_KEY: process.env.E2E_SECRET!,
         DJANGO_DEBUG: "1",
         DATABASE_URL: `sqlite:///${DB_FILE}`,
+        MEDIA_ROOT: MEDIA_DIR,
         CORS_ALLOWED_ORIGINS: WEB_ORIGIN,
         PUBLIC_BASE_URL: WEB_ORIGIN,
         ANALYTICS_SALT: process.env.E2E_SECRET!,

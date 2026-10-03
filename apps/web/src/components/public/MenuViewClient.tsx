@@ -418,6 +418,7 @@ function CartRail({
                     src={thumb}
                     alt=""
                     aria-hidden
+                    thumbnail
                     wrapperClassName="h-10 w-10 shrink-0 rounded-lg"
                   />
                 ) : null}

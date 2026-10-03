@@ -28,16 +28,24 @@ def image_url(field) -> str | None:
     """Resolve an ImageField-style value to a public URL.
 
     Django's `ImageField.url` returns ``MEDIA_URL + storage_name``. That
-    works for plain filenames (e.g. ``items/real.jpg``) but mangles
-    absolute URLs (e.g. ``http://localhost:3000/media/uploads/1/x.jpg``
-    becomes ``/media/http%3A/localhost...``). The frontend uploads via
-    ``/api/v1/admin/media/upload`` which returns an absolute URL, so we
-    need to detect that and pass it through unchanged.
+    works for plain filenames (e.g. ``items/real.jpg``) but mangles values
+    that are already URLs:
+
+    * absolute — ``http://localhost:3000/media/uploads/1/x.jpg`` becomes
+      ``/media/http%3A/localhost...``. The legacy upload endpoint
+      (``/api/v1/admin/media/upload``) returns these.
+    * root-relative — ``/media/tenants/cafe/image/x.png`` becomes
+      ``/media/media/tenants/...`` (Django strips the leading slash and
+      prepends MEDIA_URL again). The MediaAsset upload
+      (``/api/v1/admin/media/upload/``) returns these for local storage.
+
+    A storage name never starts with ``/`` or a scheme, so both shapes are
+    detected and passed through unchanged.
     """
     if not field:
         return None
     value = str(field)
-    if value.startswith(("http://", "https://")):
+    if value.startswith(("http://", "https://", "/")):
         return value
     return field.url
 

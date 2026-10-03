@@ -3,11 +3,12 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronRight, Edit3, Loader2, Plus, Search, Trash2 } from "lucide-react";
+import { ChevronRight, Edit3, ImageOff, Loader2, Plus, Search, Trash2 } from "lucide-react";
 import clsx from "clsx";
 
 import { ConfirmDialog } from "@/app/(admin)/_components/ConfirmDialog";
 import { PriceEditor } from "@/app/(admin)/_components/PriceEditor";
+import { SmartImage } from "@/components/ui/SmartImage";
 import {
   deleteItem,
   updateItem,
@@ -47,6 +48,11 @@ export function ItemsListClient({
   const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<AdminMenuItem | null>(null);
+
+  // Photos are optional. Only when at least one item has one does the list
+  // reserve a thumbnail column (an empty tile for the others), so a business
+  // that runs a text-only menu never sees a column of empty placeholders.
+  const anyPhoto = useMemo(() => items.some((it) => Boolean(it.image)), [items]);
 
   const filtered = useMemo(() => {
     const s = search.trim().toLowerCase();
@@ -216,32 +222,42 @@ export function ItemsListClient({
                       busy && "opacity-60",
                     )}
                   >
-                    <td className="max-w-[16rem] px-3 py-2 align-top">
-                      <p className="truncate font-medium text-text">{it.name}</p>
-                      {it.description ? (
-                        <p className="line-clamp-2 text-xs text-muted">
-                          {it.description}
-                        </p>
-                      ) : null}
-                      {it.is_featured || it.is_popular || it.is_new ? (
-                        <p className="mt-1 flex flex-wrap gap-1 text-[10px] uppercase tracking-wider">
-                          {it.is_featured ? (
-                            <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-primary">
-                              öne çıkan
-                            </span>
+                    <td
+                      className={clsx(
+                        "px-3 py-2 align-top",
+                        anyPhoto ? "max-w-[20rem]" : "max-w-[16rem]",
+                      )}
+                    >
+                      <div className="flex items-start gap-3">
+                        {anyPhoto ? <ItemThumb src={it.image} /> : null}
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-medium text-text">{it.name}</p>
+                          {it.description ? (
+                            <p className="line-clamp-2 text-xs text-muted">
+                              {it.description}
+                            </p>
                           ) : null}
-                          {it.is_popular ? (
-                            <span className="rounded-full bg-secondary/20 px-1.5 py-0.5 text-secondary">
-                              popüler
-                            </span>
+                          {it.is_featured || it.is_popular || it.is_new ? (
+                            <p className="mt-1 flex flex-wrap gap-1 text-[10px] uppercase tracking-wider">
+                              {it.is_featured ? (
+                                <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-primary">
+                                  öne çıkan
+                                </span>
+                              ) : null}
+                              {it.is_popular ? (
+                                <span className="rounded-full bg-secondary/20 px-1.5 py-0.5 text-secondary">
+                                  popüler
+                                </span>
+                              ) : null}
+                              {it.is_new ? (
+                                <span className="rounded-full bg-success-soft px-1.5 py-0.5 text-success">
+                                  yeni
+                                </span>
+                              ) : null}
+                            </p>
                           ) : null}
-                          {it.is_new ? (
-                            <span className="rounded-full bg-success-soft px-1.5 py-0.5 text-success">
-                              yeni
-                            </span>
-                          ) : null}
-                        </p>
-                      ) : null}
+                        </div>
+                      </div>
                     </td>
                     <td data-label="Fiyat" className="px-3 py-2 align-top">
                       <PriceEditor
@@ -355,5 +371,22 @@ function ToggleChip({
     >
       {label}
     </button>
+  );
+}
+
+/** 48 px photo beside the item name; a quiet empty tile when the item has none. */
+function ItemThumb({ src }: { src: string | null }) {
+  return (
+    <SmartImage
+      src={src}
+      alt=""
+      aria-hidden
+      thumbnail
+      fallback={<ImageOff className="h-5 w-5 text-outline" aria-hidden />}
+      wrapperClassName={clsx(
+        "h-12 w-12 shrink-0 rounded-lg bg-surface-low",
+        src ? "ring-1 ring-black/5" : "border border-dashed border-border",
+      )}
+    />
   );
 }

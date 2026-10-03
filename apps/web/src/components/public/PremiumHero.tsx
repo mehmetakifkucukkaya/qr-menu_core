@@ -2,6 +2,7 @@ import clsx from "clsx";
 import { MapPin, UtensilsCrossed } from "lucide-react";
 
 import { Badge } from "@/components/ui/Badge";
+import { mediaSrc } from "@/lib/media-url";
 import type {
   PublicMenuBusiness,
   PublicMenuCta,
@@ -65,7 +66,7 @@ export function PremiumHero({ business, theme, cta, menuName }: PremiumHeroProps
         {hasRealCover ? (
           /* eslint-disable-next-line @next/next/no-img-element */
           <img
-            src={business.cover_image!}
+            src={mediaSrc(business.cover_image) ?? undefined}
             alt=""
             aria-hidden
             className="absolute inset-0 h-full w-full object-cover"

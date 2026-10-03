@@ -617,6 +617,14 @@ docker compose --env-file .env.production -f docker-compose.production.yml exec 
     ls /app/staticfiles | head
 ```
 
+**Uploaded photos (`/media/...`) 404 on something that is not this production
+stack** (`next dev`, a preview, a tunnel, the e2e harness): nothing there plays
+Caddy's role. The web app answers `/media/*` itself by forwarding to the backend
+(`INTERNAL_API_BASE_URL`; the backend serves its media folder only while
+`DJANGO_DEBUG` is on). Pictures only, read-only; details in
+[ITEM_IMAGES.md](ITEM_IMAGES.md). In production Caddy answers first, so that
+route is never reached and nothing needs to be configured for it.
+
 ### 10.4 Database connection errors in backend logs
 
 ```

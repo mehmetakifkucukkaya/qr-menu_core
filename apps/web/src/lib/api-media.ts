@@ -12,9 +12,11 @@
  * inherit the CSRF, cookie, and envelope handling.
  *
  * NOTE: `uploadMedia()` here uses the MediaAsset endpoint (returns the
- * full asset envelope). The legacy `uploadMedia()` exported from
- * `lib/api-admin.ts` hits the older `/admin/media/upload` route and is
- * kept only for the inline `ImageUpload` form picker.
+ * full asset envelope; the file is resized and gets a thumbnail). The legacy
+ * `uploadMedia()` exported from `lib/api-admin.ts` hits the older
+ * `/admin/media/upload` route, which stores the file untouched. The inline
+ * `ImageUpload` picker uses this one for dish and category photos and the
+ * legacy one for a logo (processing flattens transparency to black).
  */
 
 import { adminFetch, AdminApiError, type AdminFetchOptions } from "@/lib/api-admin";

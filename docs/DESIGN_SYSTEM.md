@@ -64,7 +64,7 @@ Koyu tema (`[data-theme="dark"]`) aynı isimlerle tanımlı; `ThemeToggle` henü
 2. **Anlama göre renk:** hata/silme/iptal → `danger`; başarı/yeni → `success`; uyarı/alerjen → `warning`.
    `accent` bunlar için **kullanılmaz** (olumlu görünür). Anlam yalnızca renkle verilmez: ikon + metin.
 3. **Varyantı `className` ile ezme.** İki rakip `text-*`/`bg-*`/`h-*` sınıfı, yazılış sırasına değil stylesheet
-   sırasına göre çözülür. Yeni bir varyant/boyut ekle (`Button` → `inverse`, `floating`, `Badge` → `size`,
+   sırasına göre çözülür. Yeni bir varyant/boyut ekle (`Button` → `inverse`, `floating`, `danger-soft`, `Badge` → `size`,
    `Input` → `density`). Aynısı `position` için de geçerli: `Button` her zaman `relative`'dir, `className`'e yazılan `absolute`
    sessizce kaybeder (fotoğraflı ürün çekmecesinin kapat düğmesi bu yüzden akışta kalıp sayfanın dışına kayıyordu).
    Konumlandırmayı bir sarmalayıcı `div` yapar.
@@ -83,7 +83,7 @@ Koyu tema (`[data-theme="dark"]`) aynı isimlerle tanımlı; `ThemeToggle` henü
 
 | Bileşen | Not |
 |---|---|
-| `Button` + `buttonStyles()` | varyantlar `primary secondary soft outline ghost danger inverse floating`; bağlantı için `buttonStyles()` |
+| `Button` + `buttonStyles()` | varyantlar `primary secondary soft outline ghost danger danger-soft inverse floating`; bağlantı için `buttonStyles()` |
 | `Badge` | tonlar `neutral primary warm success warning danger solid`; `size sm|md` |
 | `Input` / `Textarea` + `inputStyles` | `density comfortable|compact`; `aria-invalid` → kırmızı |
 | `Sheet` | native `<dialog>`; `variant sheet|drawer|left`; telefonda tutamaç + aşağı sürükleyerek kapatma |

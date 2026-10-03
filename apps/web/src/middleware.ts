@@ -55,6 +55,7 @@ export function middleware(req: NextRequest) {
 
 export const config = {
   // Match everything except /api/*, /_next/static, /_next/image,
-  // /favicon.ico and the /m/* public menu path.
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|m/).*)"],
+  // /favicon.ico, the /m/* public menu path and the /media/* image proxy
+  // (public pictures: no reason to run the admin session check on each one).
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|m/|media/).*)"],
 };
