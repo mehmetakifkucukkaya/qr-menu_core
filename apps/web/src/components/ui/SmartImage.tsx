@@ -10,6 +10,8 @@ import {
 } from "react";
 import { UtensilsCrossed } from "lucide-react";
 
+import { mediaSrc } from "@/lib/media-url";
+
 /**
  * SmartImage — an <img> that never shows the browser's "broken image" glyph.
  *
@@ -22,6 +24,10 @@ import { UtensilsCrossed } from "lucide-react";
  * browser can finish — or fail — loading it BEFORE React hydrates and attaches
  * `onError`. In that case the event is never delivered and the broken glyph
  * stays. On mount we therefore also inspect `img.complete` / `naturalWidth`.
+ *
+ * `src` goes through `mediaSrc()`: an old upload saved with a loopback origin
+ * (`http://localhost:3000/media/…`) is turned into a same-origin `/media/…` path
+ * that actually resolves.
  *
  * The wrapper owns size, radius and background (`wrapperClassName`); the image
  * fills it. A custom `fallback` is centred inside the wrapper, so the caller
@@ -44,7 +50,7 @@ interface SmartImageProps
 }
 
 export function SmartImage({
-  src,
+  src: rawSrc,
   alt,
   fallback,
   wrapperClassName,
@@ -52,6 +58,7 @@ export function SmartImage({
   loading = "lazy",
   ...rest
 }: SmartImageProps) {
+  const src = mediaSrc(rawSrc);
   const imgRef = useRef<HTMLImageElement | null>(null);
   const [status, setStatus] = useState<Status>(src ? "loading" : "error");
 

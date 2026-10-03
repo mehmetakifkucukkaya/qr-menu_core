@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { fetchPublicMenu, PublicMenuError } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
+import { mediaSrc } from "@/lib/media-url";
 import { humanizeSlug } from "@/lib/format";
 import type { LocaleCode } from "@/types/menu";
 import type { PublicMenuCategory, PublicMenuItem } from "@/types/menu";
@@ -78,7 +79,7 @@ export default async function PublicMenuPrintPage({
         {business.logo ? (
           /* eslint-disable-next-line @next/next/no-img-element */
           <img
-            src={business.logo}
+            src={mediaSrc(business.logo) ?? undefined}
             alt=""
             className="h-16 w-16 shrink-0 rounded-full object-cover ring-1 ring-slate-300"
           />
