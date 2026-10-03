@@ -289,7 +289,7 @@ export function TranslationTabs({
               className="text-sm font-medium text-text"
             >
               {nameLabel}
-              <span className="ml-0.5 text-accent" aria-hidden>
+              <span className="ml-0.5 text-danger" aria-hidden>
                 {active === safeLocales[0] ? "*" : ""}
               </span>
             </label>
@@ -310,7 +310,7 @@ export function TranslationTabs({
             value={activeValue.name}
             onChange={(e) => updateLocale(active, { name: e.target.value })}
             placeholder={`Örnek: ${active === "tr" ? "Türk Kahvesi" : "Turkish Coffee"}`}
-            className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-muted/70 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="w-full rounded-xl border border-input bg-surface px-3.5 py-2.5 text-base sm:text-sm text-text placeholder:text-outline focus-visible:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15"
           />
         </div>
 
@@ -364,7 +364,7 @@ export function TranslationTabs({
                 ? "Kısa açıklama (opsiyonel)"
                 : "Short description (optional)"
             }
-            className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-muted/70 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="w-full rounded-xl border border-input bg-surface px-3.5 py-2.5 text-base sm:text-sm text-text placeholder:text-outline focus-visible:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15"
           />
           {descriptionHint ? (
             <p className="text-xs text-muted">{descriptionHint}</p>

@@ -99,12 +99,12 @@ const STATUS_BADGE_LABEL: Record<AdminOrderStatus, string> = {
 };
 
 const STATUS_BADGE_CLASS: Record<AdminOrderStatus, string> = {
-  pending: "bg-amber-100 text-amber-800 border-amber-300",
+  pending: "bg-warning-soft text-warning border-warning/30",
   confirmed: "bg-sky-100 text-sky-800 border-sky-300",
   preparing: "bg-violet-100 text-violet-800 border-violet-300",
-  ready: "bg-emerald-100 text-emerald-800 border-emerald-300",
-  delivered: "bg-gray-100 text-gray-700 border-gray-300",
-  cancelled: "bg-rose-100 text-rose-800 border-rose-300",
+  ready: "bg-success-soft text-success border-success/30",
+  delivered: "bg-surface-low text-text border-border",
+  cancelled: "bg-danger-soft text-danger border-danger/30",
 };
 
 function formatAge(seconds: number): string {
@@ -171,7 +171,7 @@ export function KitchenTicketCard({
       className={
         "flex flex-col gap-3 rounded-2xl border border-border bg-surface p-4 shadow-sm transition " +
         (canPulse
-          ? "kitchen-ticket-pending border-amber-300/60"
+          ? "kitchen-ticket-pending border-warning/30"
           : "border-border")
       }
     >
@@ -227,7 +227,7 @@ export function KitchenTicketCard({
               <span className="font-medium text-text">{it.name}</span>
             </div>
             {it.notes ? (
-              <p className="ml-[2.5rem] inline-flex items-start gap-1 rounded-md bg-amber-50 px-2 py-1 text-[11px] italic text-amber-900">
+              <p className="ml-[2.5rem] inline-flex items-start gap-1 rounded-md bg-warning-soft px-2 py-1 text-[11px] italic text-warning">
                 <StickyNote className="mt-0.5 h-3 w-3 flex-shrink-0" aria-hidden />
                 {it.notes}
               </p>
@@ -261,7 +261,7 @@ export function KitchenTicketCard({
                     (a.primary
                       ? "bg-primary text-primary-foreground hover:bg-primary/90 focus:ring-primary"
                       : a.danger
-                        ? "border border-accent/40 bg-accent/5 text-accent hover:bg-accent/10 focus:ring-accent"
+                        ? "border border-danger/30 bg-danger-soft text-danger hover:bg-danger/10 focus-visible:ring-danger"
                         : "border border-border bg-surface text-text hover:bg-background focus:ring-primary")
                   }
                 >
@@ -278,7 +278,7 @@ export function KitchenTicketCard({
         {error ? (
           <p
             role="alert"
-            className="mt-2 rounded-md border border-accent/40 bg-accent/5 px-2.5 py-1.5 text-xs font-medium text-accent"
+            className="mt-2 rounded-md border border-danger/30 bg-danger-soft px-2.5 py-1.5 text-xs font-medium text-danger"
           >
             {error}
           </p>

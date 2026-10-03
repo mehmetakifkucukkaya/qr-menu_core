@@ -53,7 +53,7 @@ const STATUS_STYLES: Record<MenuImportStatus, { label: string; className: string
   },
   failed: {
     label: "Başarısız",
-    className: "bg-accent/10 text-accent",
+    className: "bg-danger-soft text-danger",
   },
 };
 
@@ -232,7 +232,7 @@ export default async function PdfImportListPage() {
                         className={
                           "rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums " +
                           (d.confidence_avg !== null && d.confidence_avg < 0.5
-                            ? "bg-accent/10 text-accent"
+                            ? "bg-danger-soft text-danger"
                             : "bg-muted/20 text-text")
                         }
                       >

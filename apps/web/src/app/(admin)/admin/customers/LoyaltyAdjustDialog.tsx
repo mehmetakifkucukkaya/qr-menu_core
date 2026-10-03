@@ -175,7 +175,7 @@ export function LoyaltyAdjustDialog({
           {error ? (
             <div
               role="alert"
-              className="rounded-md border border-accent/40 bg-accent/5 px-3 py-2 text-sm text-text"
+              className="rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-text"
             >
               {error}
             </div>
@@ -219,7 +219,7 @@ export function LoyaltyAdjustDialog({
                 placeholder="örn. -25 veya 100"
                 disabled={submitting}
                 step="1"
-                className="flex-1 rounded-md border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-muted/70 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
+                className="flex-1 rounded-xl border border-input bg-surface px-3.5 py-2.5 text-base sm:text-sm text-text placeholder:text-outline focus-visible:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15 disabled:cursor-not-allowed disabled:opacity-60"
               />
               <button
                 type="button"
@@ -253,7 +253,7 @@ export function LoyaltyAdjustDialog({
               maxLength={500}
               disabled={submitting}
               placeholder="Audit kaydına yazılır. Örn: 'Şikayet telafisi'"
-              className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-muted/70 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full rounded-xl border border-input bg-surface px-3.5 py-2.5 text-base sm:text-sm text-text placeholder:text-outline focus-visible:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15 disabled:cursor-not-allowed disabled:opacity-60"
             />
           </div>
 

@@ -169,7 +169,7 @@ function CategoryGroup({
                 (e.target as HTMLInputElement).blur();
               }
             }}
-            className="min-w-0 max-w-xs rounded-md border border-transparent bg-surface px-2 py-1 font-heading text-base font-bold text-text transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-70"
+            className="min-w-0 max-w-xs rounded-md border border-transparent bg-surface px-2 py-1 font-heading text-base font-bold text-text transition focus-visible:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15 disabled:cursor-not-allowed disabled:opacity-70"
           />
           {saving ? (
             <span className="text-[10px] uppercase tracking-wider text-primary">
@@ -189,7 +189,7 @@ function CategoryGroup({
       {error ? (
         <p
           role="alert"
-          className="border-b border-accent/40 bg-accent/5 px-4 py-2 text-xs text-accent"
+          className="border-b border-danger/30 bg-danger-soft px-4 py-2 text-xs text-danger"
         >
           {error}
         </p>

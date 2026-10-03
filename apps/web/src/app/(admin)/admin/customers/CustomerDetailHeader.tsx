@@ -33,11 +33,11 @@ const TX_TYPE_LABEL: Record<LoyaltyTransactionAdmin["type"], string> = {
 };
 
 const TX_TYPE_TONE: Record<LoyaltyTransactionAdmin["type"], string> = {
-  earn: "bg-emerald-100 text-emerald-800 ring-emerald-200",
+  earn: "bg-success-soft text-success ring-success/25",
   redeem: "bg-blue-100 text-blue-800 ring-blue-200",
   expire: "bg-muted/20 text-muted ring-muted/30",
-  adjust: "bg-amber-100 text-amber-800 ring-amber-200",
-  reverse: "bg-red-100 text-red-800 ring-red-200",
+  adjust: "bg-warning-soft text-warning ring-warning/25",
+  reverse: "bg-danger-soft text-danger ring-danger/25",
 };
 
 function formatDateTime(iso: string): string {
@@ -139,13 +139,13 @@ export function CustomerDetailHeader({
               className={
                 "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold " +
                 (active
-                  ? "bg-emerald-100 text-emerald-800"
+                  ? "bg-success-soft text-success"
                   : "bg-muted/20 text-muted")
               }
             >
               <span
                 className={
-                  "h-2 w-2 rounded-full " + (active ? "bg-emerald-500" : "bg-muted")
+                  "h-2 w-2 rounded-full " + (active ? "bg-success" : "bg-muted")
                 }
                 aria-hidden
               />
@@ -320,7 +320,7 @@ export function CustomerDetailHeader({
                   <td
                     className={
                       "px-5 py-2.5 text-right font-semibold tabular-nums " +
-                      (tx.points >= 0 ? "text-emerald-700" : "text-accent")
+                      (tx.points >= 0 ? "text-success" : "text-danger")
                     }
                   >
                     {tx.points >= 0 ? "+" : ""}

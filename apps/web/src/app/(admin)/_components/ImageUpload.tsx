@@ -178,7 +178,7 @@ export function ImageUpload({
       {error ? (
         <p
           role="alert"
-          className="text-xs text-accent"
+          className="text-xs text-danger"
         >
           {error}
         </p>

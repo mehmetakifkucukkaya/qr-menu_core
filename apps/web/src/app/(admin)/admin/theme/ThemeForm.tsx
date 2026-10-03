@@ -126,7 +126,7 @@ export function ThemeForm({ theme, csrfToken }: ThemeFormProps) {
       {error ? (
         <div
           role="alert"
-          className="rounded-md border border-accent/40 bg-accent/5 px-3 py-2 text-sm text-text"
+          className="rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-text"
         >
           {error}
         </div>
@@ -182,7 +182,7 @@ export function ThemeForm({ theme, csrfToken }: ThemeFormProps) {
                   value={value}
                   onChange={(e) => setter(e.target.value)}
                   disabled={submitting}
-                  className="flex-1 rounded-md border border-border bg-surface px-3 py-2 font-mono text-sm text-text focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  className="flex-1 rounded-xl border border-input bg-surface px-3.5 py-2.5 font-mono text-base sm:text-sm text-text focus-visible:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15"
                   placeholder={field.default}
                   aria-label={`${field.label} hex kodu`}
                 />
@@ -202,7 +202,7 @@ export function ThemeForm({ theme, csrfToken }: ThemeFormProps) {
             value={fontFamily}
             onChange={(e) => setFontFamily(e.target.value)}
             disabled={submitting}
-            className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-text focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="rounded-xl border border-input bg-surface px-3.5 py-2.5 text-base sm:text-sm text-text focus-visible:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15"
           >
             {FONT_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -220,7 +220,7 @@ export function ThemeForm({ theme, csrfToken }: ThemeFormProps) {
             value={layoutVariant}
             onChange={(e) => setLayoutVariant(e.target.value)}
             disabled={submitting}
-            className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-text focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="rounded-xl border border-input bg-surface px-3.5 py-2.5 text-base sm:text-sm text-text focus-visible:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15"
           >
             {LAYOUT_VARIANTS.map((opt) => (
               <option key={opt.value} value={opt.value}>

@@ -348,7 +348,7 @@ export function BulkTranslateModal({
         </div>
 
         {error ? (
-          <p role="alert" className="text-xs text-accent">
+          <p role="alert" className="text-xs text-danger">
             {error}
           </p>
         ) : null}
@@ -588,7 +588,7 @@ function StepSource({
           id="bulk-source-locale"
           value={source}
           onChange={(e) => onSourceChange(e.target.value as AdminLocaleCode)}
-          className="w-48 rounded-md border border-border bg-surface px-3 py-2 text-sm text-text focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+          className="w-48 rounded-xl border border-input bg-surface px-3.5 py-2.5 text-base sm:text-sm text-text focus-visible:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15"
         >
           {supported.map((loc) => (
             <option key={loc} value={loc}>
@@ -698,7 +698,7 @@ function StepPreview({
                     "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold",
                     r.cached
                       ? "border border-primary/30 bg-primary/5 text-primary"
-                      : "border border-accent/30 bg-accent/5 text-accent",
+                      : "border border-danger/30 bg-danger-soft text-danger",
                   )}
                 >
                   {r.locale.toUpperCase()}{" "}
@@ -706,7 +706,7 @@ function StepPreview({
                 </span>
               ))}
               {row.rows.length === 0 ? (
-                <span className="text-xs italic text-accent">
+                <span className="text-xs italic text-danger">
                   başarısız
                 </span>
               ) : null}
@@ -752,7 +752,7 @@ function StepRunning({
         </span>
         <span>API call: {progress.apiCalls}</span>
         {progress.errors > 0 ? (
-          <span className="text-accent">hata: {progress.errors}</span>
+          <span className="text-danger">hata: {progress.errors}</span>
         ) : null}
         <span>hedef: {targetLocales.join(", ").toUpperCase()}</span>
       </div>
@@ -780,7 +780,7 @@ function StepDone({
         işlendi.
       </p>
       {progress.errors > 0 ? (
-        <p className="text-xs text-accent">
+        <p className="text-xs text-danger">
           {progress.errors} içerik başarısız oldu — detaylar için sayfayı
           yenileyin.
         </p>

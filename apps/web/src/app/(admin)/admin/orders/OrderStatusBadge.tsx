@@ -26,19 +26,19 @@ export function OrderStatusBadge({ status }: OrderStatusBadgeProps) {
     },
     preparing: {
       label: "Hazırlanıyor",
-      tone: "bg-amber-100 text-amber-800 ring-amber-200",
+      tone: "bg-warning-soft text-warning ring-warning/25",
     },
     ready: {
       label: "Hazır",
-      tone: "bg-emerald-100 text-emerald-800 ring-emerald-200",
+      tone: "bg-success-soft text-success ring-success/25",
     },
     delivered: {
       label: "Teslim Edildi",
-      tone: "bg-green-100 text-green-800 ring-green-200",
+      tone: "bg-success-soft text-success ring-success/25",
     },
     cancelled: {
       label: "İptal Edildi",
-      tone: "bg-red-100 text-red-800 ring-red-200",
+      tone: "bg-danger-soft text-danger ring-danger/25",
     },
   };
   const { label, tone } = config[status];

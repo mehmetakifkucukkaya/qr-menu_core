@@ -138,7 +138,7 @@ export function AIAssistButton({
             ? "bg-primary text-primary-foreground hover:bg-primary/90"
             : "border border-primary/40 bg-primary/5 text-primary hover:bg-primary/10",
           isError &&
-            "border-accent/50 bg-accent/10 text-accent hover:bg-accent/15",
+            "border-danger/30 bg-danger-soft text-danger hover:bg-danger/10",
           isSuccess && "border-primary/40 bg-primary/10 text-primary",
         )}
       >
@@ -156,7 +156,7 @@ export function AIAssistButton({
       {isError && errorMsg ? (
         <span
           role="alert"
-          className="max-w-[20rem] text-[11px] text-accent"
+          className="max-w-[20rem] text-[11px] text-danger"
         >
           {errorMsg}
         </span>

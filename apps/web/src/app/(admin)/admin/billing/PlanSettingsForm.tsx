@@ -150,7 +150,7 @@ export function PlanSettingsForm({ initial, csrfToken }: PlanSettingsFormProps) 
           id="active-plan"
           value={activePlan}
           onChange={(e) => setActivePlan(e.target.value as Plan)}
-          className="block w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          className="block w-full rounded-xl border border-input bg-surface px-3.5 py-2.5 text-base sm:text-sm text-text shadow-sm focus-visible:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15"
         >
           {(Object.keys(PLAN_LABEL) as Plan[]).map((p) => (
             <option key={p} value={p}>
@@ -183,7 +183,7 @@ export function PlanSettingsForm({ initial, csrfToken }: PlanSettingsFormProps) 
           rows={3}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          className="block w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          className="block w-full rounded-xl border border-input bg-surface px-3.5 py-2.5 text-base sm:text-sm text-text shadow-sm focus-visible:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15"
           placeholder="Örn. Lansmana özel %20 indirim aktif."
         />
       </FieldShell>
@@ -192,7 +192,7 @@ export function PlanSettingsForm({ initial, csrfToken }: PlanSettingsFormProps) 
         <div
           id="plan-settings-error"
           role="alert"
-          className="rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900"
+          className="rounded-md border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger"
         >
           {error}
         </div>
@@ -200,7 +200,7 @@ export function PlanSettingsForm({ initial, csrfToken }: PlanSettingsFormProps) 
       {saved ? (
         <div
           role="status"
-          className="rounded-md border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
+          className="rounded-md border border-success/30 bg-success-soft px-4 py-3 text-sm text-success"
         >
           Plan ayarları kaydedildi.
         </div>

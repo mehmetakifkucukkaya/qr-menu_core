@@ -165,7 +165,7 @@ export function PdfConfirmDialog({
               className="text-sm font-medium text-text"
             >
               Menü adı
-              <span aria-hidden className="ml-0.5 text-accent">
+              <span aria-hidden className="ml-0.5 text-danger">
                 *
               </span>
             </label>
@@ -181,7 +181,7 @@ export function PdfConfirmDialog({
               autoFocus
               required
               maxLength={120}
-              className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-muted/70 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="w-full rounded-xl border border-input bg-surface px-3.5 py-2.5 text-base sm:text-sm text-text placeholder:text-outline focus-visible:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15"
             />
             <p className="text-xs text-muted">
               Slug otomatik üretilir; /admin/menus üzerinden sonradan
@@ -233,7 +233,7 @@ export function PdfConfirmDialog({
           {(validationError || error) ? (
             <p
               role="alert"
-              className="rounded-md border border-accent/40 bg-accent/5 px-3 py-2 text-xs text-accent"
+              className="rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-xs text-danger"
             >
               {validationError ?? error}
             </p>

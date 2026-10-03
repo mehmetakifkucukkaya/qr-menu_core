@@ -71,8 +71,8 @@ export function KitchenPollingIndicator({
         aria-hidden
         className="relative flex h-2 w-2"
       >
-        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-        <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success/30 opacity-60" />
+        <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
       </span>
       <span>{label}</span>
       <button

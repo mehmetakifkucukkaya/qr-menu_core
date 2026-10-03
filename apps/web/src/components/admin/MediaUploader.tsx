@@ -398,7 +398,7 @@ export function MediaUploader({
                   renderPreview ? (
                     renderPreview(row.status.asset)
                   ) : (
-                    <p className="mt-1 text-xs text-green-700 dark:text-green-400">
+                    <p className="mt-1 text-xs text-success">
                       Yüklendi — {row.status.asset.original_filename}
                     </p>
                   )
@@ -406,7 +406,7 @@ export function MediaUploader({
                 {row.status.phase === "error" ? (
                   <p
                     role="alert"
-                    className="mt-1 inline-flex items-start gap-1 text-xs text-accent"
+                    className="mt-1 inline-flex items-start gap-1 text-xs text-danger"
                   >
                     <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
                     <span>{row.status.message}</span>

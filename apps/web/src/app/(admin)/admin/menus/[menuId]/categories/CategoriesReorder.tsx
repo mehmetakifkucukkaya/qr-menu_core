@@ -104,7 +104,7 @@ export function CategoriesReorder({
       {pendingError ? (
         <div
           role="alert"
-          className="mb-3 rounded-md border border-accent/40 bg-accent/5 px-3 py-2 text-sm text-text"
+          className="mb-3 rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-text"
         >
           {pendingError}
         </div>
@@ -169,7 +169,7 @@ export function CategoriesReorder({
               type="button"
               onClick={() => setDeleting(c)}
               disabled={deletingId === c.id}
-              className="rounded-md border border-accent/40 bg-accent/5 p-2 text-accent transition hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-md border border-danger/30 bg-danger-soft p-2 text-danger transition hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
               aria-label="Kategoriyi sil"
             >
               {deletingId === c.id ? (

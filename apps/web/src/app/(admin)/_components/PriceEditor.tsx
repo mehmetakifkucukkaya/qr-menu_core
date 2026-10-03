@@ -117,7 +117,7 @@ export function PriceEditor({
         onKeyDown={onKeyDown}
         disabled={loading}
         aria-label="Fiyat"
-        className="w-24 rounded-md border border-border bg-surface px-2 py-1 text-sm tabular-nums text-text focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-60"
+        className="w-24 rounded-xl border border-input bg-surface px-2 py-1 text-base sm:text-sm tabular-nums text-text focus-visible:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15 disabled:opacity-60"
       />
       <span className="text-xs text-muted">{currency}</span>
       <button
@@ -143,7 +143,7 @@ export function PriceEditor({
         <X className="h-4 w-4" />
       </button>
       {error ? (
-        <span role="alert" className="ml-2 text-xs font-medium text-accent">
+        <span role="alert" className="ml-2 text-xs font-medium text-danger">
           {error}
         </span>
       ) : null}

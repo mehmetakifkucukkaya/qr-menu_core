@@ -62,7 +62,7 @@ export function ResetUsageButton({ csrfToken }: ResetUsageButtonProps) {
           setError(null);
           setOpen(true);
         }}
-        className="inline-flex items-center justify-center gap-2 rounded-md border border-border bg-surface px-4 py-2 text-sm font-semibold text-text transition hover:border-accent/40 hover:bg-accent/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+        className="inline-flex items-center justify-center gap-2 rounded-md border border-border bg-surface px-4 py-2 text-sm font-semibold text-text transition hover:border-danger/30 hover:bg-danger-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-danger focus-visible:ring-offset-2"
       >
         <RotateCcw className="h-4 w-4" aria-hidden />
         Demo: aylık kullanımı sıfırla
@@ -81,7 +81,7 @@ export function ResetUsageButton({ csrfToken }: ResetUsageButtonProps) {
       />
 
       {error ? (
-        <p role="alert" className="mt-2 text-xs text-red-700">
+        <p role="alert" className="mt-2 text-xs text-danger">
           {error}
         </p>
       ) : null}

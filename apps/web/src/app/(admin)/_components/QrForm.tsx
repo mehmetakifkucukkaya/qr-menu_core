@@ -130,7 +130,7 @@ export function QrForm({
       {error ? (
         <div
           role="alert"
-          className="rounded-md border border-accent/40 bg-accent/5 px-3 py-2 text-sm text-text"
+          className="rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-text"
         >
           {error}
         </div>
@@ -154,7 +154,7 @@ export function QrForm({
           <div className="flex flex-col gap-1.5">
             <label htmlFor="menu_id" className="text-sm font-medium text-text">
               Menü
-              <span aria-hidden className="ml-0.5 text-accent">
+              <span aria-hidden className="ml-0.5 text-danger">
                 *
               </span>
             </label>
@@ -165,7 +165,7 @@ export function QrForm({
               onChange={(e) => setMenuId(e.target.value)}
               required
               disabled={submitting || menus.length === 0}
-              className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-text focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-xl border border-input bg-surface px-3.5 py-2.5 text-base sm:text-sm text-text focus-visible:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <option value="">
                 {menus.length === 0 ? "Henüz menü yok" : "Bir menü seçin"}
@@ -201,7 +201,7 @@ export function QrForm({
               value={branchId}
               onChange={(e) => setBranchId(e.target.value)}
               disabled={submitting}
-              className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-text focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-xl border border-input bg-surface px-3.5 py-2.5 text-base sm:text-sm text-text focus-visible:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <option value="">Tüm işletme (şube yok)</option>
               {branches.map((b) => (

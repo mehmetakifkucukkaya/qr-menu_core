@@ -65,7 +65,7 @@ export function LogoutButton({ label = "Çıkış", variant = "compact" }: Logou
       aria-label={confirming ? "Onayla: çıkış yap" : "Çıkış yap"}
       className={`inline-flex items-center justify-center rounded-full px-3 py-1.5 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-60 ${
         confirming
-          ? "border border-accent/60 bg-accent/5 text-accent hover:bg-accent/10"
+          ? "border border-danger/30 bg-danger-soft text-danger hover:bg-danger/10"
           : "border border-border bg-surface text-text hover:bg-background"
       }`}
     >

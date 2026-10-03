@@ -51,7 +51,7 @@ export function DiscardDraftButton({ id, csrfToken }: DiscardDraftButtonProps) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 rounded-md border border-accent/40 bg-accent/5 px-3 py-2 text-sm font-medium text-accent transition hover:bg-accent/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="inline-flex items-center gap-1.5 rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm font-medium text-danger transition hover:bg-danger/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-danger"
       >
         <Trash2 className="h-4 w-4" />
         Draft&apos;i sil
@@ -69,7 +69,7 @@ export function DiscardDraftButton({ id, csrfToken }: DiscardDraftButtonProps) {
         loading={loading}
       />
       {error ? (
-        <p role="alert" className="mt-2 text-xs text-accent">
+        <p role="alert" className="mt-2 text-xs text-danger">
           {error}
         </p>
       ) : null}

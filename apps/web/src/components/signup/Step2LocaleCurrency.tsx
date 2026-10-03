@@ -176,12 +176,12 @@ export function Step2LocaleCurrency() {
           })}
         </div>
         {validation.supported_locales ? (
-          <p role="alert" className="text-xs font-medium text-accent">
+          <p role="alert" className="text-xs font-medium text-danger">
             {validation.supported_locales}
           </p>
         ) : null}
         {validation.default_locale ? (
-          <p role="alert" className="text-xs font-medium text-accent">
+          <p role="alert" className="text-xs font-medium text-danger">
             {validation.default_locale}
           </p>
         ) : null}

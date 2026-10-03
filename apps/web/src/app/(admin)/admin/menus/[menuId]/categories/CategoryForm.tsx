@@ -142,7 +142,7 @@ export function CategoryForm({
       {error ? (
         <div
           role="alert"
-          className="rounded-md border border-accent/40 bg-accent/5 px-3 py-2 text-sm text-text"
+          className="rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-text"
         >
           {error}
         </div>
@@ -185,7 +185,7 @@ export function CategoryForm({
               setParentId(e.target.value ? Number(e.target.value) : null)
             }
             disabled={submitting}
-            className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-text focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="rounded-xl border border-input bg-surface px-3.5 py-2.5 text-base sm:text-sm text-text focus-visible:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15"
           >
             <option value="">— Yok (ana kategori) —</option>
             {parentOptions
@@ -215,7 +215,7 @@ export function CategoryForm({
               setSortOrder(Number.parseInt(e.target.value, 10) || 0)
             }
             disabled={submitting}
-            className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-text focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="rounded-xl border border-input bg-surface px-3.5 py-2.5 text-base sm:text-sm text-text focus-visible:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15"
           />
           <p className="text-xs text-muted">
             Düşük sayı önce gösterilir. Reorder butonlarıyla da değiştirilebilir.

@@ -69,21 +69,21 @@ export default async function AccountLoyaltyPage({ searchParams }: PageProps) {
 
       <section
         aria-label="Puan özeti"
-        className="rounded-xl border border-amber-200 bg-amber-50 p-5 shadow-sm"
+        className="rounded-xl border border-warning/30 bg-warning-soft p-5 shadow-sm"
       >
         <div className="flex items-center gap-2">
-          <Crown className="h-5 w-5 text-amber-600" aria-hidden />
-          <span className="text-xs font-semibold uppercase tracking-wider text-amber-700">
+          <Crown className="h-5 w-5 text-warning" aria-hidden />
+          <span className="text-xs font-semibold uppercase tracking-wider text-warning">
             Mevcut Bakiye
           </span>
         </div>
-        <p className="mt-2 font-heading text-4xl font-bold tabular-nums text-amber-900">
+        <p className="mt-2 font-heading text-4xl font-bold tabular-nums text-warning">
           {balance.toLocaleString("tr-TR")}{" "}
-          <span className="text-base font-semibold text-amber-700">puan</span>
+          <span className="text-base font-semibold text-warning">puan</span>
         </p>
-        <dl className="mt-4 grid grid-cols-1 gap-3 text-xs text-amber-900 sm:grid-cols-3">
+        <dl className="mt-4 grid grid-cols-1 gap-3 text-xs text-warning sm:grid-cols-3">
           <div>
-            <dt className="font-semibold uppercase tracking-wider text-amber-700">
+            <dt className="font-semibold uppercase tracking-wider text-warning">
               Nasıl kazanılır
             </dt>
             <dd className="mt-1">
@@ -91,7 +91,7 @@ export default async function AccountLoyaltyPage({ searchParams }: PageProps) {
             </dd>
           </div>
           <div>
-            <dt className="font-semibold uppercase tracking-wider text-amber-700">
+            <dt className="font-semibold uppercase tracking-wider text-warning">
               Harcama oranı
             </dt>
             <dd className="mt-1">
@@ -99,7 +99,7 @@ export default async function AccountLoyaltyPage({ searchParams }: PageProps) {
             </dd>
           </div>
           <div>
-            <dt className="font-semibold uppercase tracking-wider text-amber-700">
+            <dt className="font-semibold uppercase tracking-wider text-warning">
               Minimum
             </dt>
             <dd className="mt-1">
@@ -111,13 +111,13 @@ export default async function AccountLoyaltyPage({ searchParams }: PageProps) {
         <div className="mt-4 flex flex-wrap gap-2">
           <Link
             href="/"
-            className="inline-flex items-center justify-center rounded-full bg-amber-600 px-4 py-2 text-xs font-bold uppercase tracking-wider text-white shadow-sm transition hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
+            className="inline-flex items-center justify-center rounded-full bg-warning px-4 py-2 text-xs font-bold uppercase tracking-wider text-white shadow-sm transition hover:bg-warning/90 focus:outline-none focus:ring-2 focus:ring-warning focus:ring-offset-2"
           >
             Menüye dön
           </Link>
           <Link
             href="/account"
-            className="inline-flex items-center justify-center rounded-full border border-amber-300 bg-surface px-4 py-2 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-300"
+            className="inline-flex items-center justify-center rounded-full border border-warning/30 bg-surface px-4 py-2 text-xs font-semibold text-warning transition hover:bg-warning/10 focus:outline-none focus:ring-2 focus:ring-warning"
           >
             ← Hesabım
           </Link>

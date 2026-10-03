@@ -100,10 +100,10 @@ export function MagicLinkLoginForm({
       {status.kind === "success" ? (
         <div
           role="status"
-          className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
+          className="flex items-start gap-3 rounded-lg border border-success/30 bg-success-soft px-4 py-3 text-sm text-success"
         >
           <CheckCircle2
-            className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600"
+            className="mt-0.5 h-5 w-5 shrink-0 text-success"
             aria-hidden
           />
           <div className="space-y-1">
@@ -113,7 +113,7 @@ export function MagicLinkLoginForm({
               giriş bağlantısı gönderdik. Lütfen gelen kutunuzu kontrol
               edin — bağlantı 15 dakika geçerlidir.
             </p>
-            <p className="text-xs text-emerald-700/80">
+            <p className="text-xs text-success">
               Mail gelmedi mi? Spam klasörünü kontrol edin veya birkaç
               dakika bekleyip tekrar deneyin.
             </p>
@@ -125,10 +125,10 @@ export function MagicLinkLoginForm({
         <div
           id="magic-link-error"
           role="alert"
-          className="flex items-start gap-2 rounded-md border border-accent/40 bg-accent/5 px-3 py-2 text-sm text-text"
+          className="flex items-start gap-2 rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-text"
         >
           <AlertCircle
-            className="mt-0.5 h-4 w-4 shrink-0 text-accent"
+            className="mt-0.5 h-4 w-4 shrink-0 text-danger"
             aria-hidden
           />
           <span>{status.message}</span>
@@ -141,7 +141,7 @@ export function MagicLinkLoginForm({
           className="text-sm font-medium text-text"
         >
           Email
-          <span aria-hidden className="ml-0.5 text-accent">
+          <span aria-hidden className="ml-0.5 text-danger">
             *
           </span>
         </label>
@@ -160,7 +160,7 @@ export function MagicLinkLoginForm({
           placeholder="ornek@firma.com"
           disabled={isDisabled}
           aria-invalid={status.kind === "error" ? "true" : "false"}
-          className="w-full rounded-md border border-border bg-surface px-3 py-2.5 text-sm text-text placeholder:text-muted/70 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
+          className="w-full rounded-xl border border-input bg-surface px-3.5 py-2.5 text-base sm:text-sm text-text placeholder:text-outline focus-visible:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15 disabled:cursor-not-allowed disabled:opacity-60"
         />
         {hint ? (
           <p className="text-[11px] text-muted">{hint}</p>
@@ -174,7 +174,7 @@ export function MagicLinkLoginForm({
       <button
         type="submit"
         disabled={isDisabled}
-        className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-bold uppercase tracking-wider text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+        className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {status.kind === "submitting" ? (
           <>

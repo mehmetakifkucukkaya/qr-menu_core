@@ -186,7 +186,7 @@ export function TranslationGapPanel({
           </span>
         ) : null}
         {describeError ? (
-          <span role="alert" className="text-xs text-accent">
+          <span role="alert" className="text-xs text-danger">
             {describeError}
           </span>
         ) : null}

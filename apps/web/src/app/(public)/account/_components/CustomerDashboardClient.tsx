@@ -140,7 +140,7 @@ function ProfileCard({
               type="button"
               onClick={handleSave}
               disabled={pending}
-              className="inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-60"
+              className="inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-60"
             >
               {pending ? (
                 <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
@@ -194,16 +194,16 @@ function ProfileCard({
       {error ? (
         <p
           role="alert"
-          className="mt-3 inline-flex items-start gap-2 rounded-md border border-accent/40 bg-accent/5 px-3 py-2 text-xs text-text"
+          className="mt-3 inline-flex items-start gap-2 rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-xs text-text"
         >
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-accent" aria-hidden />
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-danger" aria-hidden />
           <span>{error}</span>
         </p>
       ) : null}
       {success ? (
         <p
           role="status"
-          className="mt-3 inline-flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800"
+          className="mt-3 inline-flex items-center gap-2 rounded-md border border-success/30 bg-success-soft px-3 py-2 text-xs text-success"
         >
           <CheckCircle2 className="h-4 w-4" aria-hidden />
           Profil güncellendi.
@@ -260,7 +260,7 @@ function FieldInput({
         placeholder={placeholder}
         autoComplete={autoComplete}
         maxLength={maxLength}
-        className="mt-1 w-full rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-text placeholder:text-muted/70 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+        className="mt-1 w-full rounded-xl border border-input bg-surface px-3 py-1.5 text-base sm:text-sm text-text placeholder:text-outline focus-visible:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15"
       />
     </div>
   );
@@ -278,24 +278,24 @@ function LoyaltySummaryCard({
   organizationName: string;
 }) {
   return (
-    <section className="rounded-xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
+    <section className="rounded-xl border border-warning/30 bg-warning-soft p-4 shadow-sm">
       <div className="flex items-center gap-2">
-        <Crown className="h-5 w-5 text-amber-600" aria-hidden />
-        <h2 className="font-heading text-base font-bold text-amber-900">
+        <Crown className="h-5 w-5 text-warning" aria-hidden />
+        <h2 className="font-heading text-base font-bold text-warning">
           Sadakat Puanlarım
         </h2>
       </div>
-      <p className="mt-1 text-xs text-amber-800">
+      <p className="mt-1 text-xs text-warning">
         {organizationName}
       </p>
-      <p className="mt-3 font-heading text-3xl font-bold tabular-nums text-amber-900">
+      <p className="mt-3 font-heading text-3xl font-bold tabular-nums text-warning">
         {balance.toLocaleString("tr-TR")}{" "}
-        <span className="text-base font-semibold text-amber-700">puan</span>
+        <span className="text-base font-semibold text-warning">puan</span>
       </p>
       <div className="mt-4 flex items-center gap-2">
         <Link
           href="/account/loyalty"
-          className="inline-flex items-center justify-center rounded-full bg-amber-600 px-4 py-2 text-xs font-bold uppercase tracking-wider text-white shadow-sm transition hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
+          className="inline-flex items-center justify-center rounded-full bg-warning px-4 py-2 text-xs font-bold uppercase tracking-wider text-white shadow-sm transition hover:bg-warning/90 focus:outline-none focus:ring-2 focus:ring-warning focus:ring-offset-2"
         >
           Puan geçmişim
         </Link>
