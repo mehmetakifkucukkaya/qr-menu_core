@@ -1,31 +1,37 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import clsx from "clsx";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ShoppingBag } from "lucide-react";
+
+import { Button } from "@/components/ui/Button";
+import { SmartImage } from "@/components/ui/SmartImage";
+import { useCartStore } from "@/lib/cart-store";
+import { resolveCurrency } from "@/lib/currency";
+import { trackEvent } from "@/lib/events";
+import { FeatureFlagProvider, useFeatureFlag } from "@/lib/feature-flags";
+import { formatPrice } from "@/lib/format";
 import type {
   LocaleCode,
   PublicMenuAllergen,
   PublicMenuBusiness,
   PublicMenuCategory,
+  PublicMenuCta,
   PublicMenuDietaryTag,
   PublicMenuItem,
   PublicMenuMenu,
+  Translation,
 } from "@/types/menu";
+import { pickTranslation } from "@/types/menu";
 import type { PublicSettings } from "@/types/public";
-import { trackEvent } from "@/lib/events";
-import { resolveCurrency } from "@/lib/currency";
-import {
-  FeatureFlagProvider,
-  useFeatureFlag,
-} from "@/lib/feature-flags";
+import { BottomDock } from "./BottomDock";
+import { CartDrawer } from "./CartDrawer";
+import { CartHydrator } from "./CartHydrator";
 import { CategoryNav } from "./CategoryNav";
 import { CategorySection } from "./CategorySection";
 import { ItemDetailDrawer } from "./ItemDetailDrawer";
-import { CartDrawer } from "./CartDrawer";
-import { LocaleSelector } from "./LocaleSelector";
-import { HeaderCartIcon } from "./HeaderCartIcon";
-import { AccountHeaderChip } from "./AccountHeaderChip";
-import { useCartStore } from "@/lib/cart-store";
-import { CartHydrator } from "./CartHydrator";
+import { MenuHeader } from "./MenuHeader";
+import { useCategorySpy } from "./useCategorySpy";
 
 interface MenuViewClientProps {
   publicSettings: PublicSettings | null;
@@ -35,6 +41,7 @@ interface MenuViewClientProps {
   categories: PublicMenuCategory[];
   allergens: PublicMenuAllergen[];
   dietaryTags: PublicMenuDietaryTag[];
+  cta: PublicMenuCta;
   locale: LocaleCode;
   customerProfile?: {
     id: number;
@@ -53,35 +60,30 @@ interface MenuViewClientProps {
   } | null;
   headerLoyaltyBalance?: number;
   /** Sprint B3b — server-rendered content that needs to live *inside*
-   *  the FeatureFlagProvider subtree (e.g. BusinessHero, menu name
-   *  caption, EmptyState when the catalog is empty). */
+   *  the FeatureFlagProvider subtree (e.g. the hero, the EmptyState when
+   *  the catalog is empty). */
   children?: React.ReactNode;
 }
 
 /**
- * MenuViewClient — owns the drawer state + sticky header for the
- * public menu page.
+ * MenuViewClient — owns the drawer state, the sticky header and the layout of
+ * the public menu page.
  *
- * Sprint B3b refactor: wraps the entire render output in
- * `<FeatureFlagProvider settings={publicSettings}>` so every descendant
- * (AccountHeaderChip, HeaderCartIcon, CartFab, the "Sipariş Ver" button
- * inside CartDrawer / CheckoutForm, ItemCard's "Sepete ekle" button) can
- * call `useFeatureFlag(...)` directly.
+ * Wraps everything in `<FeatureFlagProvider settings={publicSettings}>` so
+ * every descendant (account chip, cart icon, dock, "Sepete ekle" controls,
+ * the "Sipariş Ver" button in the cart) can call `useFeatureFlag(...)`.
  *
- * Sprint G (D-035) — Velouté 3-column desktop layout:
- *   • Left rail  (col-span-3, sticky) — category navigation. Hides below `lg`.
- *   • Main feed  (col-span-6)         — editorial menu catalog with the
- *     sticky segmented category nav above (col-span-9 when there is no
- *     right rail).
- *   • Right rail (col-span-3, sticky) — cart summary. Hidden when the cart
- *     feature is off.
- *   • Mobile (< lg) — single column with the sticky CategoryNav and
- *     floating CartFab from earlier sprints.
+ * Layout
+ *   • phones / tablets — one column: floating header, hero, sticky category
+ *     chips, the dishes, and a bottom dock (contact + cart).
+ *   • desktop (`lg`) — three columns: category rail (left, sticky), the
+ *     catalogue (centre), cart summary (right, sticky, only when ordering is
+ *     enabled). The chip row and the dock are hidden there.
  *
- * Only tenant data is rendered here. The earlier mock panels (dietary
- * filter with invented counts, a shared Wi-Fi password, fixed service
- * hours / "open now") were removed: they showed the same made-up values
- * on every tenant's public page (ANALYSIS_1 F-13).
+ * Only tenant data is rendered. The earlier mock panels (dietary filter with
+ * invented counts, a shared Wi-Fi password, fixed service hours) were removed
+ * in Faz 0 because they showed the same made-up values on every tenant's page
+ * (ANALYSIS_1 F-13).
  */
 export function MenuViewClient({
   publicSettings,
@@ -91,6 +93,7 @@ export function MenuViewClient({
   categories,
   allergens,
   dietaryTags,
+  cta,
   locale,
   customerProfile,
   customerLoyalty,
@@ -152,52 +155,19 @@ export function MenuViewClient({
        *  can write to the (persisted) store. See CartHydrator. */}
       <CartHydrator />
 
-      {/* Sticky top bar — mobile-first: 48px chrome, account chip hidden
-       *  on phones (moved to AccountHeaderChip's mobile sheet) */}
-      <header className="sticky safe-top top-0 z-30 border-b border-[var(--color-border)] bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70">
-        <div className="mx-auto flex h-12 max-w-6xl items-center justify-between gap-2 px-3 sm:h-14 sm:gap-3 sm:px-4 md:px-6">
-          <div className="flex min-w-0 items-center gap-2">
-            {business.logo ? (
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img
-                src={business.logo}
-                alt=""
-                aria-hidden="true"
-                className="h-7 w-7 shrink-0 rounded-md bg-surface object-cover ring-1 ring-[var(--color-border)] sm:h-8 sm:w-8"
-              />
-            ) : (
-              <span
-                aria-hidden
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary text-xs font-bold text-primary-foreground sm:h-8 sm:w-8"
-              >
-                {business.name.charAt(0).toUpperCase()}
-              </span>
-            )}
-            <span
-              className="truncate font-heading text-sm font-semibold text-text sm:text-base"
-              title={business.name}
-            >
-              {business.name}
-            </span>
-          </div>
-          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-            <LocaleSelector current={locale} />
-            <div className="hidden sm:block">
-              <AccountHeaderChip
-                initialProfile={headerInitial}
-                initialLoyaltyBalance={headerLoyaltyBalance}
-              />
-            </div>
-            <HeaderCartIcon />
-          </div>
-        </div>
-      </header>
+      <MenuHeader
+        business={business}
+        locale={locale}
+        headerInitial={headerInitial}
+        headerLoyaltyBalance={headerLoyaltyBalance}
+      />
 
       {children}
 
       {!isEmpty ? (
         <MenuContent
           businessSlug={businessSlug}
+          business={business}
           currency={currency}
           catalogLookup={catalogLookup}
           customerProfile={customerProfile}
@@ -205,6 +175,7 @@ export function MenuViewClient({
           categories={categories}
           allergens={allergens}
           dietaryTags={dietaryTags}
+          cta={cta}
           locale={locale}
           activeItem={activeItem}
           onItemSelect={handleSelect}
@@ -217,6 +188,7 @@ export function MenuViewClient({
 
 interface MenuContentProps {
   businessSlug: string;
+  business: PublicMenuBusiness;
   currency: string;
   catalogLookup: Record<number, PublicMenuItem>;
   customerProfile?: {
@@ -232,24 +204,16 @@ interface MenuContentProps {
   categories: PublicMenuCategory[];
   allergens: PublicMenuAllergen[];
   dietaryTags: PublicMenuDietaryTag[];
+  cta: PublicMenuCta;
   locale: LocaleCode;
   activeItem: PublicMenuItem | null;
   onItemSelect: (item: PublicMenuItem) => void;
   onItemClose: () => void;
 }
 
-/**
- * MenuContent — Velouté 3-column desktop layout + mobile single-column.
- *
- * Desktop (`lg:`): 12-col grid → left rail (col-3) + main feed (col-6) +
- * right cart rail (col-3). Left + right rails are `sticky top-28` so they
- * follow the user as the catalog scrolls.
- *
- * Mobile: single column. The sticky CategoryNav (full-width) sits above
- * the catalog; the floating CartFab rides in the bottom-right corner.
- */
 function MenuContent({
   businessSlug,
+  business,
   currency,
   catalogLookup,
   customerProfile,
@@ -257,6 +221,7 @@ function MenuContent({
   categories,
   allergens,
   dietaryTags,
+  cta,
   locale,
   activeItem,
   onItemSelect,
@@ -264,42 +229,53 @@ function MenuContent({
 }: MenuContentProps) {
   const cartEnabled = useFeatureFlag("cart_enabled");
   const ordersEnabled = useFeatureFlag("orders_enabled");
-
-  const totalItems = useCartStore((s) => s.totalItems());
   const openDrawer = useCartStore((s) => s.openDrawer);
+
+  const slugs = useMemo(() => categories.map((c) => c.slug), [categories]);
+  const activeSlug = useCategorySpy(slugs);
+
+  // Allergen codes arrive as English identifiers ("dairy"); the payload carries
+  // their localised names, which the dish cards show instead of the raw code.
+  const allergenNames = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const a of allergens) {
+      map[a.code] = pickTranslation(a.name as Translation, locale) || a.code;
+    }
+    return map;
+  }, [allergens, locale]);
 
   return (
     <>
-      <CategoryNav categories={categories} />
+      <CategoryNav categories={categories} activeSlug={activeSlug} />
 
-      <div className="mx-auto mt-6 max-w-6xl px-4 pb-32 sm:px-6 sm:pb-10">
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:items-start">
-          {/* ── LEFT RAIL: desktop-only sidebar (category list) ── */}
-          <aside className="hidden lg:sticky lg:top-28 lg:col-span-3 lg:flex lg:flex-col lg:gap-4 lg:self-start">
-            <CategoryRail categories={categories} />
+      <div className="mx-auto max-w-6xl px-4 pb-32 pt-6 sm:px-6 lg:pb-16 lg:pt-8">
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-12 lg:items-start">
+          {/* ── LEFT RAIL: desktop-only category list ── */}
+          <aside className="hidden lg:sticky lg:top-[calc(var(--header-h)+1.25rem)] lg:col-span-3 lg:block">
+            <CategoryRail categories={categories} activeSlug={activeSlug} />
           </aside>
 
-          {/* ── MAIN FEED: editorial catalog ── */}
-          <section
-            className={
-              "flex flex-col gap-8 " +
-              (cartEnabled ? "lg:col-span-6" : "lg:col-span-9")
-            }
+          {/* ── MAIN FEED ── */}
+          <div
+            className={clsx(
+              "flex flex-col gap-10",
+              cartEnabled ? "lg:col-span-6" : "lg:col-span-9",
+            )}
           >
             {categories.map((category) => (
               <CategorySection
                 key={category.id}
                 category={category}
                 onItemSelect={onItemSelect}
+                allergenNames={allergenNames}
               />
             ))}
-          </section>
+          </div>
 
           {/* ── RIGHT RAIL: desktop-only cart summary (when ordering is on) ── */}
           {cartEnabled ? (
-            <aside className="hidden lg:sticky lg:top-28 lg:col-span-3 lg:flex lg:flex-col lg:gap-4 lg:self-start">
+            <aside className="hidden lg:sticky lg:top-[calc(var(--header-h)+1.25rem)] lg:col-span-3 lg:block">
               <CartRail
-                businessSlug={businessSlug}
                 currency={currency}
                 catalogLookup={catalogLookup}
                 ordersEnabled={ordersEnabled}
@@ -310,9 +286,7 @@ function MenuContent({
         </div>
       </div>
 
-      {cartEnabled ? (
-        <CartFab count={totalItems} onClick={openDrawer} />
-      ) : null}
+      <BottomDock business={business} cta={cta} currency={currency} />
 
       <ItemDetailDrawer
         item={activeItem}
@@ -336,56 +310,65 @@ function MenuContent({
   );
 }
 
-/* ── Desktop left-rail helpers (Velouté 3-col layout) ─────────────────── */
+/* ── Desktop left rail ─────────────────────────────────────────────────── */
 
-function CategoryRail({ categories }: { categories: PublicMenuCategory[] }) {
+function CategoryRail({
+  categories,
+  activeSlug,
+}: {
+  categories: PublicMenuCategory[];
+  activeSlug: string | null;
+}) {
   if (categories.length === 0) return null;
   return (
     <nav
       aria-label="Menü bölümleri"
-      className="flex flex-col gap-1 rounded-lg border border-[var(--color-border)] bg-surface p-3 shadow-sm"
+      className="rounded-2xl bg-surface p-2.5 shadow-card ring-1 ring-border/60"
     >
-      <span className="px-2 pb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-outline">
-        Menü Bölümleri
-      </span>
-      {categories.map((cat, idx) => (
-        <a
-          key={cat.id}
-          href={`#category-${cat.slug}`}
-          className={
-            "flex items-center justify-between gap-2 rounded-md px-3 py-2 text-sm font-medium transition " +
-            (idx === 0
-              ? "bg-[var(--color-surface-low)] font-bold text-primary"
-              : "text-on-surface-variant hover:bg-[var(--color-surface-low)] hover:text-text")
-          }
-        >
-          <span className="line-clamp-1">{cat.name}</span>
-          <span
-            className={
-              "inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-pill px-1.5 text-[10px] font-semibold " +
-              (idx === 0
-                ? "bg-primary text-primary-foreground"
-                : "text-outline")
-            }
-          >
-            {cat.items.length}
-          </span>
-        </a>
-      ))}
+      <p className="px-3 pb-2 pt-1.5 text-xs font-semibold tracking-wide text-outline">
+        Menü bölümleri
+      </p>
+      <ul className="flex flex-col gap-0.5">
+        {categories.map((cat) => {
+          const isActive = cat.slug === activeSlug;
+          return (
+            <li key={cat.id}>
+              <a
+                href={`#category-${cat.slug}`}
+                aria-current={isActive ? "true" : undefined}
+                className={clsx(
+                  "flex items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-sm transition-colors duration-200",
+                  isActive
+                    ? "bg-primary-soft font-semibold text-primary"
+                    : "font-medium text-muted hover:bg-surface-low hover:text-text",
+                )}
+              >
+                <span className="line-clamp-1">{cat.name}</span>
+                <span
+                  className={clsx(
+                    "text-xs tabular-nums",
+                    isActive ? "text-primary" : "text-outline",
+                  )}
+                >
+                  {cat.items.length}
+                </span>
+              </a>
+            </li>
+          );
+        })}
+      </ul>
     </nav>
   );
 }
 
-/* ── Desktop right-rail helpers ────────────────────────────────────────── */
+/* ── Desktop right rail ────────────────────────────────────────────────── */
 
 function CartRail({
-  businessSlug,
   currency,
   catalogLookup,
   ordersEnabled,
   onOpenDrawer,
 }: {
-  businessSlug: string;
   currency: string;
   catalogLookup: Record<number, PublicMenuItem>;
   ordersEnabled: boolean;
@@ -395,41 +378,58 @@ function CartRail({
   const total = useCartStore((s) => s.totalAmount());
   const count = useCartStore((s) => s.totalItems());
 
-  const fmt = (n: number) => `${currency} ${n.toFixed(2)}`;
+  const cur = items[0]?.currency ?? currency;
+  const fmt = (n: number) => formatPrice(n.toFixed(2), cur);
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-[var(--color-border)] bg-surface p-4 shadow-sm">
-      <div className="flex items-center justify-between">
-        <h3 className="font-heading text-base font-semibold text-primary">
+    <section
+      aria-labelledby="cart-rail-title"
+      className="flex flex-col gap-4 rounded-2xl bg-surface p-5 shadow-card ring-1 ring-border/60"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <h3
+          id="cart-rail-title"
+          className="font-heading text-lg font-semibold text-text"
+        >
           Adisyon Özeti
         </h3>
-        <span className="rounded-pill bg-[var(--color-surface-low)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+        <span className="rounded-pill bg-surface-low px-2.5 py-1 text-xs font-semibold tabular-nums text-muted">
           {count} ürün
         </span>
       </div>
 
       {items.length === 0 ? (
-        <p className="rounded-md border border-dashed border-[var(--color-border)] bg-[var(--color-surface-low)] p-3 text-center text-xs text-on-surface-variant">
-          Henüz sepete ürün eklemediniz.
-        </p>
+        <div className="flex flex-col items-center gap-2 rounded-xl bg-surface-low px-4 py-6 text-center">
+          <ShoppingBag className="h-6 w-6 text-outline" aria-hidden />
+          <p className="text-sm text-muted">Henüz sepete ürün eklemediniz.</p>
+        </div>
       ) : (
-        <ul className="flex max-h-64 flex-col gap-2 overflow-y-auto pr-1">
+        <ul className="-mx-1 flex max-h-72 flex-col gap-1 overflow-y-auto px-1">
           {items.map((it) => {
             const catalog = catalogLookup[it.menuItemId];
+            const thumb = it.image ?? catalog?.image ?? null;
             return (
               <li
                 key={it.menuItemId}
-                className="flex items-center justify-between gap-2 rounded-md bg-[var(--color-surface-low)] px-2 py-1.5 text-xs"
+                className="flex items-center gap-3 rounded-xl py-1.5"
               >
-                <div className="flex min-w-0 items-center gap-2">
-                  <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-pill bg-primary text-[10px] font-bold text-primary-foreground">
-                    {it.quantity}
-                  </span>
-                  <span className="line-clamp-1 font-medium text-text">
+                {thumb ? (
+                  <SmartImage
+                    src={thumb}
+                    alt=""
+                    aria-hidden
+                    wrapperClassName="h-10 w-10 shrink-0 rounded-lg"
+                  />
+                ) : null}
+                <div className="min-w-0 flex-1">
+                  <p className="line-clamp-1 text-sm font-medium text-text">
                     {catalog?.name ?? it.name}
-                  </span>
+                  </p>
+                  <p className="text-xs tabular-nums text-muted">
+                    {it.quantity} × {formatPrice(it.price, it.currency)}
+                  </p>
                 </div>
-                <span className="shrink-0 font-heading text-xs font-semibold tabular-nums text-primary">
+                <span className="shrink-0 text-sm font-semibold tabular-nums text-primary">
                   {fmt(Number(it.price) * it.quantity)}
                 </span>
               </li>
@@ -438,40 +438,24 @@ function CartRail({
         </ul>
       )}
 
-      <div className="flex items-center justify-between border-t border-[var(--color-border)] pt-3">
-        <span className="text-xs font-semibold uppercase tracking-wider text-on-surface-variant">
-          Toplam
-        </span>
-        <span className="font-heading text-lg font-bold tabular-nums text-primary">
+      <div className="flex items-baseline justify-between border-t border-border pt-4">
+        <span className="text-sm font-medium text-muted">Toplam</span>
+        <span className="font-heading text-2xl font-semibold tabular-nums text-primary">
           {fmt(total)}
         </span>
       </div>
 
       {ordersEnabled ? (
-        <button
-          type="button"
+        <Button
+          variant="primary"
+          size="lg"
+          fullWidth
           onClick={onOpenDrawer}
           disabled={count === 0}
-          className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-md bg-secondary px-4 py-2 text-sm font-bold uppercase tracking-wider text-white shadow-sm transition hover:bg-secondary/90 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          Sepete Git · {fmt(total)}
-        </button>
+          Sepete Git
+        </Button>
       ) : null}
-    </div>
-  );
-}
-
-function CartFab({ count, onClick }: { count: number; onClick: () => void }) {
-  if (count <= 0) return null;
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={`Sepetim — ${count} ürün`}
-      className="safe-bottom-fixed fixed right-3 z-30 inline-flex h-12 items-center gap-2 rounded-pill bg-primary px-4 text-sm font-bold uppercase tracking-wider text-primary-foreground shadow-floating transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 active:scale-[0.98] sm:hidden"
-    >
-      <span aria-hidden>🛒</span>
-      Sepetim · {count}
-    </button>
+    </section>
   );
 }

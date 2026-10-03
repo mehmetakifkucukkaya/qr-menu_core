@@ -1,16 +1,36 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { X, Flame, Wine, Beef } from "lucide-react";
+import clsx from "clsx";
+import {
+  AlertTriangle,
+  Beef,
+  Flame,
+  Leaf,
+  Minus,
+  Plus,
+  ShoppingBag,
+  Sparkles,
+  Star,
+  Wine,
+  Weight,
+} from "lucide-react";
+import type { ReactNode } from "react";
+
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Sheet } from "@/components/ui/Sheet";
+import { SmartImage } from "@/components/ui/SmartImage";
+import { useCartStore } from "@/lib/cart-store";
+import { useFeatureFlag } from "@/lib/feature-flags";
+import { formatPrice } from "@/lib/format";
 import type {
+  LocaleCode,
   PublicMenuAllergen,
   PublicMenuDietaryTag,
   PublicMenuItem,
-  LocaleCode,
   Translation,
 } from "@/types/menu";
 import { pickTranslation } from "@/types/menu";
-import { formatPrice } from "@/lib/format";
 
 interface ItemDetailDrawerProps {
   item: PublicMenuItem | null;
@@ -20,27 +40,24 @@ interface ItemDetailDrawerProps {
   onClose: () => void;
 }
 
+const TITLE_ID = "drawer-item-title";
+
 /**
- * ItemDetailDrawer — mobile bottom sheet (md+ centered modal).
+ * ItemDetailDrawer — a dish's full story in a bottom sheet (centered modal on
+ * larger screens).
  *
- * - Opens when an ItemCard's chevron is clicked.
- * - Slides in from the bottom on mobile, fades in centered on desktop.
- * - Closes on X, on backdrop click, or on Escape key.
- * - Locks body scroll while open.
+ * - Opens when an ItemCard is tapped. Focus handling, Escape, tap-outside,
+ *   drag-down-to-dismiss and the page lock all come from `Sheet`.
+ * - A dish with a photo gets a hero image with a floating close button; a dish
+ *   without one gets the standard header, so there is never an empty frame.
+ * - The footer carries the price and an add-to-cart control (when the plan
+ *   includes the cart) so the reader doesn't have to close the sheet and hunt
+ *   for the card's button again.
  *
- * Accessibility: role="dialog", aria-modal, focus moves to close
- * button on open, restores focus on close.
- *
- * Sprint D1b — adds the mevzuat (compliance) section. Six optional
- * fields from the backend payload surface as badges / callouts:
- *   - calories    → "🔥 350 kcal" badge (Flame icon)
- *   - portion_size → "📏 250g"   badge
- *   - contains_alcohol true → amber callout "🍷 Alkol içerir"
- *   - is_halal    true / false / null → green / red / hidden badge
- *   - ingredients → comma-separated chip list
- *   - legal_notes → callout (red border if mentions alerjen, else amber)
- * Each subsection silently hides when its source field is missing so
- * a non-compliant tenant renders an unchanged drawer.
+ * Sprint D1b — mevzuat (compliance) section. Optional fields from the backend
+ * payload surface as chips / callouts: calories, portion size, alcohol, halal
+ * status, ingredients and legal notes. Each subsection silently hides when its
+ * source field is missing, so a non-compliant tenant renders a lean sheet.
  */
 export function ItemDetailDrawer({
   item,
@@ -49,29 +66,16 @@ export function ItemDetailDrawer({
   locale,
   onClose,
 }: ItemDetailDrawerProps) {
-  const closeBtnRef = useRef<HTMLButtonElement | null>(null);
+  const cartEnabled = useFeatureFlag("cart_enabled");
+  const cartItem = useCartStore((s) =>
+    item ? s.items.find((i) => i.menuItemId === item.id) : undefined,
+  );
+  const add = useCartStore((s) => s.add);
+  const updateQuantity = useCartStore((s) => s.updateQuantity);
 
-  // Lock body scroll + listen for Escape.
-  useEffect(() => {
-    if (!item) return;
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-
-    // Move focus to close button.
-    queueMicrotask(() => closeBtnRef.current?.focus());
-
-    return () => {
-      document.body.style.overflow = prevOverflow;
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [item, onClose]);
-
-  if (!item) return null;
+  if (!item) {
+    return <Sheet open={false} onClose={onClose} ariaLabel="Ürün detayı">{null}</Sheet>;
+  }
 
   // Resolve allergen / tag metadata from the global lists (they arrive
   // as { code, name: Translation } on the top-level payload).
@@ -81,10 +85,9 @@ export function ItemDetailDrawer({
 
   const tagMeta = item.dietary_tags
     .map((code) => dietaryTags.find((t) => t.code === code))
-    .filter(Boolean) as PublicMenuDietaryTag[];
+    // "popular" / "new" duplicate the badges below the title.
+    .filter((t): t is PublicMenuDietaryTag => !!t && t.code !== "popular" && t.code !== "new");
 
-  // Sprint D1b — derive compliance-view-model flags once so the
-  // mevzuat section can early-return cleanly when no data is present.
   const hasCalories =
     typeof item.calories === "number" && Number.isFinite(item.calories);
   const hasPortion = !!(item.portion_size && item.portion_size.trim());
@@ -92,272 +95,320 @@ export function ItemDetailDrawer({
   const hasLegalNotes = !!(item.legal_notes && item.legal_notes.trim());
   const showAlcohol = item.contains_alcohol === true;
   const showHalal = item.is_halal === true || item.is_halal === false;
-  const hasAnyCompliance =
-    hasCalories ||
-    hasPortion ||
-    hasIngredients ||
-    hasLegalNotes ||
-    showAlcohol ||
-    showHalal;
+  const hasFacts = hasCalories || hasPortion || showHalal;
+
+  // `default` = the requested translation is missing and the venue's own
+  // language is shown instead — worth a quiet note so it isn't mistaken for a bug.
+  const showFallbackNote = item.locale_used === "default";
+
+  const hasImage = Boolean(item.image);
+  const price = formatPrice(item.price, item.currency);
+  const comparePrice =
+    item.compare_at_price &&
+    Number.parseFloat(item.compare_at_price) > Number.parseFloat(item.price)
+      ? formatPrice(item.compare_at_price, item.currency)
+      : null;
+
+  const handleAdd = () => {
+    onClose();
+    add(
+      {
+        menuItemId: item.id,
+        name: item.name,
+        price: item.price,
+        currency: item.currency,
+        image: item.image ?? null,
+      },
+      1,
+    );
+  };
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="drawer-item-title"
-      className="fixed inset-0 z-50 flex items-end justify-center bg-text/40 backdrop-blur-sm sm:items-center sm:p-6"
-      onClick={onClose}
-    >
-      <div
-        className="safe-bottom flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-xl bg-surface shadow-lg ring-1 ring-[var(--color-border)] sm:max-h-[85vh] sm:max-w-lg sm:rounded-xl animate-[slideup_0.22s_ease-out]"
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          animation: "slideup 0.22s ease-out",
-        }}
-      >
-        <header className="sticky top-0 flex items-start justify-between gap-2 border-b border-[var(--color-border)] bg-surface/95 px-4 py-3 backdrop-blur">
-          <h2
-            id="drawer-item-title"
-            className="font-heading text-lg font-bold text-text sm:text-xl"
-          >
-            {item.name}
-          </h2>
-          <button
-            ref={closeBtnRef}
-            type="button"
-            aria-label="Kapat"
-            onClick={onClose}
-            className="touch-target inline-flex items-center justify-center rounded-full p-2 text-muted hover:bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-          >
-            <X className="h-5 w-5" aria-hidden />
-          </button>
-        </header>
+    <Sheet
+      open
+      onClose={onClose}
+      ariaLabelledBy={hasImage ? TITLE_ID : undefined}
+      floatingClose={hasImage}
+      title={hasImage ? undefined : item.name}
+      bodyClassName="p-0"
+      footer={
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <p className="font-heading text-2xl font-semibold tabular-nums leading-none text-primary">
+              {price}
+            </p>
+            {comparePrice ? (
+              <s className="mt-1 block text-sm tabular-nums text-outline">
+                {comparePrice}
+              </s>
+            ) : null}
+          </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-4">
-          {/* Hero image — only when an image URL is present. The drawer
-              never breaks layout when the source DB has no image. */}
-          {item.image ? (
-            <div className="mb-4 overflow-hidden rounded-lg bg-background">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={item.image}
-                alt={item.name}
-                loading="lazy"
-                decoding="async"
-                className="h-40 w-full object-cover sm:h-48"
-              />
+          {cartEnabled ? (
+            cartItem ? (
+              <div
+                role="group"
+                aria-label={`${item.name} adedi`}
+                className="flex h-12 items-center rounded-pill bg-surface-low ring-1 ring-border-strong"
+              >
+                <button
+                  type="button"
+                  aria-label="Azalt"
+                  onClick={() => updateQuantity(item.id, cartItem.quantity - 1)}
+                  className="flex h-12 w-12 items-center justify-center rounded-full text-primary transition hover:bg-surface-high active:scale-90"
+                >
+                  <Minus className="h-[1.125rem] w-[1.125rem]" aria-hidden />
+                </button>
+                <span
+                  aria-live="polite"
+                  className="min-w-[1.75rem] text-center text-base font-bold tabular-nums"
+                >
+                  {cartItem.quantity}
+                </span>
+                <button
+                  type="button"
+                  aria-label="Arttır"
+                  onClick={() => updateQuantity(item.id, cartItem.quantity + 1)}
+                  className="flex h-12 w-12 items-center justify-center rounded-full text-primary transition hover:bg-surface-high active:scale-90"
+                >
+                  <Plus className="h-[1.125rem] w-[1.125rem]" aria-hidden />
+                </button>
+              </div>
+            ) : (
+              <Button
+                size="lg"
+                onClick={handleAdd}
+                leadingIcon={<ShoppingBag className="h-[1.125rem] w-[1.125rem]" aria-hidden />}
+              >
+                Sepete Ekle
+              </Button>
+            )
+          ) : null}
+        </div>
+      }
+    >
+      {hasImage ? (
+        <SmartImage
+          src={item.image}
+          alt={item.name}
+          loading="eager"
+          wrapperClassName="h-60 w-full sm:h-64"
+        />
+      ) : null}
+
+      <div className="space-y-5 px-5 py-5">
+        <div>
+          {item.is_featured || item.is_popular || item.is_new || showFallbackNote ? (
+            <div className="mb-2.5 flex flex-wrap items-center gap-1.5">
+              {item.is_featured ? (
+                <Badge tone="primary" icon={<Star className="h-3 w-3" aria-hidden />}>
+                  İmza
+                </Badge>
+              ) : null}
+              {item.is_popular ? (
+                <Badge tone="warm" icon={<Flame className="h-3 w-3" aria-hidden />}>
+                  Popüler
+                </Badge>
+              ) : null}
+              {item.is_new ? (
+                <Badge tone="success" icon={<Sparkles className="h-3 w-3" aria-hidden />}>
+                  Yeni
+                </Badge>
+              ) : null}
+              {showFallbackNote ? (
+                <Badge tone="neutral">Bu dilde çeviri yok</Badge>
+              ) : null}
             </div>
+          ) : null}
+
+          {/* With a photo the title lives here (the Sheet has no header then);
+              without one the Sheet header already shows it. */}
+          {hasImage ? (
+            <h2
+              id={TITLE_ID}
+              className="font-heading text-[1.65rem] font-semibold leading-tight tracking-tight text-text"
+            >
+              {item.name}
+            </h2>
           ) : null}
 
           {item.description ? (
-            <p className="text-sm text-text sm:text-base">{item.description}</p>
+            <p className={clsx("text-base leading-relaxed text-muted", hasImage && "mt-2")}>
+              {item.description}
+            </p>
           ) : (
-            <p className="text-sm italic text-muted">Açıklama bulunmuyor.</p>
+            <p className="text-sm italic text-outline">Açıklama bulunmuyor.</p>
           )}
-
-          {/* Sprint D1b — mevzuat bölümü. Renders only when at least one
-              of the six compliance fields is present. Each subsection
-              independently hides when its field is missing. */}
-          {hasAnyCompliance ? (
-            <section
-              aria-label="Mevzuat bilgileri"
-              className="mt-5 rounded-xl border border-border bg-background/40 p-3"
-            >
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">
-                Mevzuat bilgileri
-              </h3>
-
-              <div className="flex flex-wrap gap-2">
-                {hasCalories ? (
-                  <span
-                    title={`${item.calories} kalori (kcal)`}
-                    className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-900 ring-1 ring-orange-200"
-                  >
-                    <Flame className="h-3.5 w-3.5" aria-hidden />
-                    <span aria-hidden>🔥</span>
-                    <span>{item.calories} kcal</span>
-                  </span>
-                ) : null}
-
-                {hasPortion ? (
-                  <span
-                    title={`Porsiyon: ${item.portion_size}`}
-                    className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-900 ring-1 ring-slate-200"
-                  >
-                    <span aria-hidden>📏</span>
-                    <span>{item.portion_size}</span>
-                  </span>
-                ) : null}
-
-                {showHalal && item.is_halal === true ? (
-                  <span
-                    title="Helal"
-                    className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-900 ring-1 ring-emerald-200"
-                  >
-                    <Beef className="h-3.5 w-3.5" aria-hidden />
-                    <span>Helal</span>
-                  </span>
-                ) : null}
-                {showHalal && item.is_halal === false ? (
-                  <span
-                    title="Helal Değil"
-                    className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-900 ring-1 ring-rose-200"
-                  >
-                    <Beef className="h-3.5 w-3.5" aria-hidden />
-                    <span>Helal Değil</span>
-                  </span>
-                ) : null}
-              </div>
-
-              {/* Alkol callout — amber, full-width, sits inside the
-                  mevzuat card so it reads as a compliance warning. */}
-              {showAlcohol ? (
-                <div
-                  role="note"
-                  aria-label="Alkol uyarısı"
-                  className="mt-3 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900 sm:text-sm"
-                >
-                  <Wine className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-                  <span>🍷 Alkol içerir</span>
-                </div>
-              ) : null}
-
-              {/* Ingredients chips — comma-separated source string. */}
-              {hasIngredients ? (
-                <div className="mt-3">
-                  <h4 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted">
-                    İçindekiler
-                  </h4>
-                  <ul className="flex flex-wrap gap-1.5">
-                    {item.ingredients!
-                      .split(",")
-                      .map((s) => s.trim())
-                      .filter(Boolean)
-                      .map((ing, idx) => (
-                        <li
-                          key={`${ing}-${idx}`}
-                          className="inline-flex items-center rounded-full bg-surface px-2 py-0.5 text-[11px] font-medium text-text ring-1 ring-border"
-                        >
-                          {ing}
-                        </li>
-                      ))}
-                  </ul>
-                </div>
-              ) : null}
-
-              {/* Legal notes — red border if mentions alerjen/alerji,
-                  otherwise amber. Free-text, server-supplied. */}
-              {hasLegalNotes ? (
-                <div
-                  role="note"
-                  aria-label="Yasal uyarı"
-                  className={
-                    "mt-3 rounded-lg border px-3 py-2 text-xs sm:text-sm " +
-                    (isAllergenNote(item.legal_notes!)
-                      ? "border-rose-300 bg-rose-50 text-rose-900"
-                      : "border-amber-300 bg-amber-50 text-amber-900")
-                  }
-                >
-                  <p className="font-semibold">Yasal not</p>
-                  <p className="mt-0.5 leading-snug">{item.legal_notes}</p>
-                </div>
-              ) : null}
-            </section>
-          ) : null}
-
-          {allergenMeta.length > 0 ? (
-            <div className="mt-5">
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">
-                Alerjenler
-              </h3>
-              <ul className="flex flex-wrap gap-2">
-                {allergenMeta.map((a) => (
-                  <li key={a.code}>
-                    <AllergenBadge allergen={a} locale={locale} />
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-
-          {tagMeta.length > 0 ? (
-            <div className="mt-5">
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">
-                Diyet etiketleri
-              </h3>
-              <ul className="flex flex-wrap gap-2">
-                {tagMeta.map((t) => (
-                  <li key={t.code}>
-                    <DietaryTagBadge tag={t} locale={locale} />
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
         </div>
 
-        <footer className="sticky bottom-0 flex items-center justify-between border-t border-[var(--color-border)] bg-surface/95 px-4 py-3 backdrop-blur">
-          <span className="font-heading text-xl font-bold text-primary sm:text-2xl">
-            {formatPrice(item.price, item.currency)}
-          </span>
-          <span className="text-xs uppercase tracking-wider text-muted">
-            {item.locale_used === "en" ? "EN" : "TR"}
-          </span>
-        </footer>
-      </div>
+        {hasFacts ? (
+          <ul className="flex flex-wrap gap-2" aria-label="Ürün bilgileri">
+            {hasCalories ? (
+              <Fact icon={<Flame className="h-4 w-4" aria-hidden />}>
+                {item.calories} kcal
+              </Fact>
+            ) : null}
+            {hasPortion ? (
+              <Fact icon={<Weight className="h-4 w-4" aria-hidden />}>
+                {item.portion_size}
+              </Fact>
+            ) : null}
+            {showHalal && item.is_halal === true ? (
+              <Fact tone="success" icon={<Beef className="h-4 w-4" aria-hidden />}>
+                Helal
+              </Fact>
+            ) : null}
+            {showHalal && item.is_halal === false ? (
+              <Fact tone="danger" icon={<Beef className="h-4 w-4" aria-hidden />}>
+                Helal değil
+              </Fact>
+            ) : null}
+          </ul>
+        ) : null}
 
-      <style>{`
-        @keyframes slideup {
-          from { transform: translateY(16px); opacity: 0; }
-          to   { transform: translateY(0);    opacity: 1; }
-        }
-      `}</style>
-    </div>
+        {showAlcohol ? (
+          <Callout
+            tone="warning"
+            icon={<Wine className="h-5 w-5" aria-hidden />}
+            label="Alkol uyarısı"
+          >
+            <p className="font-semibold">Alkol içerir</p>
+          </Callout>
+        ) : null}
+
+        {hasLegalNotes ? (
+          <Callout
+            tone={isAllergenNote(item.legal_notes!) ? "danger" : "warning"}
+            icon={<AlertTriangle className="h-5 w-5" aria-hidden />}
+            label="Yasal uyarı"
+          >
+            <p className="font-semibold">Yasal not</p>
+            <p className="mt-0.5 leading-snug">{item.legal_notes}</p>
+          </Callout>
+        ) : null}
+
+        {allergenMeta.length > 0 ? (
+          <Section title="Alerjenler">
+            <ul className="flex flex-wrap gap-2">
+              {allergenMeta.map((a) => (
+                <li key={a.code}>
+                  <Badge
+                    tone="warning"
+                    size="md"
+                    icon={<AlertTriangle className="h-3.5 w-3.5" aria-hidden />}
+                  >
+                    {pickTranslation(a.name as Translation, locale)}
+                  </Badge>
+                </li>
+              ))}
+            </ul>
+          </Section>
+        ) : null}
+
+        {tagMeta.length > 0 ? (
+          <Section title="Diyet etiketleri">
+            <ul className="flex flex-wrap gap-2">
+              {tagMeta.map((t) => (
+                <li key={t.code}>
+                  <Badge
+                    tone="success"
+                    size="md"
+                    icon={<Leaf className="h-3.5 w-3.5" aria-hidden />}
+                  >
+                    {pickTranslation(t.name as Translation, locale)}
+                  </Badge>
+                </li>
+              ))}
+            </ul>
+          </Section>
+        ) : null}
+
+        {hasIngredients ? (
+          <Section title="İçindekiler">
+            <ul className="flex flex-wrap gap-1.5">
+              {item.ingredients!
+                .split(",")
+                .map((s) => s.trim())
+                .filter(Boolean)
+                .map((ing, idx) => (
+                  <li
+                    key={`${ing}-${idx}`}
+                    className="rounded-pill bg-surface-low px-3 py-1 text-sm text-text"
+                  >
+                    {ing}
+                  </li>
+                ))}
+            </ul>
+          </Section>
+        ) : null}
+      </div>
+    </Sheet>
   );
 }
 
 /** True when the legal_notes string mentions alerjen / alerji — used to
- *  pick the red border tone (allergen warning) vs the amber tone
- *  (general compliance note). Case-insensitive substring match. */
+ *  pick the red tone (allergen warning) vs the amber tone (general
+ *  compliance note). Case-insensitive substring match. */
 function isAllergenNote(text: string): boolean {
   const lower = text.toLocaleLowerCase("tr-TR");
   return lower.includes("alerjen") || lower.includes("alerji");
 }
 
-function AllergenBadge({
-  allergen,
-  locale,
-}: {
-  allergen: PublicMenuAllergen;
-  locale: LocaleCode;
-}) {
-  const label = pickTranslation(allergen.name as Translation, locale);
+function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <span
-      title={label}
-      className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-900 ring-1 ring-amber-200"
-    >
-      <span aria-hidden>⚠️</span>
-      <span>{label}</span>
-    </span>
+    <section>
+      <h3 className="mb-2.5 font-body text-sm font-semibold text-text">{title}</h3>
+      {children}
+    </section>
   );
 }
 
-function DietaryTagBadge({
-  tag,
-  locale,
+function Fact({
+  icon,
+  tone = "neutral",
+  children,
 }: {
-  tag: PublicMenuDietaryTag;
-  locale: LocaleCode;
+  icon: ReactNode;
+  tone?: "neutral" | "success" | "danger";
+  children: ReactNode;
 }) {
-  const label = pickTranslation(tag.name as Translation, locale);
   return (
-    <span
-      title={label}
-      className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-900 ring-1 ring-emerald-200"
+    <li
+      className={clsx(
+        "inline-flex h-9 items-center gap-1.5 rounded-pill px-3.5 text-sm font-semibold",
+        tone === "neutral" && "bg-surface-low text-text",
+        tone === "success" && "bg-success-soft text-success",
+        tone === "danger" && "bg-danger-soft text-danger",
+      )}
     >
-      <span aria-hidden>🌿</span>
-      <span>{label}</span>
-    </span>
+      {icon}
+      {children}
+    </li>
+  );
+}
+
+function Callout({
+  tone,
+  icon,
+  label,
+  children,
+}: {
+  tone: "warning" | "danger";
+  icon: ReactNode;
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      role="note"
+      aria-label={label}
+      className={clsx(
+        "flex items-start gap-3 rounded-2xl px-4 py-3 text-sm",
+        tone === "warning" ? "bg-warning-soft text-warning" : "bg-danger-soft text-danger",
+      )}
+    >
+      <span className="mt-0.5 shrink-0">{icon}</span>
+      <div className="min-w-0">{children}</div>
+    </div>
   );
 }

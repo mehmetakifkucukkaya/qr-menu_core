@@ -1,50 +1,57 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, Check, Minus } from "lucide-react";
-import type { PublicMenuCategory, PublicMenuItem } from "@/types/menu";
-import { getItemPlaceholder } from "@/lib/placeholder";
-import { formatPrice } from "@/lib/format";
+import clsx from "clsx";
+import { useEffect, useRef, useState } from "react";
+import { Check, Flame, Minus, Plus, Sparkles, Star } from "lucide-react";
+
+import { Badge } from "@/components/ui/Badge";
+import { SmartImage } from "@/components/ui/SmartImage";
 import { useCartStore } from "@/lib/cart-store";
 import { useFeatureFlag } from "@/lib/feature-flags";
+import { formatPrice } from "@/lib/format";
+import type { PublicMenuCategory, PublicMenuItem } from "@/types/menu";
 
 interface ItemCardProps {
   item: PublicMenuItem;
   category: PublicMenuCategory;
-  /** Sprint 3B-2: opens the detail drawer. Kept for backward compat — when
-   *  provided, clicking the body opens detail (cart button stays a sibling
-   *  flex element so it never competes for taps). */
+  /** Opens the detail sheet. */
   onSelect?: (item: PublicMenuItem) => void;
+  /** allergen code → localised name (from the payload's allergen list). */
+  allergenNames?: Record<string, string>;
 }
 
 /**
- * ItemCard — Velouté Hospitality Suite dish card (D-035 / Sprint G).
+ * ItemCard — one dish, one horizontal card on every screen size.
  *
- * Desktop layout: vertical card with full-bleed cover image, dietary pill
- * row (top-left overlay), Playfair Display title + Plus Jakarta body,
- * price prominent, +44px round add button at bottom-right.
+ *   ┌───────────────────────────────────────────┐
+ *   │ [badges]                        ┌───────┐ │
+ *   │ Dish name (serif)               │ photo │ │
+ *   │ Two-line description            │       │ │
+ *   │ allergens · kcal                └──(+)──┘ │
+ *   │ ₺75,00                                    │
+ *   └───────────────────────────────────────────┘
  *
- * Mobile layout: horizontal list card — text-first with a 7rem × 7rem
- * image on the right. Dietary pills above the title, price + round add
- * at the bottom.
- *
- * Touch target: add button is exactly 44×44 (mobile round button) or
- * 44px-tall row button on desktop. WCAG AAA contrast.
+ * - The whole card opens the detail sheet through a real <button> inside the
+ *   <h3> that is stretched over the card (`stretched-link`), so the card is
+ *   reachable by keyboard and screen readers. The earlier `<article onClick>`
+ *   was mouse-only, which hid allergen and ingredient information from anyone
+ *   not using a pointer.
+ * - A dish WITHOUT a photo gets no photo slot at all: the card stays a clean
+ *   typographic row (like a printed menu) instead of showing a stock
+ *   placeholder. A photo that fails to load keeps its slot with a quiet icon
+ *   tile, so layout never jumps.
+ * - Add / stepper controls sit above the stretched link (`relative z-raised`)
+ *   and keep a 44 px hit area.
+ * - Heading level (h3) and the "Sepete Ekle" button name are relied on by the
+ *   browser smoke tests (apps/web/e2e).
  */
-export function ItemCard({ item, category, onSelect }: ItemCardProps) {
+export function ItemCard({
+  item,
+  category,
+  onSelect,
+  allergenNames,
+}: ItemCardProps) {
   const cartEnabled = useFeatureFlag("cart_enabled");
-
-  const [src, setSrc] = useState<string>(
-    item.image || getItemPlaceholder({ ...item, category_slug: category.slug }),
-  );
-
-  const handleError = () => {
-    const fallback = getItemPlaceholder({
-      ...item,
-      category_slug: category.slug,
-    });
-    if (fallback !== src) setSrc(fallback);
-  };
 
   const cartItem = useCartStore((s) =>
     s.items.find((i) => i.menuItemId === item.id),
@@ -52,7 +59,14 @@ export function ItemCard({ item, category, onSelect }: ItemCardProps) {
   const add = useCartStore((s) => s.add);
   const updateQuantity = useCartStore((s) => s.updateQuantity);
 
-  const [pulse, setPulse] = useState(false);
+  const [justAdded, setJustAdded] = useState(false);
+  const resetTimer = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (resetTimer.current) window.clearTimeout(resetTimer.current);
+    },
+    [],
+  );
 
   const handleAdd = () => {
     add(
@@ -66,176 +80,213 @@ export function ItemCard({ item, category, onSelect }: ItemCardProps) {
       },
       1,
     );
-    setPulse(true);
-    window.setTimeout(() => setPulse(false), 900);
+    setJustAdded(true);
+    if (resetTimer.current) window.clearTimeout(resetTimer.current);
+    resetTimer.current = window.setTimeout(() => setJustAdded(false), 900);
   };
 
   const handleInc = () => {
     if (cartItem) updateQuantity(item.id, cartItem.quantity + 1);
     else handleAdd();
   };
-
   const handleDec = () => {
     if (cartItem) updateQuantity(item.id, cartItem.quantity - 1);
   };
 
-  const isSoldOut = false; // Sold-out state reserved for V2 (catalog availability API).
   const price = formatPrice(item.price, item.currency);
+  const comparePrice =
+    item.compare_at_price &&
+    Number.parseFloat(item.compare_at_price) > Number.parseFloat(item.price)
+      ? formatPrice(item.compare_at_price, item.currency)
+      : null;
+
+  const hasImage = Boolean(item.image);
+  const allergenLabels = (item.allergens ?? []).map(
+    (code) => allergenNames?.[code] ?? code,
+  );
+  const hasBadges = item.is_featured || item.is_popular || item.is_new;
+
+  const control = cartEnabled ? (
+    <AddControl
+      name={item.name}
+      quantity={cartItem?.quantity ?? 0}
+      justAdded={justAdded}
+      onAdd={handleAdd}
+      onInc={handleInc}
+      onDec={handleDec}
+    />
+  ) : null;
 
   return (
     <article
-      onClick={() => onSelect?.(item)}
-      className={
-        "group relative flex cursor-pointer flex-col overflow-hidden rounded-lg border border-[var(--color-border)] bg-surface shadow-sm transition hover:shadow-md sm:flex-row sm:gap-4 " +
-        (isSoldOut ? "opacity-60" : "")
-      }
+      className={clsx(
+        "group relative flex gap-3.5 rounded-2xl bg-surface p-3.5 shadow-card ring-1 ring-border/60",
+        "transition-shadow duration-200 hover:shadow-md hover:ring-border-strong",
+        "has-[.stretched-link:focus-visible]:ring-2 has-[.stretched-link:focus-visible]:ring-primary sm:p-4",
+      )}
     >
-      {/* ── Image block ──
-       *  Mobile: 7rem (112px) tall, full-width hero on top.
-       *  sm+ :    10rem (160px) tall, 11rem (176px) wide, left-anchored. */}
-      <div className="relative h-28 w-full shrink-0 overflow-hidden bg-[var(--color-surface-low)] sm:h-40 sm:w-44 sm:rounded-l-lg">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={src}
-          alt={item.name}
-          onError={handleError}
-          loading="lazy"
-          decoding="async"
-          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-        />
-        {/* Top-left dietary / status pill row */}
-        <div className="absolute left-2 top-2 flex flex-wrap items-center gap-1">
-          {item.is_featured ? (
-            <span className="rounded-pill bg-primary/90 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary-foreground backdrop-blur-md">
-              ⭐ İmza
-            </span>
-          ) : null}
-          {item.is_popular ? (
-            <span className="rounded-pill bg-secondary px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
-              🔥 Popüler
-            </span>
-          ) : null}
-          {item.is_new ? (
-            <span className="rounded-pill bg-[var(--color-surface)]/95 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-secondary">
-              Yeni Sezon
-            </span>
-          ) : null}
-        </div>
-        {isSoldOut ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 text-white">
-            <span className="text-xl sm:text-2xl">⛔</span>
-            <span className="px-1 text-center text-[10px] font-bold uppercase tracking-wider">
-              Şu an tükendi
-            </span>
+      <div className="flex min-w-0 flex-1 flex-col">
+        {hasBadges ? (
+          <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+            {item.is_featured ? (
+              <Badge tone="primary" icon={<Star className="h-3 w-3" aria-hidden />}>
+                İmza
+              </Badge>
+            ) : null}
+            {item.is_popular ? (
+              <Badge tone="warm" icon={<Flame className="h-3 w-3" aria-hidden />}>
+                Popüler
+              </Badge>
+            ) : null}
+            {item.is_new ? (
+              <Badge
+                tone="success"
+                icon={<Sparkles className="h-3 w-3" aria-hidden />}
+              >
+                Yeni
+              </Badge>
+            ) : null}
           </div>
         ) : null}
-      </div>
 
-      {/* ── Body ──
-       *  Mobile: dense padding (p-3), 16px+ body text, line-clamp-2. */}
-      <div className="flex flex-1 flex-col gap-1 p-3 sm:p-4">
-        <div className="flex items-start justify-between gap-2 sm:gap-3">
-          <h3
-            className="font-heading text-base font-semibold leading-tight text-text transition group-hover:text-primary sm:text-xl"
+        <h3 className="font-heading text-[1.0625rem] font-semibold leading-snug text-text sm:text-lg">
+          <button
+            type="button"
+            onClick={() => onSelect?.(item)}
+            aria-haspopup="dialog"
+            className="stretched-link line-clamp-2 cursor-pointer text-left focus-visible:outline-none"
           >
             {item.name}
-          </h3>
-          <span className="shrink-0 font-heading text-sm font-bold tabular-nums text-primary sm:text-lg">
-            {price}
-          </span>
-        </div>
+          </button>
+        </h3>
 
         {item.description ? (
-          <p className="line-clamp-2 text-sm leading-relaxed text-on-surface-variant">
+          <p className="mt-1 line-clamp-2 text-sm leading-5 text-muted">
             {item.description}
           </p>
         ) : null}
 
-        {/* Dietary / nutrition meta row */}
-        <div className="mt-1 flex flex-wrap items-center gap-1.5">
-          {item.calories ? (
-            <span className="rounded-pill bg-[var(--color-surface-low)] px-2 py-0.5 text-[10px] font-semibold text-on-surface-variant">
-              {Math.round(item.calories)} kcal
-            </span>
-          ) : null}
-          {item.spice_level > 0 ? (
-            <span className="rounded-pill bg-secondary/15 px-2 py-0.5 text-[10px] font-semibold text-secondary">
-              🌶 Acı {item.spice_level}
-            </span>
-          ) : null}
-          {item.allergens && item.allergens.length > 0 ? (
-            <span className="rounded-pill bg-[var(--color-surface-low)] px-2 py-0.5 text-[10px] font-semibold text-on-surface-variant">
-              {item.allergens.slice(0, 3).join(" · ")}
-            </span>
-          ) : null}
-        </div>
-
-        {/* Footer row — Recipe link + Quick Add (mobile-first 44px tap). */}
-        <div className="mt-auto flex items-center justify-between gap-2 pt-2">
-          <span className="hidden items-center gap-1 text-xs font-semibold text-primary transition group-hover:text-primary-container sm:inline-flex">
-            Tarif Kökeni
-            <span aria-hidden>→</span>
-          </span>
-
-          {cartEnabled && !isSoldOut ? (
-            cartItem ? (
-              <div
-                role="group"
-                aria-label={`${item.name} adedi`}
-                className="ml-auto inline-flex items-center gap-0.5 rounded-pill border border-primary bg-primary/5 px-0.5 py-0.5"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <button
-                  type="button"
-                  onClick={handleDec}
-                  aria-label="Azalt"
-                  className="flex h-11 w-11 items-center justify-center rounded-pill text-primary transition hover:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <Minus className="h-4 w-4" aria-hidden />
-                </button>
-                <span
-                  aria-live="polite"
-                  className="min-w-[1.75rem] text-center font-heading text-sm font-semibold tabular-nums text-primary"
-                >
-                  {cartItem.quantity}
-                </span>
-                <button
-                  type="button"
-                  onClick={handleInc}
-                  aria-label="Arttır"
-                  className="flex h-11 w-11 items-center justify-center rounded-pill text-primary transition hover:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <Plus className="h-4 w-4" aria-hidden />
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleAdd();
-                }}
-                className={
-                  "ml-auto inline-flex h-11 items-center gap-1.5 rounded-pill bg-primary px-4 text-xs font-bold uppercase tracking-wider text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1 active:scale-[0.97] " +
-                  (pulse ? "scale-105" : "")
-                }
-              >
-                {pulse ? (
-                  <>
-                    <Check className="h-4 w-4" aria-hidden />
-                    Eklendi
-                  </>
-                ) : (
-                  <>
-                    <Plus className="h-4 w-4" aria-hidden />
-                    Sepete Ekle
-                  </>
+        {allergenLabels.length > 0 || item.calories || item.spice_level > 0 ? (
+          <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-outline">
+            {item.spice_level > 0 ? (
+              <span className="inline-flex items-center gap-0.5 font-medium text-secondary">
+                {Array.from({ length: Math.min(item.spice_level, 3) }).map(
+                  (_, i) => (
+                    <Flame key={i} className="h-3 w-3" aria-hidden />
+                  ),
                 )}
-              </button>
-            )
+                <span className="sr-only">Acı seviyesi {item.spice_level}</span>
+              </span>
+            ) : null}
+            {item.calories ? <span>{Math.round(item.calories)} kcal</span> : null}
+            {allergenLabels.length > 0 ? (
+              <span className="min-w-0 truncate">
+                İçerir: {allergenLabels.slice(0, 3).join(", ")}
+                {allergenLabels.length > 3 ? ` +${allergenLabels.length - 3}` : ""}
+              </span>
+            ) : null}
+          </p>
+        ) : null}
+
+        <div className="mt-auto flex items-baseline gap-2 pt-3">
+          <span className="font-heading text-lg font-semibold tabular-nums text-primary">
+            {price}
+          </span>
+          {comparePrice ? (
+            <s className="text-sm tabular-nums text-outline">{comparePrice}</s>
           ) : null}
         </div>
       </div>
+
+      {hasImage ? (
+        <div className="relative z-raised h-[6.5rem] w-[6.5rem] shrink-0 sm:h-[7.5rem] sm:w-[7.5rem]">
+          <SmartImage
+            src={item.image}
+            alt=""
+            aria-hidden
+            wrapperClassName="h-full w-full rounded-xl ring-1 ring-inset ring-black/5"
+            className="transition-transform duration-500 ease-out-expo group-hover:scale-105"
+          />
+          {control ? (
+            <div className="absolute -bottom-2 -right-2">{control}</div>
+          ) : null}
+        </div>
+      ) : control ? (
+        <div className="relative z-raised flex shrink-0 items-end">{control}</div>
+      ) : null}
     </article>
+  );
+}
+
+/* ── Add button / quantity stepper ─────────────────────────────────────── */
+
+interface AddControlProps {
+  name: string;
+  quantity: number;
+  justAdded: boolean;
+  onAdd: () => void;
+  onInc: () => void;
+  onDec: () => void;
+}
+
+function AddControl({
+  name,
+  quantity,
+  justAdded,
+  onAdd,
+  onInc,
+  onDec,
+}: AddControlProps) {
+  if (quantity > 0) {
+    return (
+      <div
+        role="group"
+        aria-label={`${name} adedi`}
+        className="flex h-10 items-center rounded-full bg-surface shadow-md ring-1 ring-border-strong animate-pop"
+      >
+        <button
+          type="button"
+          onClick={onDec}
+          aria-label="Azalt"
+          className="relative flex h-10 w-10 items-center justify-center rounded-full text-primary transition hover:bg-surface-low active:scale-90 before:absolute before:-inset-1 before:content-['']"
+        >
+          <Minus className="h-4 w-4" aria-hidden />
+        </button>
+        <span
+          aria-live="polite"
+          className="min-w-[1.25rem] text-center text-sm font-bold tabular-nums text-text"
+        >
+          {quantity}
+        </span>
+        <button
+          type="button"
+          onClick={onInc}
+          aria-label="Arttır"
+          className="relative flex h-10 w-10 items-center justify-center rounded-full text-primary transition hover:bg-surface-low active:scale-90 before:absolute before:-inset-1 before:content-['']"
+        >
+          <Plus className="h-4 w-4" aria-hidden />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onAdd}
+      aria-label={`Sepete Ekle: ${name}`}
+      className={clsx(
+        "relative flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md",
+        "transition duration-200 hover:bg-primary/90 hover:shadow-lg active:scale-90",
+        "before:absolute before:-inset-1 before:content-['']",
+        justAdded && "animate-pop",
+      )}
+    >
+      {justAdded ? (
+        <Check className="h-[1.15rem] w-[1.15rem]" aria-hidden />
+      ) : (
+        <Plus className="h-[1.15rem] w-[1.15rem]" aria-hidden />
+      )}
+    </button>
   );
 }

@@ -17,6 +17,15 @@
 
 export type LocaleCode = "tr" | "en";
 
+/**
+ * Where a piece of translated text came from. NOT a locale code:
+ *   requested — the translation for the locale the client asked for
+ *   default   — that translation is missing, the venue's default-language text is shown
+ *   model     — taken straight from the model field (no translation table involved)
+ * (Kept as a union with LocaleCode for older fixtures that still pass a locale.)
+ */
+export type ContentSource = LocaleCode | "requested" | "default" | "model";
+
 export interface Translation {
   en?: string;
   tr?: string;
@@ -72,7 +81,7 @@ export interface PublicMenuItem {
   sort_order: number;
   name: string;
   description: string;
-  locale_used: LocaleCode;
+  locale_used: ContentSource;
   price: string; // decimal serialized as string (DRF default)
   compare_at_price: string | null;
   currency: string;
@@ -99,7 +108,7 @@ export interface PublicMenuCategory {
   sort_order: number;
   name: string;
   description: string;
-  locale_used: LocaleCode;
+  locale_used: ContentSource;
   image: string | null;
   items: PublicMenuItem[];
 }

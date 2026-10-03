@@ -78,9 +78,9 @@ export function AccountHeaderChip({
         href="/account/login"
         prefetch={false}
         aria-label="Hesabınıza giriş yapın"
-        className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-text transition hover:bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+        className="inline-flex h-11 items-center gap-1.5 rounded-pill bg-surface/90 px-3.5 text-sm font-semibold text-text shadow-sm ring-1 ring-black/5 backdrop-blur transition duration-200 hover:bg-surface"
       >
-        <LogIn className="h-3.5 w-3.5" aria-hidden />
+        <LogIn className="h-4 w-4" aria-hidden />
         <span>Giriş Yap</span>
       </Link>
     );
@@ -114,9 +114,9 @@ export function AccountHeaderChip({
           href="/account"
           prefetch={false}
           aria-label={`Hesabım — ${profile.email}`}
-          className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-text transition hover:bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+          className="inline-flex h-11 items-center gap-1.5 rounded-pill bg-surface/90 px-3.5 text-sm font-semibold text-text shadow-sm ring-1 ring-black/5 backdrop-blur transition duration-200 hover:bg-surface"
         >
-          <User className="h-3.5 w-3.5" aria-hidden />
+          <User className="h-4 w-4" aria-hidden />
           <span className="hidden sm:inline">Hesabım</span>
         </Link>
       ) : null}

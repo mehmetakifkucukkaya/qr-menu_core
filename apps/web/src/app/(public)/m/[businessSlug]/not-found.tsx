@@ -1,19 +1,29 @@
 import Link from "next/link";
+import { SearchX } from "lucide-react";
+
+import { buttonStyles } from "@/components/ui/Button";
 
 export default function PublicMenuNotFound() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-background p-6">
-      <div className="max-w-md rounded-lg border border-border bg-surface p-6 text-center shadow-card">
-        <h1 className="font-heading text-xl font-bold text-text">
+      <div className="w-full max-w-sm rounded-3xl bg-surface p-8 text-center shadow-lg ring-1 ring-border/60">
+        <span className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-secondary-soft text-secondary">
+          <SearchX className="h-7 w-7" aria-hidden />
+        </span>
+        <h1 className="font-heading text-2xl font-semibold text-text">
           İşletme bulunamadı
         </h1>
-        <p className="mt-2 text-sm text-muted">
-          QR kodunuzdaki bağlantı geçersiz olabilir veya bu işletme
-          şu anda yayında değil.
+        <p className="mt-2 text-[0.9375rem] leading-relaxed text-muted">
+          QR kodunuzdaki bağlantı geçersiz olabilir veya bu işletme şu anda
+          yayında değil.
         </p>
         <Link
           href="/"
-          className="touch-target mt-5 inline-flex items-center justify-center rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+          className={buttonStyles({
+            size: "lg",
+            fullWidth: true,
+            className: "mt-6",
+          })}
         >
           Ana sayfaya dön
         </Link>

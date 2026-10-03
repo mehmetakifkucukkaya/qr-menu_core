@@ -12,7 +12,10 @@ import {
   X,
   RefreshCw,
   Receipt,
+  ArrowLeft,
+  ShoppingBag,
 } from "lucide-react";
+import { buttonStyles } from "@/components/ui/Button";
 import {
   fetchOrderStatus,
   OrdersApiError,
@@ -134,9 +137,9 @@ export default function OrderConfirmationPage({ params }: PageProps) {
         <div className="mt-8 text-center">
           <Link
             href={`/m/${businessSlug}`}
-            className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-5 py-2.5 text-sm font-semibold text-text shadow-sm transition hover:border-primary hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary"
+            className={buttonStyles({ variant: "primary", size: "md" })}
           >
-            <RefreshCw className="h-4 w-4" aria-hidden />
+            <ShoppingBag className="h-4 w-4" aria-hidden />
             Yeni sipariş ver
           </Link>
         </div>
@@ -188,9 +191,9 @@ function OrderDetail({
       <div className="text-center">
         <Link
           href={`/m/${businessSlug}`}
-          className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-5 py-2.5 text-sm font-semibold text-text shadow-sm transition hover:border-primary hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary"
+          className={buttonStyles({ variant: "outline", size: "md" })}
         >
-          <RefreshCw className="h-4 w-4" aria-hidden />
+          <ArrowLeft className="h-4 w-4" aria-hidden />
           Menüye dön
         </Link>
       </div>
@@ -328,12 +331,12 @@ function StatusTimeline({
       })}
 
       {isCancelled ? (
-        <li className="flex items-start gap-3 rounded-lg border border-accent/40 bg-accent/5 p-3">
-          <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent/20 text-accent">
+        <li className="flex items-start gap-3 rounded-lg border border-danger/30 bg-danger-soft p-3">
+          <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-danger/20 text-danger">
             <X className="h-4 w-4" aria-hidden />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-accent">İptal Edildi</p>
+            <p className="text-sm font-semibold text-danger">İptal Edildi</p>
             <p className="text-xs text-muted">
               Sipariş iptal edildi
               {data.cancelled_at
@@ -358,9 +361,9 @@ function ErrorBanner({
   return (
     <div
       role="alert"
-      className="mt-6 rounded-xl border border-accent/40 bg-accent/5 p-4 text-center"
+      className="mt-6 rounded-xl border border-danger/30 bg-danger-soft p-4 text-center"
     >
-      <Receipt className="mx-auto mb-2 h-6 w-6 text-accent" aria-hidden />
+      <Receipt className="mx-auto mb-2 h-6 w-6 text-danger" aria-hidden />
       <p className="text-sm font-semibold text-text">
         Sipariş bilgisi yüklenemedi
       </p>

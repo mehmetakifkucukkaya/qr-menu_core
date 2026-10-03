@@ -1,3 +1,5 @@
+import { UtensilsCrossed } from "lucide-react";
+
 interface EmptyStateProps {
   title?: string;
   message?: string;
@@ -14,10 +16,15 @@ export function EmptyState({
   return (
     <div
       role="status"
-      className="rounded-lg border border-dashed border-border bg-surface p-8 text-center"
+      className="flex flex-col items-center rounded-3xl border border-dashed border-border-strong bg-surface px-6 py-12 text-center"
     >
-      <p className="font-heading text-lg text-text">{title}</p>
-      <p className="mt-2 text-sm text-muted">{message}</p>
+      <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary-soft text-primary">
+        <UtensilsCrossed className="h-7 w-7" aria-hidden />
+      </span>
+      <p className="font-heading text-xl font-semibold text-text">{title}</p>
+      <p className="mt-2 max-w-sm text-sm leading-relaxed text-muted">
+        {message}
+      </p>
     </div>
   );
 }

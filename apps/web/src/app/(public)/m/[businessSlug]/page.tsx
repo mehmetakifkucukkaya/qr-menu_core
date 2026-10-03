@@ -3,7 +3,6 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 
 import { PremiumHero } from "@/components/public/PremiumHero";
-import { FloatingCtas } from "@/components/public/FloatingCtas";
 import { EmptyState } from "@/components/public/EmptyState";
 import { MenuViewClient } from "@/components/public/MenuViewClient";
 import { fetchPublicMenu, PublicMenuError } from "@/lib/api";
@@ -59,11 +58,11 @@ function resolveOrigin(): string {
  *     + AccountHeaderChip + HeaderCartIcon) and wraps the entire
  *     interactive subtree in a FeatureFlagProvider so every header /
  *     cart / checkout piece can call useFeatureFlag() (Sprint B3b).
- *   - BusinessHero (cover + logo + name + theme override) — server
- *     rendered, passed as children into MenuViewClient so the visual
+ *   - PremiumHero (cover + logo + name + contact tiles + theme override) —
+ *     server rendered, passed as children into MenuViewClient so the visual
  *     order stays header → hero → menu grid.
- *   - CategoryNav + CategorySection + ItemDetailDrawer + CartFab + CartDrawer
- *   - FloatingCtas (mobile only bottom bar)
+ *   - CategoryNav + CategorySection + ItemDetailDrawer + CartDrawer
+ *   - BottomDock (phones/tablets: quick contact + cart in one floating bar)
  *   - footer
  *
  * Note on `<html lang>`: Next 14 App Router locks the `<html>` element to
@@ -309,7 +308,7 @@ function MenuView({
     categories.every((c) => c.items.length === 0);
 
   return (
-    <main className="min-h-screen bg-background">
+    <main id="main-content" className="min-h-screen bg-background">
       <MenuViewClient
         publicSettings={publicSettings}
         businessSlug={businessSlug}
@@ -318,6 +317,7 @@ function MenuView({
         categories={categories}
         allergens={allergens}
         dietaryTags={dietary_tags}
+        cta={cta}
         locale={locale}
         customerProfile={customerProfile}
         customerLoyalty={customerLoyalty}
@@ -326,28 +326,23 @@ function MenuView({
       >
         {/* Server-rendered chrome sits between the sticky header and
             the menu grid — preserves the pre-B3b visual order. */}
-        <PremiumHero business={business} theme={theme} />
-
-        {menu ? (
-          <p className="px-4 pt-3 text-center text-xs text-muted sm:text-sm">
-            {menu.name}
-          </p>
-        ) : null}
+        <PremiumHero
+          business={business}
+          theme={theme}
+          cta={cta}
+          menuName={menu?.name}
+        />
 
         {isEmpty ? (
-          <div className="mx-auto mt-6 max-w-2xl px-4">
+          <div className="mx-auto mt-2 max-w-2xl px-4 pb-10">
             <EmptyState />
           </div>
         ) : null}
       </MenuViewClient>
 
-      {/* Mobile-only floating CTAs (tel + WhatsApp). */}
-      <FloatingCtas cta={cta} />
-
-      <footer className="mx-auto mt-10 max-w-2xl border-t border-border px-4 py-6 text-center text-xs text-muted">
+      <footer className="mx-auto max-w-6xl px-4 pb-28 pt-2 text-center text-xs text-outline sm:px-6 lg:pb-12">
         <p>
-          © {new Date().getFullYear()} {business.name} ·{" "}
-          <span className="uppercase tracking-wider">QR Menü</span>
+          © {new Date().getFullYear()} {business.name} · QR Menü
         </p>
       </footer>
     </main>

@@ -1,5 +1,9 @@
 "use client";
 
+import { RefreshCw, TriangleAlert } from "lucide-react";
+
+import { Button } from "@/components/ui/Button";
+
 interface ErrorStateProps {
   title?: string;
   message?: string;
@@ -21,23 +25,24 @@ export function ErrorState({
   return (
     <div
       role="alert"
-      className="rounded-lg border border-border bg-surface p-6 text-center shadow-card"
+      className="flex flex-col items-center rounded-3xl bg-surface p-7 text-center shadow-card ring-1 ring-border/60"
     >
-      <h2 className="font-heading text-base font-bold text-text">{title}</h2>
-      <p className="mt-2 text-sm text-muted">{message}</p>
+      <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-secondary-soft text-secondary">
+        <TriangleAlert className="h-6 w-6" aria-hidden />
+      </span>
+      <h2 className="font-heading text-lg font-semibold text-text">{title}</h2>
+      <p className="mt-2 text-sm leading-relaxed text-muted">{message}</p>
       {code ? (
-        <p className="mt-1 font-mono text-[10px] uppercase tracking-wider text-muted">
-          {code}
-        </p>
+        <p className="mt-2 font-mono text-xs text-outline">{code}</p>
       ) : null}
       {onRetry ? (
-        <button
-          type="button"
+        <Button
           onClick={onRetry}
-          className="touch-target mt-4 inline-flex items-center justify-center rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+          className="mt-5"
+          leadingIcon={<RefreshCw className="h-4 w-4" aria-hidden />}
         >
           Tekrar dene
-        </button>
+        </Button>
       ) : null}
     </div>
   );
