@@ -75,15 +75,9 @@ logger = logging.getLogger(__name__)
 
 def _resolve_organization(request):
     """D-022 helper — first membership → organization (D-026 mirror)."""
-    from apps.accounts.models import Membership
+    from apps.accounts.services import get_active_membership
 
-    membership = (
-        Membership.objects.filter(
-            user=request.user, organization__is_active=True
-        )
-        .select_related("organization")
-        .first()
-    )
+    membership = get_active_membership(request.user)
     if membership is None:
         from rest_framework.exceptions import PermissionDenied
 

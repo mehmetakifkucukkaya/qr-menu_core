@@ -41,9 +41,9 @@ from .services import AIProviderError, confirm_draft, parse_menu_pdf
 # ---------------------------------------------------------------------------
 def _resolve_organization(user):
     """First active membership — same rule as media upload."""
-    membership = Membership.objects.filter(
-        user=user, organization__is_active=True
-    ).first()
+    from apps.accounts.services import get_active_membership
+
+    membership = get_active_membership(user)
     return membership.organization if membership else None
 
 

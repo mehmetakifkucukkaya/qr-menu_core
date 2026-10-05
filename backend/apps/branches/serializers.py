@@ -50,7 +50,7 @@ class BranchSerializer(serializers.ModelSerializer):
         if getattr(user, "is_platform_admin", False):
             qs = Organization.objects.all()
         else:
-            qs = Organization.objects.filter(memberships__user=user).distinct()
+            qs = Organization.objects.filter(memberships__user=user, memberships__is_active=True).distinct()
         self.fields["organization_id"].queryset = qs
 
 

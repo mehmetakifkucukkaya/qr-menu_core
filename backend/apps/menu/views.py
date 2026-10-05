@@ -221,13 +221,9 @@ class MenuCategoryViewSet(viewsets.ModelViewSet):
     @staticmethod
     def _resolve_org_for_user(request):
         """First active membership → organization (D-022 + D-026 mirror)."""
-        membership = (
-            Membership.objects.filter(
-                user=request.user, organization__is_active=True
-            )
-            .select_related("organization")
-            .first()
-        )
+        from apps.accounts.services import get_active_membership
+
+        membership = get_active_membership(request.user)
         return membership.organization if membership else None
 
 
@@ -326,13 +322,9 @@ class MenuItemViewSet(viewsets.ModelViewSet):
     @staticmethod
     def _resolve_org_for_user(request):
         """First active membership → organization (D-022 + D-026 mirror)."""
-        membership = (
-            Membership.objects.filter(
-                user=request.user, organization__is_active=True
-            )
-            .select_related("organization")
-            .first()
-        )
+        from apps.accounts.services import get_active_membership
+
+        membership = get_active_membership(request.user)
         return membership.organization if membership else None
 
 # ---------------------------------------------------------------------------
