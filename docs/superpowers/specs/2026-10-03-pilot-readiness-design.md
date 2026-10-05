@@ -1,6 +1,6 @@
 # QR Menü — Pilot Kullanıma Hazırlık Tasarımı (Spec)
 
-Tarih: 2026-10-03 (güncelleme 2026-10-05) · Durum: **tasarım ve spec onaylandı; Dilim 1 yürütüldü (PR #6, açık); Dilim 2 planı yazıldı ve doğrulandı** (`PLAN_DILIM1_TEMEL_2026-10-05.md`, `PLAN_DILIM2_AJANS_2026-10-05.md`; plan aşamasında bulunan sapmalar bu belgeye işlendi) · Sabit sürüm: `origin/main` `05b3c12`
+Tarih: 2026-10-03 (güncelleme 2026-10-05) · Durum: **tasarım ve spec onaylandı; Dilim 1 yürütüldü (PR #6, açık); Dilim 2 yürütüldü (PR #7, açık, Dilim 1'in üstüne yığılı)** (`PLAN_DILIM1_TEMEL_2026-10-05.md`, `PLAN_DILIM2_AJANS_2026-10-05.md`; plan aşamasında bulunan sapmalar bu belgeye işlendi) · Sabit sürüm: `origin/main` `05b3c12`
 Kanıt belgesi: `READINESS_AUDIT_2026-10-03.md` (bulgular ve `path:line` kanıtları burada). Bu belge **ne yapılacağını** söyler, nedenini oradan okuyun.
 
 ## 1. Amaç ve karar günlüğü
@@ -102,10 +102,10 @@ Ajans (platform yöneticisi: `role=admin`, `is_superuser`) hepsini tüm işletme
 
 1. `--plan` dört paket (`orders` dahil); deneme yalnız `basic` ve modülsüz müşteriye; `payments_enabled` ops'ta bile kapalı.
 2. `provision_tenant` ek parametreleri: `starter_content`, `open_payments`, `source`.
-3. Türkçe etiketler: model adları dört etiket-yalnız migrasyonla (`AlterModelOptions`), gruplar `AgencyAdminSite` ile; alan etiketleri yalnız Organization, PlanSettings, Membership formlarında. İşletmelerin müşteri hesapları "Müşteri hesapları" olur (ajansın "Müşteriler" grubuyla karışmasın).
+3. Türkçe etiketler: model adları dört etiket-yalnız migrasyonla (`AlterModelOptions`), gruplar `AgencyAdminSite` ile; ana ekranların (Müşteriler, Plan Ayarları, Üyelikler, Kullanıcılar, Denetim olayları, Medya, Menü görüntülenmeleri, Kullanım sayaçları) liste başlıkları, süzgeçleri, salt okunur etiketleri ve denetim kaydının sözcükleri `TurkishLabelsMixin` ile Türkçe (alan başına migrasyon gerekmez); eski sprintlerin ekranları Django varsayılanında kalır. İşletmelerin müşteri hesapları "Müşteri hesapları" olur (ajansın "Müşteriler" grubuyla karışmasın).
 4. `/me` `access_state` (`ok | suspended | no_membership`) ve askıdaki / işletmesiz hesap için çıkış düğmeli ekran (Dilim 1'deki "işletmeye bağlı değil" ekranındaki çıkışsız döngüyü de kapatır).
 5. Yolda bulunan gerçek hatalar: işletme silme çökmesi (T2), kayıt sihirbazı 5. adım 500'ü (T4), eski oturum çerezinde `/login` ↔ `/admin` sonsuz yönlendirme (T14; ajansın sıfırladığı şifre bunu tetikler).
-6. Sertleştirmeler: boş "Ekle" formu kapalı, `slug` salt okunur, toplu silme yok, plan satırı silinemez.
+6. Sertleştirmeler: boş "Ekle" formu kapalı, `slug` salt okunur, toplu silme yok, plan satırı silinemez. Müşteri panelden silinebilir (salt okunur kayıtların koruması yalnız müşterinin silme sayfasında kalkar); **siparişi olan müşteri silinemez** (`Order.organization` PROTECT), askıya alınır. Canlı denemede bulundu ve düzeltildi (PR açıldıktan sonra eklenen T15-T16).
 
 ## 5. Dilim 3 — Mutfak ekranı (≈ 7-9 gün)
 
