@@ -63,7 +63,8 @@ AUTH_USER_MODEL = "accounts.User"
 # Applications
 # ---------------------------------------------------------------------------
 DJANGO_APPS = [
-    "django.contrib.admin",
+    # The agency's panel: Django's admin with our site class (apps/core/admin_site.py).
+    "apps.core.admin_site.AgencyAdminConfig",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",

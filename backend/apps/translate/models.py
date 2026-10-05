@@ -83,8 +83,8 @@ class TranslationMemory(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        verbose_name = "Translation Memory"
-        verbose_name_plural = "Translation Memories"
+        verbose_name = "Çeviri belleği"
+        verbose_name_plural = "Çeviri belleği kayıtları"
         ordering = ("-created_at",)
         unique_together = (
             ("organization", "source_text_hash", "target_locale"),
@@ -146,8 +146,8 @@ class AIProductDescription(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        verbose_name = "AI Product Description"
-        verbose_name_plural = "AI Product Descriptions"
+        verbose_name = "Yapay zekâ ürün açıklaması"
+        verbose_name_plural = "Yapay zekâ ürün açıklamaları"
         ordering = ("-updated_at",)
         unique_together = (("menu_item", "locale"),)
         indexes = [

@@ -128,8 +128,8 @@ class MenuImportDraft(TimeStampedModel):
     objects = MenuImportDraftQuerySet.as_manager()
 
     class Meta:
-        verbose_name = "PDF Import Draft"
-        verbose_name_plural = "PDF Import Drafts"
+        verbose_name = "PDF menü taslağı"
+        verbose_name_plural = "PDF menü taslakları"
         ordering = ("-created_at",)
         indexes = [
             models.Index(fields=["organization", "-created_at"]),
@@ -223,8 +223,8 @@ class MenuImportItem(models.Model):
     objects = MenuImportItemQuerySet.as_manager()
 
     class Meta:
-        verbose_name = "PDF Import Item"
-        verbose_name_plural = "PDF Import Items"
+        verbose_name = "PDF menü satırı"
+        verbose_name_plural = "PDF menü satırları"
         ordering = ("sort_order", "id")
         indexes = [
             models.Index(fields=["draft", "category_name", "sort_order"]),
