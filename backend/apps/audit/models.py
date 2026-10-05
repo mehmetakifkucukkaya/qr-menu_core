@@ -128,6 +128,10 @@ class AuditEvent(models.Model):
         # limit_exceeded_attempt / feature_disabled_access events.
         # ``target_id`` = PlanSettings.pk.
         ("plan_settings", "Plan Settings"),
+        # Pilot readiness — team management (SPEC §3.3). Generic FK target for
+        # added / role-changed / deactivated / password-reset members.
+        # ``target_id`` = Membership.pk.
+        ("membership", "Membership"),
     ]
 
     actor = models.ForeignKey(
