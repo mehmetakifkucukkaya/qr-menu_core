@@ -283,4 +283,28 @@ test.describe.serial("kitchen screen", () => {
     await expect(shopper.getByText("Neden: Mutfak yoğun")).toBeVisible();
     await customer.close();
   });
+
+  test("flow 11f: the owner's order page asks for a reason too when it cancels", async ({ page, request }) => {
+    const order = await placeOrder(request, [{ name: "Espresso", quantity: 1 }]);
+    await loginAsAdmin(page);
+
+    // The order's id is on the board's data.
+    const board = (await (await page.request.get(`${API_ORIGIN}/api/v1/admin/kitchen/board`)).json()).data;
+    const card = board.columns.new.find((c: { order_number: string }) => c.order_number === order.orderNumber);
+    expect(card, "the new order is on the board").toBeTruthy();
+
+    await page.goto(`/admin/orders/${card.id}`);
+    await page.getByRole("button", { name: "İptal", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Siparişi iptal et" });
+    await expect(dialog.getByRole("button", { name: "Siparişi iptal et" })).toBeDisabled();
+    await dialog.getByRole("radio", { name: "Diğer" }).check();
+    await dialog.getByRole("button", { name: "Siparişi iptal et" }).click();
+
+    await expect(page.getByText("İptal nedeni: Diğer")).toBeVisible();
+    expect(await publicStatus(request, order.orderNumber)).toMatchObject({
+      status: "cancelled",
+      cancel_reason: "other",
+      cancel_reason_label: "Diğer",
+    });
+  });
 });

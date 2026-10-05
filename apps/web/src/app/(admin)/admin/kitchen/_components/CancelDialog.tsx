@@ -7,12 +7,12 @@ import {
   cardTitle,
   tableLabel,
   type CancelReason,
-  type KitchenCard,
+  type CancelTarget,
 } from "@/lib/kitchen-board";
 
 export interface CancelDialogProps {
   /** The order being cancelled; `null` keeps the dialog closed. */
-  card: KitchenCard | null;
+  card: CancelTarget | null;
   onConfirm: (reason: CancelReason) => void;
   onClose: () => void;
 }
@@ -59,7 +59,7 @@ function CancelForm({
   onConfirm,
   onClose,
 }: {
-  card: KitchenCard;
+  card: CancelTarget;
   onConfirm: (reason: CancelReason) => void;
   onClose: () => void;
 }) {

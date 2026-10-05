@@ -56,6 +56,9 @@ export interface KitchenBoard {
   server_time: string;
 }
 
+/** What the cancel dialog needs to name an order: a kitchen card, or the owner's order page. */
+export type CancelTarget = Pick<KitchenCard, "id" | "daily_seq" | "order_number" | "table_number">;
+
 /** What a tap on a card's main button asks the server for. */
 export type KitchenTarget = "preparing" | "ready" | "delivered";
 
