@@ -10,6 +10,7 @@ from rest_framework import serializers
 from apps.organizations.models import Organization
 
 from .models import User
+from .services import get_active_membership
 
 
 _SLUG_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$")
@@ -21,7 +22,15 @@ class LoginSerializer(serializers.Serializer):
 
 
 class UserSerializer(serializers.ModelSerializer):
-    """Lightweight user representation for /api/v1/me."""
+    """Lightweight user representation for /api/v1/me and the sign-in reply.
+
+    ``membership_role`` is the role in the organization the user operates as
+    (``owner`` / ``manager`` / ``staff`` / ``kitchen`` / ``agency_admin``), or
+    ``None`` for a platform admin without a membership. The admin UI uses it to
+    decide which pages to show; the server enforces the same table.
+    """
+
+    membership_role = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -33,9 +42,15 @@ class UserSerializer(serializers.ModelSerializer):
             "is_active",
             "is_staff",
             "is_superuser",
+            "must_change_password",
+            "membership_role",
             "date_joined",
             "created_at",
         )
+
+    def get_membership_role(self, obj: User) -> str | None:
+        membership = get_active_membership(obj)
+        return membership.role if membership else None
 
 
 class SignupSerializer(serializers.Serializer):

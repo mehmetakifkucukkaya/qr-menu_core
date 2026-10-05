@@ -421,6 +421,9 @@ REST_FRAMEWORK = {
         # slow account-creation spam (10/hour/IP). The wizard's
         # check-slug endpoint uses the default 60/min/IP.
         "signup": "10/hour",
+        # Pilot readiness — password change by a signed-in user. Stops a
+        # hijacked session from brute-forcing the current password.
+        "password_change": "10/hour",
     },
     # SessionAuth enforces CSRF on unsafe methods (POST/PUT/PATCH/DELETE).
     # This is the default but made explicit so future contributors don't relax it.
@@ -450,6 +453,10 @@ CSRF_TRUSTED_ORIGINS = list(CORS_ALLOWED_ORIGINS)
 SESSION_COOKIE_NAME = "qr_sessionid"
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
+# Sliding sessions: every request pushes the expiry forward, so a kitchen
+# tablet that is used daily stays signed in. The length itself is set per role
+# at sign-in (apps.accounts.services.session_age_for).
+SESSION_SAVE_EVERY_REQUEST = True
 # Secure flag is opt-in via env (must be True behind HTTPS in production).
 SESSION_COOKIE_SECURE = _env_bool("SESSION_COOKIE_SECURE", default=False)
 
