@@ -8,6 +8,7 @@ from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
 from apps.organizations.models import Organization
+from apps.organizations.reserved import is_reserved
 
 from .models import User
 from .services import get_active_membership
@@ -95,13 +96,13 @@ class SignupSerializer(serializers.Serializer):
         return value.lower()
 
     def validate_slug(self, value: str) -> str:
+        if is_reserved(value):
+            raise serializers.ValidationError(
+                "Bu slug sistem için ayrılmış. Farklı bir slug deneyin."
+            )
         if Organization.objects.filter(slug=value).exists():
             raise serializers.ValidationError(
                 "Bu slug zaten kullanımda. Farklı bir slug deneyin."
-            )
-        if value in {"admin", "api", "www", "static", "media", "signup"}:
-            raise serializers.ValidationError(
-                "Bu slug sistem için ayrılmış. Farklı bir slug deneyin."
             )
         return value
 

@@ -24,6 +24,7 @@ from apps.accounts.models import Membership, MembershipRole, User
 from apps.billing.constants import BASIC, default_features
 from apps.billing.models import PlanSettings
 from apps.organizations.models import Organization
+from apps.organizations.reserved import is_reserved
 from rest_framework.views import APIView
 
 from .serializers import LoginSerializer, UserSerializer
@@ -216,8 +217,7 @@ class SlugAvailabilityView(APIView):
                 }
             )
 
-        reserved = {"admin", "api", "www", "static", "media", "signup", "docs", "auth"}
-        if slug in reserved:
+        if is_reserved(slug):
             payload = {"slug": slug, "available": False, "reason": "reserved"}
         elif not SlugAvailabilityView._SLUG_RE.match(slug):
             payload = {"slug": slug, "available": False, "reason": "invalid"}
