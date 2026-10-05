@@ -49,6 +49,8 @@ docker compose --env-file .env.production -f docker-compose.production.yml exec 
 
 Karttaki yönetim giriş bağlantısını, e-postayı ve geçici şifreyi sahibe iletin. Sahip ilk girişte şifresini değiştirir; sonra **Ekip** sayfasından mutfak ve personel hesaplarını kendisi ekler. Menü bağlantısı `/m/<slug>`; basılı QR kodları sahibin panelindeki **QR Kodlar** sayfasından iner.
 
+Mutfak tabletinin kurulumu, günlük kullanımı ve pilot günü kontrol listesi: `docs/KITCHEN_GUIDE.md`.
+
 ## 3. Askıya alma ve yeniden etkinleştirme
 
 **Müşteriler › İşletmeler**, işletmeyi işaretleyin, eylem: **Seçili müşterileri askıya al** (bir onay sorulur). Etkisi:
@@ -129,6 +131,7 @@ Değişiklikten sonra: `docker compose --env-file .env.production -f docker-comp
 | "Müşteri giriş yapamıyor" | İşletme askıda mı (§3)? Üyeliği aktif mi (işletme sayfasındaki ekip tablosu)? Gerekirse şifre sıfırlayın (§6). |
 | "QR kod açılmıyor / 404" | İşletme askıda mı, adres adı doğru mu, menü aktif mi? |
 | "Sipariş ve mutfak ekranı yok" | Pakette **Sipariş + mutfak** açık mı (§5)? |
+| "Zil çalmıyor", "kartta alerjen yok", "Bağlantı yok" | `docs/KITCHEN_GUIDE.md` §5. |
 | "Bu özellik paketinizde yok" | İlgili modülü açın veya paketi yükseltin (§5). |
 | "Deneme bitti, özellikler kapandı" | Denemeyi uzatın (§4) ya da paketi değiştirin (§5). |
 | Yanlış kişiye şifre gitti | Hemen **Sahibin şifresini sıfırla** (§6); açık oturumlar kapanır. |
