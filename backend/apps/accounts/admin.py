@@ -1,9 +1,25 @@
 """Admin registration for accounts app."""
 
+from django import forms
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 
 from .models import Membership, User
+
+
+class MembershipForm(forms.ModelForm):
+    """Turkish labels for the membership forms (also used by the team table on
+    the customer page, apps/organizations/admin.py)."""
+
+    class Meta:
+        model = Membership
+        fields = "__all__"
+        labels = {
+            "user": "Kullanıcı",
+            "organization": "İşletme",
+            "role": "Rol",
+            "is_active": "Aktif",
+        }
 
 
 @admin.register(User)
@@ -38,6 +54,7 @@ class UserAdmin(DjangoUserAdmin):
 
 @admin.register(Membership)
 class MembershipAdmin(admin.ModelAdmin):
+    form = MembershipForm
     list_display = ("user", "organization", "role", "is_active", "created_at")
     list_filter = ("role", "is_active")
     search_fields = ("user__email", "organization__name", "organization__slug")

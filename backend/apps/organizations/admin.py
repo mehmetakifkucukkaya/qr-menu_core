@@ -23,6 +23,7 @@ from django.urls import path, reverse
 from django.utils import timezone
 from django.utils.html import format_html
 
+from apps.accounts.admin import MembershipForm
 from apps.accounts.models import Membership, MembershipRole
 from apps.billing.constants import FEATURE_LABELS, PLAN_CHOICES, PLAN_TIER_LIMITS
 from apps.billing.models import TenantUsageCounter
@@ -228,17 +229,30 @@ class ModuleFilter(admin.SimpleListFilter):
 
 class MembershipInline(admin.TabularInline):
     model = Membership
+    form = MembershipForm
     extra = 0
-    fields = ("user", "role", "is_active", "created_at")
-    readonly_fields = ("created_at",)
+    fields = ("user", "role", "is_active")
     autocomplete_fields = ("user",)
     can_delete = False  # take access away with "is_active", the history stays
     verbose_name = "Üyelik"
     verbose_name_plural = "Ekip ve üyelikler"
 
 
+class BranchInlineForm(forms.ModelForm):
+    class Meta:
+        model = Branch
+        fields = ("name", "slug", "is_active", "phone")
+        labels = {
+            "name": "Şube adı",
+            "slug": "Adres adı",
+            "is_active": "Aktif",
+            "phone": "Telefon",
+        }
+
+
 class BranchInline(admin.TabularInline):
     model = Branch
+    form = BranchInlineForm
     extra = 0
     fields = ("name", "slug", "is_active", "phone")
     show_change_link = True
