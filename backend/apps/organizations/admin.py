@@ -15,10 +15,11 @@ from datetime import timedelta
 from django import forms
 from django.contrib import admin, messages
 from django.contrib.admin import helpers
+from django.core.exceptions import PermissionDenied
 from django.db.models import Count, OuterRef, Subquery
 from django.db.models.functions import Coalesce
 from django.template.response import TemplateResponse
-from django.urls import reverse
+from django.urls import path, reverse
 from django.utils import timezone
 from django.utils.html import format_html
 
@@ -28,7 +29,13 @@ from apps.billing.models import TenantUsageCounter
 from apps.billing.services import default_plan, extend_trial
 from apps.branches.models import Branch
 from apps.menu.models import MenuItem
-from apps.onboarding.provisioning import CURRENCIES, MODULES
+from apps.onboarding.provisioning import (
+    CURRENCIES,
+    MODULES,
+    ProvisioningError,
+    provision_tenant,
+    tenant_card,
+)
 from apps.orders.models import Order
 
 from . import services
@@ -98,6 +105,51 @@ class OrganizationAdminForm(forms.ModelForm):
         if default and supported and default not in supported:
             self.add_error("supported_locales", "Varsayılan dil, desteklenen diller arasında olmalı.")
         return cleaned
+
+
+class NewCustomerForm(forms.Form):
+    """"Yeni müşteri aç": the arguments of ``provision_tenant``."""
+
+    name = forms.CharField(label="İşletme adı", max_length=160)
+    slug = forms.CharField(
+        label="Adres adı (slug)",
+        max_length=40,
+        help_text="Menü bağlantısı /m/<slug> olur; küçük harf, rakam ve tire. Sonradan değişmez.",
+    )
+    owner_name = forms.CharField(label="Sahip adı soyadı", max_length=120, required=False)
+    owner_email = forms.EmailField(label="Sahip e-postası")
+    plan = forms.ChoiceField(label="Paket", choices=PLAN_CHOICES, initial="basic")
+    modules = forms.MultipleChoiceField(
+        label="Modüller (pakete ek olarak açılır)",
+        choices=[(key, MODULE_LABELS[key]) for key in MODULES],
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+    )
+    trial_days = forms.IntegerField(
+        label="Deneme günü",
+        min_value=0,
+        max_value=90,
+        required=False,
+        help_text="Yalnızca basic paket ve modülsüz müşteriye; süre bitince basic'e düşer. Boş = deneme yok.",
+    )
+    default_locale = forms.ChoiceField(label="Dil", choices=LOCALE_CHOICES, initial="tr")
+    currency = forms.ChoiceField(
+        label="Para birimi", choices=[(c, c) for c in CURRENCIES], initial="TRY"
+    )
+
+    def provision_arguments(self) -> dict:
+        data = self.cleaned_data
+        return {
+            "name": data["name"],
+            "slug": data["slug"],
+            "owner_email": data["owner_email"],
+            "owner_name": data["owner_name"],
+            "plan": data["plan"],
+            "modules": data["modules"],
+            "trial_days": data["trial_days"] or 0,
+            "default_locale": data["default_locale"],
+            "currency": data["currency"],
+        }
 
 
 # ------------------------------------------------------------------ filters
@@ -235,6 +287,58 @@ class OrganizationAdmin(admin.ModelAdmin):
         # The slug is in every printed QR code: it does not change here.
         extra = ("slug",) if obj else ()
         return (*super().get_readonly_fields(request, obj), *extra)
+
+    def has_add_permission(self, request):
+        # A bare "add" would make a customer without an owner, plan, menu or QR
+        # code: customers are opened on the "Yeni müşteri aç" screen.
+        return False
+
+    def get_urls(self):
+        custom = path(
+            "yeni-musteri/",
+            self.admin_site.admin_view(self.provision_view),
+            name="organizations_organization_provision",
+        )
+        return [custom, *super().get_urls()]
+
+    def provision_view(self, request):
+        opts = self.model._meta
+        if not request.user.has_perm(f"{opts.app_label}.add_{opts.model_name}"):
+            raise PermissionDenied
+        form = NewCustomerForm(request.POST or None)
+        if request.method == "POST" and form.is_valid():
+            try:
+                result = provision_tenant(**form.provision_arguments())
+            except ProvisioningError as exc:
+                for field, message in exc.errors.items():
+                    form.add_error(field if field in form.fields else None, message)
+            else:
+                response = TemplateResponse(
+                    request,
+                    "admin/organizations/organization/provision_result.html",
+                    {
+                        **self.admin_site.each_context(request),
+                        "opts": opts,
+                        "title": "Müşteri açıldı",
+                        "card": tenant_card(result),
+                        "change_url": reverse(
+                            "admin:organizations_organization_change",
+                            args=[result.organization.pk],
+                        ),
+                    },
+                )
+                response["Cache-Control"] = "no-store"  # the password is shown once
+                return response
+        return TemplateResponse(
+            request,
+            "admin/organizations/organization/provision.html",
+            {
+                **self.admin_site.each_context(request),
+                "opts": opts,
+                "title": "Yeni müşteri aç",
+                "form": form,
+            },
+        )
 
     def get_actions(self, request):
         actions = super().get_actions(request)

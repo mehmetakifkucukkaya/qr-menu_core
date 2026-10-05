@@ -1,0 +1,26 @@
+{% extends "admin/base_site.html" %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Ana sayfa</a>
+  &rsaquo; <a href="{% url 'admin:organizations_organization_changelist' %}">İşletmeler</a>
+  &rsaquo; {{ title }}
+</div>
+{% endblock %}
+
+{% block content %}
+<p><strong>{{ card.organization.name }}</strong> ({{ card.organization.slug }}) açıldı. Aşağıdaki bilgileri sahibe iletin.</p>
+<table>
+  <tr><th>Yönetim girişi</th><td><a href="{{ card.login_url }}">{{ card.login_url }}</a></td></tr>
+  <tr><th>E-posta</th><td>{{ card.owner_email }}</td></tr>
+  <tr><th>Geçici şifre</th><td><code data-testid="temporary-password">{{ card.temporary_password }}</code></td></tr>
+  <tr><th>Menü bağlantısı</th><td><a href="{{ card.menu_url }}">{{ card.menu_url }}</a></td></tr>
+  <tr><th>Paket</th><td>{{ card.plan }}{% if card.modules %} · modüller: {{ card.modules|join:", " }}{% endif %}{% if card.trial_ends_at %} · deneme bitişi: {{ card.trial_ends_at }}{% endif %}</td></tr>
+</table>
+<p><strong>Bu şifre bir daha gösterilmez.</strong> Sahip ilk girişte yeni bir şifre belirleyecek.</p>
+<p>
+  <a href="{{ change_url }}">Müşteri sayfasına git</a> ·
+  <a href="{% url 'admin:organizations_organization_provision' %}">Yeni müşteri aç</a> ·
+  <a href="{% url 'admin:organizations_organization_changelist' %}">Müşteri listesi</a>
+</p>
+{% endblock %}
