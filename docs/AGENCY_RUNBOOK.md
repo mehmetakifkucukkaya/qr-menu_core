@@ -84,7 +84,7 @@ Biten denemeleri her gün `basic`'e düşüren komutu cron'a koyun (plan okunurk
 
 ## 8. Müşteriyi silme
 
-İşletmeyi silmek menüsünü, siparişlerini ve görsellerini geri dönüşsüz siler. Önce askıya alın, bir süre bekleyin; silmek için işletme sayfasında **Sil**. (Toplu silme kapalıdır.)
+İşletmeyi silmek menüsünü, QR kodlarını, ekibini ve görsellerini geri dönüşsüz siler. **Siparişi olan bir müşteri silinemez** (siparişler iş kaydıdır, sistem korur): onu askıya alın. Önce askıya alın, bir süre bekleyin; silmek için işletme sayfasında **Sil**. (Toplu silme kapalıdır.) Silinen müşterinin denetim kayıtları, işletmenin adıyla kalır.
 
 ## 9. Paneli kısıtlama (önerilir)
 

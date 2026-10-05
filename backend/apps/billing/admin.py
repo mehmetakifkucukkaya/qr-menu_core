@@ -11,6 +11,7 @@ from django import forms
 from django.contrib import admin
 
 from apps.audit.services import record_event
+from apps.core.admin_base import deleting_a_customer
 
 from .constants import FEATURE_FIELDS, FEATURE_LABELS
 from .models import PlanSettings, TenantUsageCounter
@@ -55,8 +56,9 @@ class PlanSettingsAdmin(admin.ModelAdmin):
         return (*super().get_readonly_fields(request, obj), *extra)
 
     def has_delete_permission(self, request, obj=None):
-        # Without a row the customer silently falls back to the default plan.
-        return False
+        # Without a row the customer silently falls back to the default plan, so
+        # it is never deleted on its own - only together with its customer.
+        return deleting_a_customer(request)
 
     def save_model(self, request, obj, form, change):
         if not change:

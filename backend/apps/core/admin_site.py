@@ -75,6 +75,7 @@ class AgencyAdminSite(admin.AdminSite):
     site_header = "QR Menü — Ajans Paneli"
     site_title = "QR Menü Ajans Paneli"
     index_title = "Müşteriler ve operasyon"
+    site_url = None  # "Siteyi göster" would open the backend's empty root
 
     def get_app_list(self, request, app_label=None):
         app_list = super().get_app_list(request, app_label)
