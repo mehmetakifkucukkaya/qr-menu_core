@@ -119,6 +119,9 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     # Sprint 4C — populate thread-local actor + IP for audit signal handlers.
     "apps.audit.middleware.AuditContextMiddleware",
+    # Pilot readiness — enforce the per-role policy table on the tenant admin
+    # API (apps/accounts/roles.py). Must come after AuthenticationMiddleware.
+    "apps.accounts.middleware.RoleGateMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
