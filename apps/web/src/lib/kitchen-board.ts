@@ -59,6 +59,19 @@ export interface KitchenBoard {
 /** What a tap on a card's main button asks the server for. */
 export type KitchenTarget = "preparing" | "ready" | "delivered";
 
+// ------------------------------------------------------------------ naming
+
+/** "#12", the short number of the day; orders from before it existed show their full number. */
+export function cardTitle(card: Pick<KitchenCard, "daily_seq" | "order_number">): string {
+  return card.daily_seq !== null ? `#${card.daily_seq}` : card.order_number;
+}
+
+/** "Masa 7", or "Masa yok" when the customer gave none. */
+export function tableLabel(card: Pick<KitchenCard, "table_number">): string {
+  const table = card.table_number.trim();
+  return table ? `Masa ${table}` : "Masa yok";
+}
+
 // ------------------------------------------------------------------ age
 
 export const WARN_AFTER_SECONDS = 10 * 60;

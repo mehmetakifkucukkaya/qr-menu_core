@@ -293,6 +293,23 @@
   animation: kitchen-pulse 2s ease-in-out infinite;
 }
 
+/* A new, untouched order on the kitchen screen: a ring that pulses in the
+ * `warning` colour of the kitchen palette until somebody touches the card.
+ * (The border and the "YENİ" label stay when motion is switched off.) */
+@keyframes kitchen-alert {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(var(--color-warning) / 0);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgb(var(--color-warning) / 0.35);
+  }
+}
+
+.kitchen-card-alert {
+  animation: kitchen-alert 1.2s ease-in-out infinite;
+}
+
 /* ---------------------------------------------------------------------------
  * prefers-reduced-motion — global guard.
  *
@@ -312,6 +329,10 @@
   }
 
   .kitchen-ticket-pending {
+    animation: none;
+  }
+
+  .kitchen-card-alert {
     animation: none;
   }
 

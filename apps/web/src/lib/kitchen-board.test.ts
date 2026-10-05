@@ -13,10 +13,12 @@ import {
   cancelReasonLabel,
   canCancel,
   CANCEL_REASONS,
+  cardTitle,
   formatAge,
   liveAge,
   nextAlertState,
   primaryActionFor,
+  tableLabel,
   type AlertState,
   type KitchenBoard,
   type KitchenCard,
@@ -150,4 +152,16 @@ test("the cancel reasons are the three the server accepts, in Turkish", () => {
   assert.equal(cancelReasonLabel("other"), "Diğer");
   assert.equal(cancelReasonLabel(null), null);
   assert.equal(cancelReasonLabel("???"), null);
+});
+
+test("a card is known by its short number of the day, or by its full number when it has none", () => {
+  assert.equal(cardTitle({ daily_seq: 12, order_number: "CA-20261005-012" }), "#12");
+  assert.equal(cardTitle({ daily_seq: null, order_number: "CA-20261005-012" }), "CA-20261005-012");
+});
+
+test("the table reads 'Masa 7', and 'Masa yok' when the customer gave none", () => {
+  assert.equal(tableLabel({ table_number: "7" }), "Masa 7");
+  assert.equal(tableLabel({ table_number: " B-3 " }), "Masa B-3");
+  assert.equal(tableLabel({ table_number: "" }), "Masa yok");
+  assert.equal(tableLabel({ table_number: "   " }), "Masa yok");
 });
