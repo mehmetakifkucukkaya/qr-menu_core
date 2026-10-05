@@ -30,6 +30,7 @@ export type MembershipRole =
   | "owner"
   | "manager"
   | "staff"
+  | "kitchen"
   | "agency_admin";
 
 // ---------------------------------------------------------------------------
@@ -50,8 +51,35 @@ export interface CurrentUser {
   is_active: boolean;
   is_staff: boolean;
   is_superuser: boolean;
+  /** True after the agency or the owner issued a temporary password. */
+  must_change_password: boolean;
+  /** Role in the business the user operates as; null for a platform admin without one. */
+  membership_role: MembershipRole | null;
   date_joined: string; // ISO datetime
   created_at: string; // ISO datetime
+}
+
+/** One row of `GET /api/v1/admin/team/` (a membership with its user). */
+export interface TeamMember {
+  /** Membership id - the id every team endpoint takes. */
+  id: number;
+  user_id: number;
+  email: string;
+  full_name: string;
+  role: MembershipRole;
+  is_active: boolean;
+  must_change_password: boolean;
+  last_login: string | null; // ISO datetime
+  created_at: string; // ISO datetime
+}
+
+/** Roles the owner may hand out (owners are managed by the agency). */
+export type AssignableRole = "manager" | "staff" | "kitchen";
+
+/** Reply of adding a member / resetting a password: shown to the owner ONCE. */
+export interface TeamMemberWithPassword {
+  member: TeamMember;
+  temporary_password: string;
 }
 
 /** Generic `{ data, meta }` envelope. */
