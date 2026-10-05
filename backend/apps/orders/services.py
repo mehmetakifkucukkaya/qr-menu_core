@@ -3,8 +3,7 @@
 Three pure-Python helpers plus a state machine.
 
 * :func:`generate_order_number` — builds a daily-counter order number
-  (``{slug2}-{YYYYMMDD}-{NNN}``) and falls back to retry-on-collision
-  if the DB race produces a duplicate.
+  (``{slug2}-{YYYYMMDD}-{NNN}``) from the locked ``OrderCounter`` row.
 
 * :func:`calculate_total_from_items` — server-side total calculation.
   Client-supplied prices are **never** trusted; we look up the
@@ -22,13 +21,11 @@ Three pure-Python helpers plus a state machine.
 Decimal precision follows OP-6 (Sprint 2) — see ``Order.total_amount``
 field validators.
 
-Race notes
-----------
-Two customers posting at the same millisecond both pass the
-``Order.objects.filter(...).count()`` check with the same number, then
-both ``Order.objects.create()`` and one fails on the unique
-constraint. We catch ``IntegrityError`` and retry up to 5 times before
-giving up.
+Numbering
+---------
+``order_number`` suffixes and ``Order.daily_seq`` come from ``OrderCounter``
+rows advanced under a row lock (:func:`next_counter`), so concurrent customers
+never share a number and no retry loop is needed.
 """
 
 from __future__ import annotations
@@ -39,11 +36,12 @@ from typing import Any, Iterable
 
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
+from django.db.models import F
 from django.utils import timezone
 
 from apps.menu.models import MenuItem
 
-from .models import Order, OrderItem, OrderStatus
+from .models import Order, OrderCounter, OrderItem, OrderStatus
 
 logger = logging.getLogger(__name__)
 
@@ -59,41 +57,63 @@ STATUS_TRANSITIONS: dict[str, set[str]] = {
     OrderStatus.CANCELLED: set(),  # terminal
 }
 
-# Maximum retries when concurrent requests race on the same daily counter.
-_ORDER_NUMBER_RETRY_LIMIT = 5
+def _highest_suffix(prefix: str) -> int:
+    """Highest ``NNN`` already handed out under ``prefix`` (orders that predate the counter)."""
+    highest = 0
+    for number in Order.objects.filter(order_number__startswith=prefix).values_list(
+        "order_number", flat=True
+    ):
+        suffix = number[len(prefix):]
+        if suffix.isdigit():
+            highest = max(highest, int(suffix))
+    return highest
 
 
-def generate_order_number(organization) -> str:
+def next_counter(scope: str, key: str, day, *, start_at: int = 0) -> int:
+    """Next value of the (scope, key, day) counter: ``start_at + 1`` the first time.
+
+    The row is locked (``select_for_update``) while it is advanced, so two
+    orders in the same instant can never share a number. When two requests both
+    see "no row yet" the loser of the insert falls back to the winner's row.
+    ``start_at`` only matters when the row is created (a day that already has
+    orders from before the counter existed).
+    """
+    with transaction.atomic():
+        counter = (
+            OrderCounter.objects.select_for_update()
+            .filter(scope=scope, key=key, day=day)
+            .first()
+        )
+        if counter is None:
+            try:
+                with transaction.atomic():
+                    counter = OrderCounter.objects.create(
+                        scope=scope, key=key, day=day, last_value=start_at
+                    )
+            except IntegrityError:
+                counter = OrderCounter.objects.select_for_update().get(
+                    scope=scope, key=key, day=day
+                )
+        OrderCounter.objects.filter(pk=counter.pk).update(last_value=F("last_value") + 1)
+        counter.refresh_from_db(fields=["last_value"])
+        return counter.last_value
+
+
+def generate_order_number(organization, day=None) -> str:
     """Return a unique human-readable order number for the given org.
 
-    Format: ``{slug[:2].upper()}-{YYYYMMDD}-{NNN}`` where ``NNN`` is
-    the next available 3-digit suffix for that daily ``prefix``.
-
-    The DB unique constraint enforces global uniqueness — we count
-    across *all* orgs sharing the same prefix because two orgs with
-    the same first 2-letter slug prefix (e.g. ``cafe-a`` and
-    ``cafe-b``) would otherwise hand out the same number on the
-    same day. The per-organization "counter restarts each day"
-    property is therefore *per prefix*, not per org; for the V1
-    demo (one business per tenant) this is the same number.
+    Format: ``{slug[:2].upper()}-{YYYYMMDD}-{NNN}``, ``NNN`` being the next
+    value of the daily counter for that prefix. Two businesses whose slugs
+    start with the same two letters share the counter (that is what keeps the
+    number globally unique); the day is the local day (Europe/Istanbul).
     """
-    today = timezone.now().strftime("%Y%m%d")
+    day = day or timezone.localdate()
     slug_prefix = (organization.slug or "")[:2].upper() or "OR"
-    prefix = f"{slug_prefix}-{today}-"
-
-    for _ in range(_ORDER_NUMBER_RETRY_LIMIT):
-        # Global count across all orgs sharing the prefix.
-        today_prefixed_count = Order.objects.filter(
-            order_number__startswith=prefix,
-        ).count()
-        candidate = f"{prefix}{today_prefixed_count + 1:03d}"
-        if not Order.objects.filter(order_number=candidate).exists():
-            return candidate
-
-    raise RuntimeError(
-        f"generate_order_number: could not allocate unique order "
-        f"number after {_ORDER_NUMBER_RETRY_LIMIT} attempts"
+    prefix = f"{slug_prefix}-{day:%Y%m%d}-"
+    number = next_counter(
+        OrderCounter.SCOPE_PREFIX, slug_prefix, day, start_at=_highest_suffix(prefix)
     )
+    return f"{prefix}{number:03d}"
 
 
 def calculate_total_from_items(items_data: Iterable[dict[str, Any]], organization):
@@ -192,38 +212,23 @@ def create_order(
     total, validated = calculate_total_from_items(items_data, organization)
     currency = _default_currency(validated)
 
-    try:
-        order_number = generate_order_number(organization)
-        order = Order.objects.create(
-            organization=organization,
-            branch=branch,
-            menu=menu,
-            order_number=order_number,
-            customer_name=customer_name,
-            customer_phone=customer_phone,
-            table_number=table_number or "",
-            notes=notes or "",
-            total_amount=total,
-            currency=currency,
-            metadata=metadata or {},
-        )
-    except IntegrityError:
-        # Unique-constraint race from concurrent customers. One quick
-        # retry is enough in practice (the next counter slot is free).
-        order_number = generate_order_number(organization)
-        order = Order.objects.create(
-            organization=organization,
-            branch=branch,
-            menu=menu,
-            order_number=order_number,
-            customer_name=customer_name,
-            customer_phone=customer_phone,
-            table_number=table_number or "",
-            notes=notes or "",
-            total_amount=total,
-            currency=currency,
-            metadata=metadata or {},
-        )
+    # Both numbers come from locked counter rows inside this transaction: a
+    # failure further down takes them back (no gaps) and no two orders race.
+    day = timezone.localdate()
+    order = Order.objects.create(
+        organization=organization,
+        branch=branch,
+        menu=menu,
+        order_number=generate_order_number(organization, day),
+        daily_seq=next_counter(OrderCounter.SCOPE_ORG, str(organization.id), day),
+        customer_name=customer_name,
+        customer_phone=customer_phone,
+        table_number=table_number or "",
+        notes=notes or "",
+        total_amount=total,
+        currency=currency,
+        metadata=metadata or {},
+    )
 
     OrderItem.objects.bulk_create(
         [

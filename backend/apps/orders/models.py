@@ -122,6 +122,10 @@ class Order(TimeStampedModel):
 
     metadata = models.JSONField(default=dict, blank=True)
 
+    # "#12": the short number the kitchen shouts. 1, 2, 3... per business per
+    # local day (``OrderCounter`` scope "org"); empty on orders that predate it.
+    daily_seq = models.PositiveIntegerField(null=True, blank=True)
+
     class Meta:
         verbose_name = "Sipariş"
         verbose_name_plural = "Siparişler"
@@ -135,6 +139,32 @@ class Order(TimeStampedModel):
 
     def __str__(self) -> str:  # pragma: no cover
         return f"{self.order_number} ({self.status})"
+
+
+class OrderCounter(models.Model):
+    """One counter per (scope, key, local day), advanced under a row lock.
+
+    * scope ``prefix``, key ``CA`` - the daily suffix of ``order_number``
+      (``CA-20261005-007``); shared by every business whose slug starts with
+      the same two letters, which keeps the number globally unique.
+    * scope ``org``, key ``<organization id>`` - ``Order.daily_seq``.
+    """
+
+    SCOPE_PREFIX = "prefix"
+    SCOPE_ORG = "org"
+
+    scope = models.CharField(max_length=10)
+    key = models.CharField(max_length=40)
+    day = models.DateField()
+    last_value = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        verbose_name = "Sipariş Sayacı"
+        verbose_name_plural = "Sipariş Sayaçları"
+        unique_together = (("scope", "key", "day"),)
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"{self.scope}:{self.key}:{self.day} = {self.last_value}"
 
 
 class OrderItem(models.Model):
