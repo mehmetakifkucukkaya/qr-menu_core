@@ -60,6 +60,7 @@ import type {
   UpgradePreview,
   UpgradePreviewRequest,
 } from "@/types/admin";
+import type { CancelReason, KitchenBoard } from "./kitchen-board";
 
 /**
  * AdminApiError — mirrors PublicMenuError. Thrown so route segments /
@@ -92,6 +93,8 @@ export interface AdminFetchOptions {
   cookieHeader?: string;
   /** Optional extra headers. */
   headers?: Record<string, string>;
+  /** Lets the caller cancel the request (the kitchen board's polling timeout). */
+  signal?: AbortSignal;
   /**
    * Set to true when the caller supplies a `FormData` (or `Blob`) as `body`.
    * The fetch layer must NOT inject `Content-Type: application/json` and
@@ -134,6 +137,7 @@ export async function adminFetch<T>(
     cookieHeader,
     headers: extraHeaders,
     formData = false,
+    signal,
   } = options;
 
   const base = resolveBaseUrl({ baseUrl, internal });
@@ -164,6 +168,7 @@ export async function adminFetch<T>(
             : JSON.stringify(body),
       // Admin payloads are dynamic — never cache.
       cache: "no-store",
+      signal,
     });
   } catch (err) {
     throw new AdminApiError(
@@ -1312,6 +1317,10 @@ export interface AdminOrder {
 /** Shape returned by `GET /api/v1/admin/orders/{id}` (detail). */
 export interface AdminOrderDetail extends AdminOrder {
   notes: string;
+  /** "#12": the short number of the day (null on orders from before it existed). */
+  daily_seq: number | null;
+  cancel_reason: string | null;
+  cancel_reason_label: string | null;
   items: Array<{
     id: number;
     menu_item: number | null;
@@ -1319,6 +1328,8 @@ export interface AdminOrderDetail extends AdminOrder {
     price: string;
     quantity: number;
     notes: string;
+    /** Turkish allergen names copied from the dish when the order was placed. */
+    allergens: string[];
   }>;
   confirmed_at: string | null;
   preparing_at: string | null;
@@ -1331,6 +1342,9 @@ export interface AdminOrderDetail extends AdminOrder {
 export interface AdminOrderStatusResponse {
   order_number: string;
   status: AdminOrderStatus;
+  /** Why a cancelled order was cancelled (`null` otherwise) and its Turkish label. */
+  cancel_reason: string | null;
+  cancel_reason_label: string | null;
   placed_at: string;
   confirmed_at: string | null;
   preparing_at: string | null;
@@ -1383,15 +1397,19 @@ export async function fetchOrderDetail(
 export async function updateOrderStatus(
   id: number,
   newStatus: AdminOrderStatus,
-  options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader" | "csrfToken"> = {},
+  options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader" | "csrfToken"> & {
+    /** Required by the server when `newStatus` is `cancelled`. */
+    cancelReason?: CancelReason;
+  } = {},
 ): Promise<AdminOrderStatusResponse> {
+  const { cancelReason, ...fetchOptions } = options;
   return adminFetch<AdminOrderStatusResponse>(
     `/api/v1/admin/orders/${id}/status`,
     {
       method: "POST",
-      csrfToken: options.csrfToken,
-      body: { status: newStatus },
-      ...options,
+      csrfToken: fetchOptions.csrfToken,
+      body: cancelReason ? { status: newStatus, cancel_reason: cancelReason } : { status: newStatus },
+      ...fetchOptions,
     },
   );
 }
@@ -1469,6 +1487,20 @@ export async function fetchKitchenTickets(
   );
   if (Array.isArray(payload)) return payload;
   return (payload as { data: KitchenTicket[] }).data ?? [];
+}
+
+/**
+ * GET /api/v1/admin/kitchen/board — the three columns the kitchen works from
+ * (new / preparing / ready), one call, no customer phone numbers.
+ *
+ * Called from the browser every few seconds by the board's poller (pass its
+ * `signal` so a hung request can be given up) and once on the server for the
+ * first paint.
+ */
+export async function fetchKitchenBoard(
+  options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader" | "signal"> = {},
+): Promise<KitchenBoard> {
+  return adminFetch<KitchenBoard>("/api/v1/admin/kitchen/board", { ...options });
 }
 
 // ---------------------------------------------------------------------------

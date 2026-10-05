@@ -23,7 +23,8 @@
     "test:datetime": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test src/lib/datetime.test.ts",
     "test:set-cookie": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test src/lib/set-cookie.test.ts",
     "test:kitchen-board": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test src/lib/kitchen-board.test.ts",
-    "test:board-poller": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test src/lib/board-poller.test.ts"
+    "test:board-poller": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test src/lib/board-poller.test.ts",
+    "test:kitchen-api": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test src/lib/kitchen-api.test.ts"
   },
   "dependencies": {
     "clsx": "^2.1.1",
