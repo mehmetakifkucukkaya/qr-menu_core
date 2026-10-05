@@ -199,6 +199,27 @@ def test_order_creation_generates_unique_order_number(org_a, item_a):
 
 def test_order_creation_per_org_independent_counters(org_a, org_b, item_a):
     """Each org's daily counter is independent."""
+    # Org B orders its OWN item (an order may no longer reference another
+    # business's item - ANALYSIS_1 F-10).
+    from apps.menu.models import Menu, MenuCategory, MenuItem
+
+    menu_b = Menu.objects.create(
+        organization=org_b,
+        name="B menüsü",
+        default_locale="tr",
+        supported_locales=["tr"],
+        is_active=True,
+    )
+    category_b = MenuCategory.objects.create(menu=menu_b, name="B kategori", is_active=True)
+    item_of_b = MenuItem.objects.create(
+        menu=menu_b,
+        category=category_b,
+        name="B ürünü",
+        price=Decimal("30.00"),
+        currency="TRY",
+        is_active=True,
+        is_available=True,
+    )
     a = services.create_order(
         organization=org_a,
         items_data=[{"menu_item_id": item_a.id, "quantity": 1}],
@@ -207,7 +228,7 @@ def test_order_creation_per_org_independent_counters(org_a, org_b, item_a):
     )
     b = services.create_order(
         organization=org_b,
-        items_data=[{"menu_item_id": item_a.id, "quantity": 1}],
+        items_data=[{"menu_item_id": item_of_b.id, "quantity": 1}],
         customer_name="B1",
         customer_phone="5550000002",
     )
