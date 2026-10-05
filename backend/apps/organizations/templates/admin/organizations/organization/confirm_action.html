@@ -1,0 +1,29 @@
+{% extends "admin/base_site.html" %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Ana sayfa</a>
+  &rsaquo; <a href="{% url 'admin:organizations_organization_changelist' %}">İşletmeler</a>
+  &rsaquo; {{ title }}
+</div>
+{% endblock %}
+
+{% block content %}
+<p>{{ message }}</p>
+<ul>
+  {% for organization in queryset %}<li>{{ organization }}</li>{% endfor %}
+</ul>
+<form method="post">
+  {% csrf_token %}
+  <div>
+    {% for organization in queryset %}
+    <input type="hidden" name="{{ action_checkbox_name }}" value="{{ organization.pk }}">
+    {% endfor %}
+    <input type="hidden" name="action" value="{{ action_name }}">
+    <input type="hidden" name="confirm" value="yes">
+    <input type="hidden" name="select_across" value="0">
+    <input type="submit" value="Evet, uygula">
+    <a href="{% url 'admin:organizations_organization_changelist' %}" class="button cancel-link">Vazgeç</a>
+  </div>
+</form>
+{% endblock %}

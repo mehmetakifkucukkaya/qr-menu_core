@@ -13,9 +13,11 @@ import math
 from datetime import timedelta
 
 from django import forms
-from django.contrib import admin
-from django.db.models import Count, OuterRef, Q, Subquery
+from django.contrib import admin, messages
+from django.contrib.admin import helpers
+from django.db.models import Count, OuterRef, Subquery
 from django.db.models.functions import Coalesce
+from django.template.response import TemplateResponse
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import format_html
@@ -23,12 +25,13 @@ from django.utils.html import format_html
 from apps.accounts.models import Membership, MembershipRole
 from apps.billing.constants import FEATURE_LABELS, PLAN_CHOICES, PLAN_TIER_LIMITS
 from apps.billing.models import TenantUsageCounter
-from apps.billing.services import default_plan
+from apps.billing.services import default_plan, extend_trial
 from apps.branches.models import Branch
 from apps.menu.models import MenuItem
 from apps.onboarding.provisioning import CURRENCIES, MODULES
 from apps.orders.models import Order
 
+from . import services
 from .models import Organization
 
 LOCALE_CHOICES = [("tr", "Türkçe"), ("en", "English")]
@@ -206,6 +209,10 @@ class OrganizationAdmin(admin.ModelAdmin):
     ordering = ("name",)
     list_per_page = 50
     inlines = [MembershipInline, BranchInline]
+    actions = (
+        "suspend", "reactivate", "extend_trial_7", "extend_trial_14", "extend_trial_30",
+        "reset_owner_password",
+    )
     readonly_fields = ("plan_summary", "usage_summary", "created_at", "updated_at")
     fieldsets = (
         ("Özet", {"fields": ("plan_summary", "usage_summary")}),
@@ -228,6 +235,11 @@ class OrganizationAdmin(admin.ModelAdmin):
         # The slug is in every printed QR code: it does not change here.
         extra = ("slug",) if obj else ()
         return (*super().get_readonly_fields(request, obj), *extra)
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        actions.pop("delete_selected", None)  # a customer is not deleted in bulk
+        return actions
 
     def get_queryset(self, request):
         since = timezone.now() - timedelta(days=30)
@@ -348,3 +360,104 @@ class OrganizationAdmin(admin.ModelAdmin):
             obj.orders_30d,
             _local(obj.last_order_at),
         )
+
+    # ---- actions
+
+    def _ask_first(self, request, queryset, action, title, message):
+        """The confirmation page (None once the agency confirmed it)."""
+        if request.POST.get("confirm") == "yes":
+            return None
+        return TemplateResponse(
+            request,
+            "admin/organizations/organization/confirm_action.html",
+            {
+                **self.admin_site.each_context(request),
+                "opts": self.model._meta,
+                "title": title,
+                "message": message,
+                "queryset": queryset,
+                "action_name": action,
+                "action_checkbox_name": helpers.ACTION_CHECKBOX_NAME,
+            },
+        )
+
+    @admin.action(description="Seçili müşterileri askıya al", permissions=["change"])
+    def suspend(self, request, queryset):
+        asked = self._ask_first(
+            request, queryset, "suspend", "Müşterileri askıya al",
+            "Askıya alınan müşterinin ekibi giriş yapamaz ve herkese açık menüsü kapanır "
+            "(QR kodlar açılmaz). Yeniden etkinleştirince her şey eski haline döner.",
+        )
+        if asked:
+            return asked
+        done = [org for org in queryset if services.set_active(org, False)]
+        self.message_user(request, f"{len(done)} müşteri askıya alındı.", messages.SUCCESS)
+
+    @admin.action(description="Seçili müşterileri yeniden etkinleştir", permissions=["change"])
+    def reactivate(self, request, queryset):
+        done = [org for org in queryset if services.set_active(org, True)]
+        self.message_user(
+            request, f"{len(done)} müşteri yeniden etkinleştirildi.", messages.SUCCESS
+        )
+
+    def _extend(self, request, queryset, days):
+        extended = 0
+        for org in queryset:
+            try:
+                extend_trial(org, days)
+                extended += 1
+            except ValueError as exc:
+                self.message_user(request, f"{org.name}: {exc}", messages.WARNING)
+        if extended:
+            self.message_user(
+                request, f"{extended} müşterinin denemesi {days} gün uzatıldı.", messages.SUCCESS
+            )
+
+    @admin.action(description="Denemeyi 7 gün uzat", permissions=["change"])
+    def extend_trial_7(self, request, queryset):
+        self._extend(request, queryset, 7)
+
+    @admin.action(description="Denemeyi 14 gün uzat", permissions=["change"])
+    def extend_trial_14(self, request, queryset):
+        self._extend(request, queryset, 14)
+
+    @admin.action(description="Denemeyi 30 gün uzat", permissions=["change"])
+    def extend_trial_30(self, request, queryset):
+        self._extend(request, queryset, 30)
+
+    @admin.action(
+        description="Sahibin şifresini sıfırla (tek müşteri seçin)", permissions=["change"]
+    )
+    def reset_owner_password(self, request, queryset):
+        if queryset.count() != 1:
+            self.message_user(
+                request, "Şifre sıfırlamak için tek bir müşteri seçin.", messages.ERROR
+            )
+            return None
+        asked = self._ask_first(
+            request, queryset, "reset_owner_password", "Sahibin şifresini sıfırla",
+            "Sahibin mevcut şifresi geçersiz olur ve açık oturumları kapanır; yeni geçici şifre "
+            "bir sonraki ekranda yalnızca bir kez gösterilir.",
+        )
+        if asked:
+            return asked
+        organization = queryset.get()
+        try:
+            owner, password = services.reset_owner_password(organization)
+        except ValueError as exc:
+            self.message_user(request, f"{organization.name}: {exc}", messages.ERROR)
+            return None
+        response = TemplateResponse(
+            request,
+            "admin/organizations/organization/password_result.html",
+            {
+                **self.admin_site.each_context(request),
+                "opts": self.model._meta,
+                "title": "Geçici şifre",
+                "organization": organization,
+                "owner": owner,
+                "password": password,
+            },
+        )
+        response["Cache-Control"] = "no-store"
+        return response
