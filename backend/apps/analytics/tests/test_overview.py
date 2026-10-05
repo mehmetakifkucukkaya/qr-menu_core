@@ -128,12 +128,16 @@ def test_overview_daily_aggregation(api_client, org_a, menu_a):
     assert response.status_code == 200
     daily = response.json()["data"]["daily_views"]
     counts_by_date = {row["date"]: row["count"] for row in daily}
-    today_key = timezone.now().date().isoformat()
+    # The overview buckets by the venue's local day (Europe/Istanbul), so the
+    # expected keys must be local dates too: `timezone.now().date()` is the UTC
+    # date and disagrees with them between 00:00 and 03:00 local time.
+    today = timezone.localdate()
+    today_key = today.isoformat()
     assert counts_by_date.get(today_key) == 3
-    two_days_ago = (timezone.now().date() - datetime.timedelta(days=2)).isoformat()
+    two_days_ago = (today - datetime.timedelta(days=2)).isoformat()
     assert counts_by_date.get(two_days_ago) == 5
     # The 10-day-old event is outside the window.
-    ten_days_ago = (timezone.now().date() - datetime.timedelta(days=10)).isoformat()
+    ten_days_ago = (today - datetime.timedelta(days=10)).isoformat()
     assert ten_days_ago not in counts_by_date
 
 
