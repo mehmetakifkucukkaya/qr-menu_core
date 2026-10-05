@@ -47,8 +47,11 @@ RUN npm run build
 
 FROM node:20-bookworm-slim AS runner
 WORKDIR /app
+# TZ: the venue's clock. Dates the business sees are formatted with an explicit
+# time zone (src/lib/datetime.ts); this covers anything that still uses local time.
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
+    TZ=Europe/Istanbul \
     PORT=3000 \
     HOSTNAME=0.0.0.0
 

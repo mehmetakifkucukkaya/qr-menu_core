@@ -63,9 +63,9 @@ TODAY_EVENT_TYPES = [choice for choice, _ in MenuViewEvent.EVENT_CHOICES]
 
 
 def _resolve_organization(user):
-    membership = Membership.objects.filter(
-        user=user, organization__is_active=True
-    ).first()
+    from apps.accounts.services import get_active_membership
+
+    membership = get_active_membership(user)
     return membership.organization if membership else None
 
 

@@ -104,6 +104,17 @@ class PublicOrderCreateSerializer(serializers.Serializer):
         required=False, default=0, min_value=0, max_value=10_000_000,
     )
 
+    # A cart is a handful of lines; an unbounded list is a way to make one
+    # request cost hundreds of queries.
+    MAX_LINES = 50
+
+    def validate_items(self, value):
+        if len(value) > self.MAX_LINES:
+            raise serializers.ValidationError(
+                f"Bir siparişte en fazla {self.MAX_LINES} kalem olabilir."
+            )
+        return value
+
     def validate_customer_name(self, value: str) -> str:
         v = (value or "").strip()
         if not v:

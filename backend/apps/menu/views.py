@@ -13,6 +13,7 @@ applied pre-save so a 402 response never leaves a dangling row.
 
 from __future__ import annotations
 
+from django.shortcuts import get_object_or_404
 from rest_framework import status, viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -125,6 +126,22 @@ class MenuViewSet(viewsets.ModelViewSet):
         return self.update(request, *args, partial=True, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
+        # Deleting a menu cascades to its QR codes, whose records back the
+        # printed codes on the tables. Make the owner retire them first.
+        menu = self.get_object()
+        if menu.qr_codes.filter(is_active=True).exists():
+            return Response(
+                {
+                    "error": {
+                        "code": "menu.has_active_qr",
+                        "message": (
+                            "Bu menüye bağlı aktif QR kodlar var. "
+                            "Önce QR kodlarını kaldırın veya pasife alın."
+                        ),
+                    }
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
         response = super().destroy(request, *args, **kwargs)
         return Response(status=response.status_code)
 
@@ -221,13 +238,9 @@ class MenuCategoryViewSet(viewsets.ModelViewSet):
     @staticmethod
     def _resolve_org_for_user(request):
         """First active membership → organization (D-022 + D-026 mirror)."""
-        membership = (
-            Membership.objects.filter(
-                user=request.user, organization__is_active=True
-            )
-            .select_related("organization")
-            .first()
-        )
+        from apps.accounts.services import get_active_membership
+
+        membership = get_active_membership(request.user)
         return membership.organization if membership else None
 
 
@@ -326,14 +339,42 @@ class MenuItemViewSet(viewsets.ModelViewSet):
     @staticmethod
     def _resolve_org_for_user(request):
         """First active membership → organization (D-022 + D-026 mirror)."""
-        membership = (
-            Membership.objects.filter(
-                user=request.user, organization__is_active=True
-            )
-            .select_related("organization")
-            .first()
-        )
+        from apps.accounts.services import get_active_membership
+
+        membership = get_active_membership(request.user)
         return membership.organization if membership else None
+
+# ---------------------------------------------------------------------------
+# Availability ("tükendi / mevcut") — the one catalogue write floor staff get
+# ---------------------------------------------------------------------------
+class MenuItemAvailabilityView(APIView):
+    """POST /api/v1/admin/menu-items/{id}/availability — body ``{"is_available": bool}``.
+
+    Everything else on menu items needs owner/manager (``apps.accounts.roles``);
+    staff only toggle availability. The lookup goes through ``for_user`` so an
+    item of another organization is a 404, never a toggle.
+    """
+
+    permission_classes = [IsAuthenticated, IsMenuOrganizationMember]
+
+    def post(self, request: Request, pk: int) -> Response:
+        item = get_object_or_404(MenuItem.objects.for_user(request.user), pk=pk)
+        value = request.data.get("is_available")
+        if not isinstance(value, bool):
+            return Response(
+                {
+                    "error": {
+                        "code": "menu.invalid_availability",
+                        "message": "is_available true veya false olmalı.",
+                    }
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if item.is_available != value:
+            item.is_available = value
+            item.save(update_fields=["is_available", "updated_at"])
+        return _wrap({"id": item.id, "is_available": item.is_available}, request)
+
 
 # ---------------------------------------------------------------------------
 # Reorder endpoints

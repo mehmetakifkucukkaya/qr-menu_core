@@ -8,7 +8,10 @@ the csrftoken cookie, then echo it in the ``X-CSRFToken`` header.
 
 from __future__ import annotations
 
-from django.contrib.auth import authenticate, login, logout
+from django.conf import settings
+from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.middleware.csrf import get_token
 from rest_framework import status
@@ -24,6 +27,22 @@ from apps.organizations.models import Organization
 from rest_framework.views import APIView
 
 from .serializers import LoginSerializer, UserSerializer
+from .services import get_active_membership, resolve_membership_state, session_age_for
+
+
+def _error(code: str, message: str, http_status: int) -> Response:
+    return Response({"error": {"code": code, "message": message}}, status=http_status)
+
+
+def _signup_closed() -> Response | None:
+    """The 404 for the signup endpoints while SIGNUP_ENABLED is off."""
+    if getattr(settings, "SIGNUP_ENABLED", False):
+        return None
+    return _error(
+        "signup.disabled",
+        "Kayıt şu an kapalı. Ajansınızla iletişime geçin.",
+        status.HTTP_404_NOT_FOUND,
+    )
 
 
 class CSRFView(APIView):
@@ -65,7 +84,27 @@ class LoginView(APIView):
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
+        # A member of a suspended business, or an account that belongs to no
+        # business at all, gets a clear answer instead of a half-working panel.
+        # Platform admins (the agency) are not tied to one business.
+        if not user.is_platform_admin:
+            state, _ = resolve_membership_state(user)
+            if state == "suspended":
+                return _error(
+                    "tenant.suspended",
+                    "Hesabınız askıya alındı, ajansınızla iletişime geçin.",
+                    status.HTTP_403_FORBIDDEN,
+                )
+            if state == "no_membership":
+                return _error(
+                    "auth.no_membership",
+                    "Bu hesap bir işletmeye bağlı değil. Ajansınızla iletişime geçin.",
+                    status.HTTP_403_FORBIDDEN,
+                )
+
         login(request, user)
+        membership = get_active_membership(user)
+        request.session.set_expiry(session_age_for(membership.role if membership else None))
         # Force session save so the cookie is set on the response.
         request.session.save()
         return Response(
@@ -83,6 +122,52 @@ class LogoutView(APIView):
     def post(self, request: Request) -> Response:
         logout(request)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class PasswordChangeView(APIView):
+    """POST /api/v1/auth/password/change — any signed-in user, any role.
+
+    Body ``{"current_password": "...", "new_password": "..."}``. Used by the
+    voluntary "Şifre değiştir" page and by the forced change after a temporary
+    password. The current session stays signed in; other sessions are dropped
+    by Django's session auth hash.
+    """
+
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "password_change"
+
+    def post(self, request: Request) -> Response:
+        data = request.data if hasattr(request.data, "get") else {}
+        current = data.get("current_password") or ""
+        new = data.get("new_password") or ""
+        user = request.user
+
+        if not user.check_password(current):
+            return _error(
+                "auth.invalid_current_password",
+                "Mevcut şifre hatalı.",
+                status.HTTP_400_BAD_REQUEST,
+            )
+        if new == current:
+            return _error(
+                "auth.password_unchanged",
+                "Yeni şifre mevcut şifreyle aynı olamaz.",
+                status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            validate_password(new, user)
+        except DjangoValidationError as exc:
+            return _error(
+                "auth.password_invalid", " ".join(exc.messages), status.HTTP_400_BAD_REQUEST
+            )
+
+        user.set_password(new)
+        user.must_change_password = False
+        user.save(update_fields=["password", "must_change_password"])
+        update_session_auth_hash(request, user)
+        return Response(
+            {"data": {"ok": True}, "meta": {"request_id": request.META.get("HTTP_X_REQUEST_ID", "")}}
+        )
 
 
 class MeView(APIView):
@@ -116,6 +201,10 @@ class SlugAvailabilityView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request: Request) -> Response:
+        closed = _signup_closed()
+        if closed is not None:
+            return closed
+
         from .serializers import SlugAvailabilitySerializer
 
         slug = (request.query_params.get("slug") or "").strip().lower()
@@ -182,6 +271,10 @@ class SignupView(APIView):
 
     @transaction.atomic
     def post(self, request: Request) -> Response:
+        closed = _signup_closed()
+        if closed is not None:
+            return closed
+
         from .serializers import SignupResponseSerializer, SignupSerializer
 
         serializer = SignupSerializer(data=request.data)

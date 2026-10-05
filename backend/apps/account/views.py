@@ -233,11 +233,9 @@ def _resolve_organization(user):
     """Mirror of the helpers in audit/orders for admin endpoints."""
     if not (user and getattr(user, "is_authenticated", False)):
         return None
-    membership = (
-        Membership.objects.filter(user=user, organization__is_active=True)
-        .select_related("organization")
-        .first()
-    )
+    from apps.accounts.services import get_active_membership
+
+    membership = get_active_membership(user)
     return membership.organization if membership else None
 
 

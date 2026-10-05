@@ -26,6 +26,15 @@ class PlanSettingsAdmin(admin.ModelAdmin):
     list_filter = ("active_plan", "cart_enabled", "orders_enabled", "loyalty_enabled")
     search_fields = ("organization__name", "organization__slug")
     readonly_fields = ("created_at", "updated_at")
+
+    def save_model(self, request, obj, form, change):
+        # Picking a plan here is an explicit decision: end the trial window so
+        # a stale ``trial_ends_at`` cannot downgrade it later.
+        if change and "active_plan" in form.changed_data:
+            obj.trial_started_at = None
+            obj.trial_ends_at = None
+        super().save_model(request, obj, form, change)
+
     fieldsets = (
         (None, {
             "fields": ("organization", "active_plan", "billing_notes"),

@@ -18,7 +18,7 @@ class BranchQuerySet(models.QuerySet):
         """Branches the user can access via their org memberships."""
         if getattr(user, "is_platform_admin", False):
             return self.all()
-        return self.filter(organization__memberships__user=user).distinct()
+        return self.filter(organization__memberships__user=user, organization__memberships__is_active=True).distinct()
 
 
 class Branch(SluggedModel, TimeStampedModel):

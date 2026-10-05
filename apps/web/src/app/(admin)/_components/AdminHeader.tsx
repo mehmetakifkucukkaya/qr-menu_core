@@ -7,12 +7,15 @@ import { ChevronRight, Menu } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
 import { Sheet } from "@/components/ui/Sheet";
+import { ROLE_LABELS, type UiRole } from "@/lib/roles";
 import type { CurrentUser } from "@/types/admin";
 import { AdminNavList } from "./AdminNav";
 import { AdminAccountLinks, AdminBrand } from "./AdminSidebarParts";
 
 interface AdminHeaderProps {
   user: CurrentUser;
+  /** The signed-in role - decides which links the phone drawer lists. */
+  role: UiRole;
   businessName: string;
   businessLogo?: string | null;
   businessSlug?: string | null;
@@ -29,6 +32,10 @@ const SEGMENT_LABELS: Record<string, string> = {
   items: "Ürünler",
   orders: "Siparişler",
   kitchen: "Mutfak",
+  availability: "Ürün durumu",
+  team: "Ekip",
+  account: "Hesap",
+  password: "Şifre değiştir",
   customers: "Müşteriler",
   "qr-codes": "QR Kodlar",
   "pdf-import": "PDF Import",
@@ -81,6 +88,7 @@ function buildBreadcrumbs(pathname: string): Crumb[] {
  */
 export function AdminHeader({
   user,
+  role,
   businessName,
   businessLogo,
   businessSlug,
@@ -167,7 +175,7 @@ export function AdminHeader({
               >
                 {displayName}
               </p>
-              <p className="text-xs capitalize text-outline">{user.role}</p>
+              <p className="text-xs text-outline">{ROLE_LABELS[role]}</p>
             </div>
             <span
               aria-hidden
@@ -197,7 +205,7 @@ export function AdminHeader({
           />
         }
       >
-        <AdminNavList onNavigate={() => setNavOpen(false)} />
+        <AdminNavList role={role} onNavigate={() => setNavOpen(false)} />
       </Sheet>
     </>
   );

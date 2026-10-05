@@ -22,6 +22,7 @@ import {
   type OrderStatus,
   type OrderStatusResponse,
 } from "@/lib/api-orders";
+import { formatDateTime } from "@/lib/datetime";
 
 interface PageProps {
   params: { businessSlug: string; orderNumber: string };
@@ -419,14 +420,10 @@ function statusDescription(status: OrderStatus): string {
 }
 
 function formatTimestamp(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString("tr-TR", {
-      hour: "2-digit",
-      minute: "2-digit",
-      day: "2-digit",
-      month: "2-digit",
-    });
-  } catch {
-    return iso;
-  }
+  return formatDateTime(iso, {
+    hour: "2-digit",
+    minute: "2-digit",
+    day: "2-digit",
+    month: "2-digit",
+  });
 }

@@ -16,6 +16,8 @@ urlpatterns = [
     path("api/v1/auth/", include("apps.accounts.auth_urls")),
     path("api/v1/", include("apps.accounts.urls")),
     path("api/v1/admin/organizations/", include("apps.organizations.urls")),
+    # Pilot readiness — owner-managed team (members, roles, temporary passwords).
+    path("api/v1/admin/team/", include("apps.accounts.team_urls")),
     path("api/v1/admin/branches/", include("apps.branches.urls")),
     path("api/v1/admin/theme/", include("apps.theme.urls")),
     path("api/v1/admin/", include("apps.menu.urls")),

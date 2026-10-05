@@ -12,7 +12,8 @@ import type { NextRequest } from "next/server";
  *
  * Path map (V1):
  *   /login                         → always allowed (form)
- *   /admin/**                      → requires `qr_sessionid` cookie
+ *   /admin/**                      → requires `qr_sessionid` cookie; the path is
+ *                                    forwarded to the layout as `x-pathname`
  *   /api/v1/auth/csrf              → allowed (CSRF bootstrap)
  *   /api/v1/auth/login             → allowed (auth bootstrap)
  *   /api/v1/auth/logout            → allowed (logout always succeeds)
@@ -46,7 +47,11 @@ export function middleware(req: NextRequest) {
       loginUrl.searchParams.set("next", nextUrl);
       return NextResponse.redirect(loginUrl);
     }
-    return NextResponse.next();
+    // The admin layout decides per ROLE whether the page may open, and a
+    // layout does not know the URL it is rendered for: hand it over.
+    const requestHeaders = new Headers(req.headers);
+    requestHeaders.set("x-pathname", pathname);
+    return NextResponse.next({ request: { headers: requestHeaders } });
   }
 
   // Everything else: pass through (public routes, root, etc.).

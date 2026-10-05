@@ -36,10 +36,11 @@ class MembershipRole(models.TextChoices):
     A user can have a different role in each organization they belong to.
     """
 
-    OWNER = "owner", "Owner"
-    MANAGER = "manager", "Manager"
-    STAFF = "staff", "Staff"
-    AGENCY_ADMIN = "agency_admin", "Agency Admin"
+    OWNER = "owner", "Sahip"
+    MANAGER = "manager", "Yönetici"
+    STAFF = "staff", "Personel"
+    KITCHEN = "kitchen", "Mutfak"
+    AGENCY_ADMIN = "agency_admin", "Ajans yöneticisi"
 
 
 class UserManager(BaseUserManager):
@@ -91,6 +92,10 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_staff = models.BooleanField(default=False)
     is_superuser = models.BooleanField(default=False)
 
+    # Set when the account was created (or its password reset) with a
+    # temporary password that the user has to replace on first sign-in.
+    must_change_password = models.BooleanField("Şifre değiştirmeli", default=False)
+
     date_joined = models.DateTimeField(default=timezone.now)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -136,6 +141,9 @@ class Membership(models.Model):
         choices=MembershipRole.choices,
         default=MembershipRole.OWNER,
     )
+    # A deactivated member keeps the row (and the audit trail) but loses all
+    # access immediately; see apps.accounts.services.get_active_membership.
+    is_active = models.BooleanField("Aktif", default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

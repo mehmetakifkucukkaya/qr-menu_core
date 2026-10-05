@@ -119,6 +119,9 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     # Sprint 4C — populate thread-local actor + IP for audit signal handlers.
     "apps.audit.middleware.AuditContextMiddleware",
+    # Pilot readiness — enforce the per-role policy table on the tenant admin
+    # API (apps/accounts/roles.py). Must come after AuthenticationMiddleware.
+    "apps.accounts.middleware.RoleGateMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -351,10 +354,12 @@ PAYMENT_WEBHOOK_BASE_URL = os.environ.get(
 # ---------------------------------------------------------------------------
 # Sprint B1 — Billing (D-026)
 # ---------------------------------------------------------------------------
-# Default plan for fresh tenants (no row yet). V1 demo posture: OPS
-# so Modern Cafe runs full feature set. Production / V2 SaaS flips to
-# ``basic`` and the seed / signup wizard upgrades as needed.
-BILLING_DEFAULT_PLAN = os.environ.get("BILLING_DEFAULT_PLAN", "ops")
+# Plan used for a tenant that has NO PlanSettings row (e.g. an Organization
+# created by hand in the Django admin). ``basic`` = the smallest tier: a
+# tenant nobody classified must not silently get every feature and no limits
+# (it used to fall back to OPS). apps.onboarding.provisioning and seed_demo
+# always create the row explicitly.
+BILLING_DEFAULT_PLAN = os.environ.get("BILLING_DEFAULT_PLAN", "basic")
 # Grace percent applied to tier limits before ``enforce_limit`` fails.
 # V1 hard-fails at the boundary (``BILLING_LIMIT_GRACE_PCT=0``); V2
 # SaaS uses a positive value (e.g. 10) to send a warning email at
@@ -370,6 +375,13 @@ BILLING_LIMIT_GRACE_PCT = int(os.environ.get("BILLING_LIMIT_GRACE_PCT", "0"))
 # backend and frontend environments (never NEXT_PUBLIC_*):
 #   python -c "import secrets; print(secrets.token_urlsafe(32))"
 INTERNAL_API_TOKEN = os.environ.get("INTERNAL_API_TOKEN", "")
+
+# ---------------------------------------------------------------------------
+# Pilot readiness — self-service signup
+# ---------------------------------------------------------------------------
+# Public signup (/api/v1/auth/signup, check-slug) is CLOSED by default: during
+# the pilot the agency opens every customer. Set SIGNUP_ENABLED=1 to reopen it.
+SIGNUP_ENABLED = _env_bool("SIGNUP_ENABLED", default=False)
 
 # ---------------------------------------------------------------------------
 # DRF
@@ -418,6 +430,9 @@ REST_FRAMEWORK = {
         # slow account-creation spam (10/hour/IP). The wizard's
         # check-slug endpoint uses the default 60/min/IP.
         "signup": "10/hour",
+        # Pilot readiness — password change by a signed-in user. Stops a
+        # hijacked session from brute-forcing the current password.
+        "password_change": "10/hour",
     },
     # SessionAuth enforces CSRF on unsafe methods (POST/PUT/PATCH/DELETE).
     # This is the default but made explicit so future contributors don't relax it.
@@ -447,6 +462,10 @@ CSRF_TRUSTED_ORIGINS = list(CORS_ALLOWED_ORIGINS)
 SESSION_COOKIE_NAME = "qr_sessionid"
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
+# Sliding sessions: every request pushes the expiry forward, so a kitchen
+# tablet that is used daily stays signed in. The length itself is set per role
+# at sign-in (apps.accounts.services.session_age_for).
+SESSION_SAVE_EVERY_REQUEST = True
 # Secure flag is opt-in via env (must be True behind HTTPS in production).
 SESSION_COOKIE_SECURE = _env_bool("SESSION_COOKIE_SECURE", default=False)
 

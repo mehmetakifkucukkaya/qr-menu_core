@@ -8,6 +8,8 @@ import { StepIndicator } from "@/components/signup/StepIndicator";
 import { ProgressBar } from "@/components/signup/ProgressBar";
 import { WizardHeader } from "./WizardHeader";
 import { fetchCurrentUser, AdminApiError } from "@/lib/api-admin";
+import { fetchSignupStatus } from "@/lib/signup-status";
+import { SignupClosed } from "./SignupClosed";
 import { SignupWizardClient } from "./SignupWizardClient";
 
 /**
@@ -66,6 +68,11 @@ async function resolveAlreadySignedIn(
 }
 
 export default async function SignupPage() {
+  // Public registration is closed during the pilot (backend SIGNUP_ENABLED).
+  if ((await fetchSignupStatus()) === "closed") {
+    return <SignupClosed />;
+  }
+
   const cookieHeader = readCookieHeader();
   const alreadyIn = await resolveAlreadySignedIn(cookieHeader);
   if (alreadyIn) {

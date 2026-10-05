@@ -18,6 +18,7 @@ import { OrderStatusBadge } from "@/app/(admin)/admin/orders/OrderStatusBadge";
 import { formatPrice } from "@/lib/format";
 import type { CustomerAdminDetail, LoyaltyTransactionAdmin } from "@/types/admin";
 import { LoyaltyAdjustDialog } from "./LoyaltyAdjustDialog";
+import { formatDateTime } from "@/lib/datetime";
 
 interface CustomerDetailHeaderProps {
   detail: CustomerAdminDetail;
@@ -39,16 +40,6 @@ const TX_TYPE_TONE: Record<LoyaltyTransactionAdmin["type"], string> = {
   adjust: "bg-warning-soft text-warning ring-warning/25",
   reverse: "bg-danger-soft text-danger ring-danger/25",
 };
-
-function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString("tr-TR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 function formatRelative(iso: string): string {
   const then = new Date(iso).getTime();

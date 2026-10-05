@@ -30,6 +30,7 @@ from .views import (
     CategoriesReorderView,
     DietaryTagViewSet,
     ItemsReorderView,
+    MenuItemAvailabilityView,
     MenuCategoryViewSet,
     MenuItemViewSet,
     MenuViewSet,
@@ -52,5 +53,10 @@ urlpatterns = router.urls + [
         "menu-items/reorder",
         ItemsReorderView.as_view(),
         name="menu-items-reorder",
+    ),
+    path(
+        "menu-items/<int:pk>/availability",
+        MenuItemAvailabilityView.as_view(),
+        name="menu-item-availability",
     ),
 ]

@@ -45,7 +45,9 @@ def _resolve_organization(user):
     Platform admins with no membership fall back to ``None`` so the
     view can render an empty payload instead of 500'ing.
     """
-    membership = Membership.objects.filter(user=user, organization__is_active=True).first()
+    from apps.accounts.services import get_active_membership
+
+    membership = get_active_membership(user)
     return membership.organization if membership else None
 
 

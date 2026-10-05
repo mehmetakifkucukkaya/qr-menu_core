@@ -46,6 +46,20 @@ class OrganizationSerializer(serializers.ModelSerializer):
         )
         read_only_fields = ("id", "created_at", "updated_at")
 
+    # Fields only the agency (platform admins) may change: the URL slug that
+    # printed QR codes point at, and the suspend switch. An owner PATCHing them
+    # is ignored rather than rejected, so the profile form keeps working.
+    PLATFORM_ONLY_FIELDS = ("slug", "is_active")
+
+    def get_fields(self):
+        fields = super().get_fields()
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if not getattr(user, "is_platform_admin", False):
+            for name in self.PLATFORM_ONLY_FIELDS:
+                fields[name].read_only = True
+        return fields
+
 
 class OrganizationSummarySerializer(serializers.ModelSerializer):
     """Minimal org representation for nested resources + public menu payload.

@@ -121,6 +121,31 @@ if [[ $fernet_len -ne 44 ]]; then
     exit 2
 fi
 
+# --- 3b. Demo leftovers that must never reach a customer-facing server -----
+# `seed_demo` creates a super-user whose default password is in the public
+# repository and printed on the local login page. Production never runs it
+# (customers are opened in the Django admin), so none of its variables belong
+# in this file.
+demo_pw=$(grep -E "^DEMO_ADMIN_PASSWORD=" "$ENV_FILE" | head -1 | cut -d= -f2- || true)
+if [[ "$demo_pw" == "change-me-demo-only" || "$demo_pw" == "__"* ]]; then
+    echo ""
+    echo "❌ DEMO_ADMIN_PASSWORD is the published default or a template placeholder."
+    echo "   Anyone can read it in the public repository. Remove the variable:"
+    echo "   production does not run seed_demo."
+    exit 2
+fi
+if grep -qE "^NEXT_PUBLIC_ADMIN_DEMO_HINT=[^[:space:]]" "$ENV_FILE"; then
+    echo ""
+    echo "❌ NEXT_PUBLIC_ADMIN_DEMO_HINT is set: the login page would print a demo account."
+    echo "   Remove it from $ENV_FILE and rebuild the frontend image."
+    exit 2
+fi
+if grep -qiE "^DJANGO_DEBUG=(1|true|yes|on)[[:space:]]*$" "$ENV_FILE"; then
+    echo ""
+    echo "❌ DJANGO_DEBUG is on. Production must run with DEBUG off."
+    exit 2
+fi
+
 # PUBLIC_BASE_URL is printed into every QR code - it must be the public origin.
 public_url=$(grep -E "^PUBLIC_BASE_URL=" "$ENV_FILE" | cut -d= -f2-)
 if [[ "$public_url" == *localhost* || "$public_url" == *127.0.0.1* ]]; then
