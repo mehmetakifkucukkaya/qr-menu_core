@@ -11,7 +11,7 @@ from django import forms
 from django.contrib import admin
 
 from apps.audit.services import record_event
-from apps.core.admin_base import deleting_a_customer
+from apps.core.admin_base import TurkishLabelsMixin, deleting_a_customer
 
 from .constants import FEATURE_FIELDS, FEATURE_LABELS
 from .models import PlanSettings, TenantUsageCounter
@@ -37,17 +37,25 @@ class PlanSettingsAdminForm(forms.ModelForm):
 
 
 @admin.register(PlanSettings)
-class PlanSettingsAdmin(admin.ModelAdmin):
+class PlanSettingsAdmin(TurkishLabelsMixin, admin.ModelAdmin):
     form = PlanSettingsAdminForm
+    labels = {
+        "organization": "İşletme",
+        "active_plan": "Paket",
+        "cart_enabled": FEATURE_LABELS["cart_enabled"],
+        "orders_enabled": FEATURE_LABELS["orders_enabled"],
+        "loyalty_enabled": FEATURE_LABELS["loyalty_enabled"],
+        "updated_at": "Güncellenme",
+    }
     list_display = ("organization", "plan", "orders_on", "loyalty_on", "trial_end", "updated_at")
     list_filter = ("active_plan", "cart_enabled", "orders_enabled", "loyalty_enabled")
     search_fields = ("organization__name", "organization__slug")
-    readonly_fields = ("trial_started_at", "trial_ends_at", "created_at", "updated_at")
+    readonly_fields = ("trial_started", "trial_ends", "created", "updated")
     fieldsets = (
         (None, {"fields": ("organization", "active_plan", "billing_notes")}),
         ("Modüller ve özellikler", {"fields": FEATURE_FIELDS}),
-        ("Deneme", {"fields": ("trial_started_at", "trial_ends_at")}),
-        ("Kayıt", {"fields": ("created_at", "updated_at")}),
+        ("Deneme", {"fields": ("trial_started", "trial_ends")}),
+        ("Kayıt", {"fields": ("created", "updated")}),
     )
 
     def get_readonly_fields(self, request, obj=None):
@@ -91,6 +99,14 @@ class PlanSettingsAdmin(admin.ModelAdmin):
         )
         obj.refresh_from_db()
 
+    @admin.display(description="Deneme başlangıcı")
+    def trial_started(self, obj):
+        return obj.trial_started_at
+
+    @admin.display(description="Deneme bitişi")
+    def trial_ends(self, obj):
+        return obj.trial_ends_at
+
     # ---- list columns (Turkish headers)
 
     @admin.display(description="Paket", ordering="active_plan")
@@ -111,7 +127,17 @@ class PlanSettingsAdmin(admin.ModelAdmin):
 
 
 @admin.register(TenantUsageCounter)
-class TenantUsageCounterAdmin(admin.ModelAdmin):
+class TenantUsageCounterAdmin(TurkishLabelsMixin, admin.ModelAdmin):
+    labels = {
+        "organization": "İşletme",
+        "period_year": "Yıl",
+        "period_month": "Ay",
+        "views": "Görüntülenme",
+        "scans": "Tarama",
+        "ai_pdf_imports": "PDF içe aktarma",
+        "ai_translate_ops": "Çeviri işlemi",
+        "ai_description_ops": "Açıklama işlemi",
+    }
     list_display = (
         "organization",
         "period_year",

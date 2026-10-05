@@ -26,6 +26,7 @@ from django.utils.html import format_html
 from apps.accounts.admin import MembershipForm
 from apps.accounts.models import Membership, MembershipRole
 from apps.billing.constants import FEATURE_LABELS, PLAN_CHOICES, PLAN_TIER_LIMITS
+from apps.core.admin_base import TurkishLabelsMixin
 from apps.billing.models import TenantUsageCounter
 from apps.billing.services import default_plan, extend_trial
 from apps.branches.models import Branch
@@ -264,8 +265,9 @@ class BranchInline(admin.TabularInline):
 
 
 @admin.register(Organization)
-class OrganizationAdmin(admin.ModelAdmin):
+class OrganizationAdmin(TurkishLabelsMixin, admin.ModelAdmin):
     form = OrganizationAdminForm
+    labels = {"name": "İşletme", "slug": "Adres adı"}
     list_display = (
         "name", "slug", "plan_label", "trial_label", "owner_email", "status",
         "orders_30d", "item_total", "last_order",
@@ -279,7 +281,7 @@ class OrganizationAdmin(admin.ModelAdmin):
         "suspend", "reactivate", "extend_trial_7", "extend_trial_14", "extend_trial_30",
         "reset_owner_password",
     )
-    readonly_fields = ("plan_summary", "usage_summary", "created_at", "updated_at")
+    readonly_fields = ("plan_summary", "usage_summary", "created", "updated")
     fieldsets = (
         ("Özet", {"fields": ("plan_summary", "usage_summary")}),
         (None, {"fields": ("name", "slug", "legal_name", "description", "is_active")}),
@@ -294,7 +296,7 @@ class OrganizationAdmin(admin.ModelAdmin):
             },
         ),
         ("Yerelleştirme", {"fields": ("default_locale", "supported_locales", "currency")}),
-        ("Önemli tarihler", {"fields": ("created_at", "updated_at")}),
+        ("Önemli tarihler", {"fields": ("created", "updated")}),
     )
 
     def get_readonly_fields(self, request, obj=None):

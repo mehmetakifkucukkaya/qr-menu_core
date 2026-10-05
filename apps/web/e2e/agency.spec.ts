@@ -190,7 +190,7 @@ test.describe.serial("agency panel", () => {
     await agency.goto(`${AGENCY}/audit/auditevent/?q=${SLUG}`);
     const list = agency.locator("#result_list");
     await expect(list).toContainText(`${NAME} (${SLUG})`);
-    for (const action of ["Deactivated", "Reactivated", "Onboarding: tenant + owner signup"]) {
+    for (const action of ["Askıya alındı", "Yeniden etkinleştirildi", "Müşteri açıldı"]) {
       await expect(list).toContainText(action);
     }
     // Opening a record shows it read-only: nothing to save.
