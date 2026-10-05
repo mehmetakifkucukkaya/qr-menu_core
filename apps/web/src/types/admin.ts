@@ -14,6 +14,8 @@
  *  - Locale codes are `"tr" | "en"` to keep parity with the public UI.
  */
 
+import type { AccessState } from "@/lib/roles";
+
 /** Locale codes supported by the admin (mirrors PublicMenuLocaleCode). */
 export type AdminLocaleCode = "tr" | "en";
 
@@ -55,6 +57,8 @@ export interface CurrentUser {
   must_change_password: boolean;
   /** Role in the business the user operates as; null for a platform admin without one. */
   membership_role: MembershipRole | null;
+  /** Why an open session can do nothing: the agency suspended the business, or it has none. */
+  access_state: AccessState;
   date_joined: string; // ISO datetime
   created_at: string; // ISO datetime
 }

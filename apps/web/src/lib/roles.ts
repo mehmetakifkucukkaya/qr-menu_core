@@ -11,6 +11,9 @@
 
 export type UiRole = "owner" | "manager" | "staff" | "kitchen";
 
+/** Mirrors `access_state` of `/api/v1/me`: can this account use its business? */
+export type AccessState = "ok" | "suspended" | "no_membership";
+
 export const ROLE_LABELS: Readonly<Record<UiRole, string>> = {
   owner: "Sahip",
   manager: "Yönetici",
@@ -43,6 +46,37 @@ export function uiRole(
     default:
       return isPlatformAdmin ? "owner" : null;
   }
+}
+
+export interface BlockedNotice {
+  title: string;
+  message: string;
+}
+
+/**
+ * What a signed-in account that cannot use the panel is told, or `null` when it
+ * can. `suspended` = the agency switched the business off (the server refuses
+ * every request of the team's open sessions); anything else without a role is
+ * an account tied to no business.
+ */
+export function blockedNotice(
+  accessState: AccessState | undefined,
+  role: UiRole | null,
+): BlockedNotice | null {
+  if (accessState === "suspended") {
+    return {
+      title: "Hesabınız askıya alındı",
+      message:
+        "İşletmenizin erişimi ajans tarafından durduruldu. Ayrıntı için ajansınızla iletişime geçin.",
+    };
+  }
+  if (role === null || accessState === "no_membership") {
+    return {
+      title: "Hesabınız bir işletmeye bağlı değil",
+      message: "Ajansınızla iletişime geçin.",
+    };
+  }
+  return null;
 }
 
 interface AccessRule {
