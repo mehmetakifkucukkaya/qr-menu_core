@@ -32,6 +32,7 @@ from __future__ import annotations
 import logging
 from decimal import Decimal
 
+from django.core.exceptions import ValidationError
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.exceptions import ValidationError as DRFValidationError
@@ -54,9 +55,9 @@ from apps.organizations.models import Organization
 from apps.account.models import Customer, LoyaltySettings
 from apps.account.services import LoyaltyError, customer_balance, redeem_points
 
-from .models import Order, OrderStatus
+from .models import CancelReason, Order, OrderStatus
 from .serializers import PublicOrderCreateSerializer
-from .services import create_order, transition_status
+from .services import OrderTransitionError, create_order, transition_status
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +83,15 @@ def _wrap(data, request: Request) -> Response:
             "meta": {"request_id": request.META.get("HTTP_X_REQUEST_ID", "")},
         }
     )
+
+
+def _cancel_reason_fields(order: Order) -> dict:
+    """``cancel_reason`` + its Turkish label (both ``None`` unless cancelled)."""
+    reason = order.cancel_reason or None
+    return {
+        "cancel_reason": reason,
+        "cancel_reason_label": CancelReason(reason).label if reason else None,
+    }
 
 
 def _resolve_organization(user):
@@ -438,6 +448,7 @@ class PublicOrderStatusView(APIView):
                 "cancelled_at": (
                     order.cancelled_at.isoformat() if order.cancelled_at else None
                 ),
+                **_cancel_reason_fields(order),
             },
             request,
         )
@@ -570,7 +581,9 @@ class AdminOrderDetailView(APIView):
             {
                 "id": order.id,
                 "order_number": order.order_number,
+                "daily_seq": order.daily_seq,
                 "status": order.status,
+                **_cancel_reason_fields(order),
                 "table_number": order.table_number,
                 "customer_name": order.customer_name,
                 "customer_phone": order.customer_phone,
@@ -642,14 +655,31 @@ class AdminOrderStatusView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        if new_status not in {choice for choice, _ in OrderStatus.choices}:
+            return Response(
+                {"error": {"code": "order.invalid_status", "message": "Bilinmeyen durum."}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         try:
-            transition_status(order, new_status, actor=request.user)
-        except Exception as exc:
+            transition_status(
+                order,
+                new_status,
+                actor=request.user,
+                cancel_reason=str(request.data.get("cancel_reason") or ""),
+            )
+        except OrderTransitionError as exc:
+            # Another tablet got there first, or the move is simply not allowed.
+            return Response(
+                {"error": {"code": "order.invalid_transition", "message": exc.messages[0]}},
+                status=status.HTTP_409_CONFLICT,
+            )
+        except ValidationError as exc:
             return Response(
                 {
                     "error": {
-                        "code": "order.invalid_transition",
-                        "message": str(exc),
+                        "code": f"order.{exc.error_list[0].code or 'invalid'}",
+                        "message": exc.messages[0],
                     }
                 },
                 status=status.HTTP_400_BAD_REQUEST,
@@ -673,6 +703,7 @@ class AdminOrderStatusView(APIView):
                 "cancelled_at": (
                     order.cancelled_at.isoformat() if order.cancelled_at else None
                 ),
+                **_cancel_reason_fields(order),
             },
             request,
         )

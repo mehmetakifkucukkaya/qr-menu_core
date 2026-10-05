@@ -41,7 +41,7 @@ from django.utils import timezone
 
 from apps.menu.models import MenuItem
 
-from .models import Order, OrderCounter, OrderItem, OrderStatus
+from .models import CancelReason, Order, OrderCounter, OrderItem, OrderStatus
 
 logger = logging.getLogger(__name__)
 
@@ -263,56 +263,55 @@ def create_order(
     return order
 
 
-def transition_status(order: Order, new_status: str, actor=None) -> Order:
-    """Validate the transition + stamp timestamp + emit audit event.
+# Short Turkish names for messages (the model's labels are long sentences).
+STATUS_LABELS: dict[str, str] = {
+    OrderStatus.PENDING: "Beklemede",
+    OrderStatus.CONFIRMED: "Onaylandı",
+    OrderStatus.PREPARING: "Hazırlanıyor",
+    OrderStatus.READY: "Hazır",
+    OrderStatus.DELIVERED: "Teslim edildi",
+    OrderStatus.CANCELLED: "İptal edildi",
+}
 
-    Raises ``ValidationError`` for illegal transitions. The audit call
-    happens *after* the save so the event row's ``target_id`` matches
-    the persisted row (and the rollback on a partial save would not
-    leak an "audited" but unstamped transition).
-    """
+# "Hazırlamaya başla" on a new order: confirmed and preparing in one tap.
+_COMBINED_STEPS = {
+    (OrderStatus.PENDING, OrderStatus.PREPARING): (OrderStatus.CONFIRMED, OrderStatus.PREPARING),
+}
+
+
+class OrderTransitionError(ValidationError):
+    """The order cannot move to that status from where it really is (HTTP 409)."""
+
+
+def _apply_step(order: Order, step: str, cancel_reason: str) -> None:
+    """Stamp, save and audit ONE edge of the state machine."""
     # Local import keeps services import-order independent from apps.audit.
     from apps.audit.services import record_event
 
-    current = order.status
-    allowed = STATUS_TRANSITIONS.get(current, set())
-    if new_status not in allowed:
-        allowed_list = sorted(allowed) if allowed else ["(terminal)"]
-        raise ValidationError(
-            f"Geçersiz durum geçişi: {current} -> {new_status}. "
-            f"İzin verilen: {', '.join(allowed_list)}."
-        )
-
-    if new_status not in {choice for choice, _ in OrderStatus.choices}:
-        # Programmer error — guard against typos in the call site.
-        raise ValidationError(f"Bilinmeyen durum: {new_status}")
-
-    order.status = new_status
+    previous = order.status
+    order.status = step
     now = timezone.now()
-    if new_status == OrderStatus.CONFIRMED:
+    if step == OrderStatus.CONFIRMED:
         order.confirmed_at = now
-    elif new_status == OrderStatus.PREPARING:
+    elif step == OrderStatus.PREPARING:
         order.preparing_at = now
-    elif new_status == OrderStatus.READY:
+    elif step == OrderStatus.READY:
         order.ready_at = now
-    elif new_status == OrderStatus.DELIVERED:
+    elif step == OrderStatus.DELIVERED:
         order.delivered_at = now
-    elif new_status == OrderStatus.CANCELLED:
+    elif step == OrderStatus.CANCELLED:
         order.cancelled_at = now
+        order.cancel_reason = cancel_reason
 
-    order.save(update_fields=["status", "updated_at",
-                              "confirmed_at", "preparing_at",
-                              "ready_at", "delivered_at", "cancelled_at"])
+    order.save(update_fields=["status", "updated_at", "confirmed_at", "preparing_at",
+                              "ready_at", "delivered_at", "cancelled_at", "cancel_reason"])
 
     # Sprint 10A — loyalty award trigger (D-025). When an order
     # transitions to "delivered" and the customer is linked, we
     # append an EARN row to the loyalty ledger. Idempotent via
     # the (order, type='earn') unique constraint; safe to call
     # repeatedly if the state machine ever retries.
-    if (
-        new_status == OrderStatus.DELIVERED
-        and order.customer_id is not None
-    ):
+    if step == OrderStatus.DELIVERED and order.customer_id is not None:
         from apps.account.services import award_points_for_order
         try:
             award_points_for_order(order)
@@ -323,13 +322,61 @@ def transition_status(order: Order, new_status: str, actor=None) -> Order:
                 exc,
             )
 
-    action = f"order_{new_status}"
+    payload = {"from": previous, "to": step}
+    if step == OrderStatus.CANCELLED:
+        payload["cancel_reason"] = cancel_reason
     record_event(
         organization=order.organization,
-        action=action,
+        action=f"order_{step}",
         target_type="order",
         target_id=order.id,
         target_repr=f"{order.order_number} ({order.customer_name})",
-        payload={"from": current, "to": new_status},
+        payload=payload,
     )
+
+
+def transition_status(
+    order: Order, new_status: str, actor=None, cancel_reason: str = ""
+) -> Order:
+    """Move ``order`` to ``new_status`` (SPEC_PILOT_READINESS 5.2).
+
+    * The row is locked while it moves and the order is judged by what is
+      really stored - another tablet may have moved it since this copy was read.
+    * Asking for the status the order already has is a quiet success (a double
+      tap, two tablets): nothing changes, nothing is audited.
+    * A new order asked to be ``preparing`` goes through ``confirmed`` in the
+      same call (two timestamps, two audit events).
+    * An impossible move raises :class:`OrderTransitionError`; cancelling needs a
+      ``cancel_reason`` (``CancelReason``), else ``ValidationError``.
+
+    Both are ``django.core.exceptions.ValidationError`` subclasses with Turkish
+    messages. Audit actor/IP come from the request context, not from ``actor``.
+    """
+    if new_status not in {choice for choice, _ in OrderStatus.choices}:
+        raise ValidationError(f"Bilinmeyen durum: {new_status}", code="invalid_status")
+
+    with transaction.atomic():
+        Order.objects.select_for_update().get(pk=order.pk)
+        order.refresh_from_db()
+
+        current = order.status
+        if current == new_status:
+            return order
+
+        steps = _COMBINED_STEPS.get((current, new_status))
+        if steps is None and new_status in STATUS_TRANSITIONS.get(current, set()):
+            steps = (new_status,)
+        if steps is None:
+            raise OrderTransitionError(
+                f"Geçersiz durum geçişi: sipariş şu an \"{STATUS_LABELS[current]}\"; "
+                f"\"{STATUS_LABELS[new_status]}\" durumuna alınamaz."
+            )
+        if new_status == OrderStatus.CANCELLED:
+            if not cancel_reason:
+                raise ValidationError("İptal nedeni seçin.", code="cancel_reason_required")
+            if cancel_reason not in CancelReason.values:
+                raise ValidationError("Geçersiz iptal nedeni.", code="invalid_cancel_reason")
+
+        for step in steps:
+            _apply_step(order, step, cancel_reason)
     return order

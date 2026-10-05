@@ -81,9 +81,10 @@ def test_status_invalid_transition_rejected(order_a):
 
 
 def test_status_pending_skip_steps_rejected(order_a):
-    # pending -> preparing is not in the FSM (would skip confirmed).
+    # pending -> ready would skip the whole kitchen. (pending -> preparing is
+    # the one allowed shortcut: "Hazırlamaya başla" confirms and starts at once.)
     with pytest.raises(ValidationError):
-        services.transition_status(order_a, "preparing")
+        services.transition_status(order_a, "ready")
 
 
 def test_status_terminal_delivered_cannot_change(order_a):
@@ -95,7 +96,7 @@ def test_status_terminal_delivered_cannot_change(order_a):
 
 
 def test_status_terminal_cancelled_cannot_change(order_a):
-    services.transition_status(order_a, "cancelled")
+    services.transition_status(order_a, "cancelled", cancel_reason="other")
     for illegal in ("pending", "confirmed", "preparing", "ready", "delivered"):
         with pytest.raises(ValidationError):
             services.transition_status(order_a, illegal)
@@ -124,7 +125,7 @@ def test_status_transition_pending_only_has_placed_at(order_a):
 
 
 def test_status_cancelled_stamps_cancelled_at_only(order_a):
-    services.transition_status(order_a, "cancelled")
+    services.transition_status(order_a, "cancelled", cancel_reason="other")
     order_a.refresh_from_db()
     assert order_a.cancelled_at is not None
     assert order_a.confirmed_at is None

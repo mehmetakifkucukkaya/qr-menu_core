@@ -43,6 +43,14 @@ class OrderStatus(models.TextChoices):
     CANCELLED = "cancelled", "İptal Edildi"
 
 
+class CancelReason(models.TextChoices):
+    """Why a kitchen cancelled an order; the customer sees the label."""
+
+    OUT_OF_STOCK = "out_of_stock", "Ürün tükendi"
+    KITCHEN_BUSY = "kitchen_busy", "Mutfak yoğun"
+    OTHER = "other", "Diğer"
+
+
 class Order(TimeStampedModel):
     """A customer order belonging to one Organization.
 
@@ -121,6 +129,10 @@ class Order(TimeStampedModel):
     cancelled_at = models.DateTimeField(null=True, blank=True)
 
     metadata = models.JSONField(default=dict, blank=True)
+
+    cancel_reason = models.CharField(
+        max_length=20, choices=CancelReason.choices, blank=True, default=""
+    )
 
     # "#12": the short number the kitchen shouts. 1, 2, 3... per business per
     # local day (``OrderCounter`` scope "org"); empty on orders that predate it.
