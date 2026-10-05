@@ -29,6 +29,7 @@ source code or at API responses in isolation can see that.
 | 8h | The cover photo is resized, shown in the hero, and has an absolute `og:image`; removing it restores the plain hero | `photos.spec.ts` | a 4–5 MB phone photo sent to every visitor as the first image; link previews with a relative image URL |
 | 9 | The owner adds a kitchen and a staff user on the Ekip page; each signs in with the temporary password, must choose a new one and lands on their own page; role limits hold in the UI and on the server; deactivating ends access at once | `roles.spec.ts` | roles that were never enforced (F-08), no way to create floor staff, a kitchen tablet that needed the owner's full login |
 | 10 | The agency opens a customer on the Django admin's "Yeni müşteri aç" screen; the owner signs in with the temporary password; suspending closes the owner's open session and the public menu; reactivating and a reissued owner password work; the audit trail shows all of it | `agency.spec.ts` | an agency tool nobody had ever driven in a browser; a stale session cookie sending `/login` and `/admin` into an endless redirect |
+| 11 | The kitchen screen: a new order appears within seconds without a reload, with its number, table, lines, notes and allergens and without the customer's phone number; one tap per step moves it across the three columns; cancelling needs a reason the customer can read; "Servisi başlat" rings for a new order until its card is touched; a dropped connection keeps the last orders on screen under a "Bağlantı yok" strip and recovers by itself | `kitchen.spec.ts` | a kitchen screen that reloaded the whole page through the server and showed nothing when offline, customer phone numbers on a wall display, an order nobody noticed arriving |
 
 Flows 1, 1b, 2, 2b and 2c also run on a phone viewport (Pixel 7): the product is
 used on phones.
@@ -56,7 +57,7 @@ Chromium. Playwright's bundled one is installed once with
 The harness starts its **own** stack and never touches your dev data:
 
 * backend: Django `runserver` on `:8200`, a fresh SQLite file in the OS temp
-  directory (deleted and re-seeded with `seed_demo` on every run) and a
+  directory (deleted and re-seeded with `seed_allergens_tags` and `seed_demo` on every run) and a
   throwaway media folder next to it (`MEDIA_ROOT`, wiped on every run - uploaded
   test photos never land in `backend/media`);
 * web: `next build` + `next start` on `:3200`, pointed at that backend;

@@ -19,7 +19,7 @@ import { defineConfig, devices } from "@playwright/test";
  * The harness starts its OWN stack on throwaway ports and a throwaway SQLite
  * database - it never touches your dev data:
  *
- *   backend  Django `runserver` on :8200, fresh DB, `seed_demo` data
+ *   backend  Django `runserver` on :8200, fresh DB, `seed_allergens_tags` + `seed_demo` data
  *   web      `next build` + `next start` on :3200, pointed at that backend
  *
  * Run:  npm run test:e2e        (see e2e/README.md for env overrides)
@@ -84,6 +84,9 @@ export default defineConfig({
       command:
         `rm -f "${DB_FILE}" && rm -rf "${MEDIA_DIR}" && ` +
         `${PYTHON} manage.py migrate --noinput && ` +
+        // Allergens and dietary tags are reference data a real install seeds once;
+        // without them the demo dishes carry no allergens.
+        `${PYTHON} manage.py seed_allergens_tags && ` +
         `${PYTHON} manage.py seed_demo && ` +
         `${PYTHON} manage.py runserver 127.0.0.1:${BACKEND_PORT} --noreload`,
       url: `http://127.0.0.1:${BACKEND_PORT}/health`,

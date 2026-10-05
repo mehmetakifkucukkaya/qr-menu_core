@@ -79,20 +79,23 @@ export function KitchenCard({
         isNew ? "kitchen-card-alert border-warning" : "border-border",
       )}
     >
-      <header className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-4xl font-black leading-none tabular-nums text-text">{cardTitle(card)}</p>
-          <p className="mt-2 break-words text-base text-muted">
+      <header className="flex flex-col gap-1.5">
+        {/* Two rows, so a long table name wraps instead of squeezing the number. */}
+        <div className="flex items-baseline justify-between gap-3">
+          <p className="shrink-0 text-4xl font-black leading-none tabular-nums text-text">{cardTitle(card)}</p>
+          <p className="min-w-0 break-words text-right text-3xl font-bold leading-tight text-text">
+            {tableLabel(card)}
+          </p>
+        </div>
+        <div className="flex items-start justify-between gap-3">
+          <p className="min-w-0 break-words text-base text-muted">
             {card.order_number}
             {card.customer_name ? ` · ${card.customer_name}` : ""}
           </p>
-        </div>
-        <div className="shrink-0 text-right">
-          <p className="text-3xl font-bold leading-none text-text">{tableLabel(card)}</p>
           <p
             data-tone={tone}
             className={clsx(
-              "mt-2 inline-flex items-center justify-end gap-1.5 text-xl font-bold tabular-nums",
+              "inline-flex shrink-0 items-center gap-1.5 text-xl font-bold tabular-nums",
               AGE_CLASS[tone],
             )}
           >
