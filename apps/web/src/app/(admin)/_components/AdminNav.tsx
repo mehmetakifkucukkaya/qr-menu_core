@@ -11,14 +11,19 @@ import {
   ChefHat,
   FileUp,
   Image as ImageIcon,
+  KeyRound,
   LayoutDashboard,
+  PackageCheck,
   Palette,
   QrCode,
   Receipt,
+  UserCog,
   UtensilsCrossed,
   Users,
   type LucideIcon,
 } from "lucide-react";
+
+import { filterNavGroups, type UiRole } from "@/lib/roles";
 
 interface NavItem {
   href: string;
@@ -57,6 +62,7 @@ export const ADMIN_NAV_GROUPS: NavGroup[] = [
     label: "Katalog",
     items: [
       { href: "/admin/menus", label: "Menüler", icon: UtensilsCrossed },
+      { href: "/admin/availability", label: "Ürün durumu", icon: PackageCheck },
       { href: "/admin/qr-codes", label: "QR Kodlar", icon: QrCode },
       { href: "/admin/pdf-import", label: "PDF Import", icon: FileUp },
       { href: "/admin/media", label: "Medya Kütüphanesi", icon: ImageIcon },
@@ -75,11 +81,15 @@ export const ADMIN_NAV_GROUPS: NavGroup[] = [
       { href: "/admin/business", label: "İşletme", icon: Building2 },
       { href: "/admin/theme", label: "Tema", icon: Palette },
       { href: "/admin/billing", label: "Plan & Limitler", icon: Banknote },
+      { href: "/admin/team", label: "Ekip", icon: UserCog },
+      { href: "/admin/account/password", label: "Şifre değiştir", icon: KeyRound },
     ],
   },
 ];
 
 interface AdminNavListProps {
+  /** The signed-in role: links it cannot open are not offered (the server refuses them too). */
+  role: UiRole;
   /** Called after a link is chosen (the phone drawer closes itself). */
   onNavigate?: () => void;
 }
@@ -89,12 +99,12 @@ interface AdminNavListProps {
  * A section counts as current for its own URL and everything beneath it
  * (`/admin/menus/1/edit` keeps "Menüler" highlighted).
  */
-export function AdminNavList({ onNavigate }: AdminNavListProps) {
+export function AdminNavList({ role, onNavigate }: AdminNavListProps) {
   const pathname = usePathname() ?? "";
 
   return (
     <nav aria-label="Admin navigasyonu" className="flex flex-col gap-0.5">
-      {ADMIN_NAV_GROUPS.map((group, index) => (
+      {filterNavGroups(ADMIN_NAV_GROUPS, role).map((group, index) => (
         <div key={group.label ?? index} className={group.label ? "pt-4" : undefined}>
           {group.label ? (
             <p className="px-3 pb-1.5 text-xs font-semibold tracking-wide text-outline">

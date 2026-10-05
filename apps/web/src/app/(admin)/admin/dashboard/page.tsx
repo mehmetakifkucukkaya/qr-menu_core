@@ -123,6 +123,7 @@ const TARGET_LABEL: Record<string, string> = {
   customer: "müşteri",
   menu_import_draft: "menü içe aktarma",
   plan_settings: "plan",
+  membership: "ekip üyesi",
 };
 
 /**
