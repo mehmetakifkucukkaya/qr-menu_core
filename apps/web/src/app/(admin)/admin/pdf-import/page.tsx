@@ -9,6 +9,7 @@ import {
   fetchImportDrafts,
 } from "@/lib/api-admin";
 import type { MenuImportDraftSummary, MenuImportStatus } from "@/types/admin";
+import { formatDateTime } from "@/lib/datetime";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -240,7 +241,7 @@ export default async function PdfImportListPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 align-middle text-xs text-muted">
-                      {new Date(d.created_at).toLocaleString("tr-TR")}
+                      {formatDateTime(d.created_at, {})}
                     </td>
                     <td className="px-4 py-3 align-middle">
                       <div className="flex items-center justify-end gap-1.5">

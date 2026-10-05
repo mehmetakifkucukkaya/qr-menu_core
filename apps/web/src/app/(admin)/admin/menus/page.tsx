@@ -6,6 +6,7 @@ import { AdminErrorState } from "@/app/(admin)/_components/ErrorState";
 import { AdminEmptyState } from "@/app/(admin)/_components/EmptyState";
 import { fetchMenus, AdminApiError } from "@/lib/api-admin";
 import type { AdminMenu } from "@/types/admin";
+import { formatDate } from "@/lib/datetime";
 
 // Admin list pages depend on cookies + the request user; opt out of static
 // prerender so Next.js doesn't try to bake them at build time.
@@ -134,7 +135,7 @@ export default async function MenusListPage() {
                     </span>
                   ) : null}
                   <span>
-                    {new Date(menu.updated_at).toLocaleDateString("tr-TR")}
+                    {formatDate(menu.updated_at)}
                   </span>
                 </div>
               </Link>

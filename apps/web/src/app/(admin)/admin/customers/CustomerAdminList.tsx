@@ -3,6 +3,7 @@ import { Search, X } from "lucide-react";
 
 import { FormField } from "@/app/(admin)/_components/FormField";
 import type { CustomerAdminSummary } from "@/types/admin";
+import { formatDateTime } from "@/lib/datetime";
 
 interface CustomerAdminListProps {
   customers: CustomerAdminSummary[];
@@ -13,16 +14,6 @@ interface CustomerAdminListProps {
   searchQuery: string;
 }
 
-function formatDateTime(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleString("tr-TR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 /**
  * CustomerAdminList — server component, renders the 10A backend's
