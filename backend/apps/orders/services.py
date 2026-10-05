@@ -116,6 +116,19 @@ def generate_order_number(organization, day=None) -> str:
     return f"{prefix}{number:03d}"
 
 
+# A line note is read on a kitchen tablet: short on purpose.
+MAX_LINE_NOTE_LENGTH = 120
+
+
+def _allergen_names(menu_item) -> list[str]:
+    """Turkish allergen names of a dish, ordered by allergen code."""
+    names = []
+    for link in sorted(menu_item.item_allergens.all(), key=lambda l: l.allergen.code):
+        name = link.allergen.name or {}
+        names.append(name.get("tr") or name.get("en") or link.allergen.code)
+    return names
+
+
 def calculate_total_from_items(items_data: Iterable[dict[str, Any]], organization):
     """Validate line items + return ``(total, validated_lines)``.
 
@@ -152,8 +165,10 @@ def calculate_total_from_items(items_data: Iterable[dict[str, Any]], organizatio
         # Only the business's own items: a bare ``pk`` lookup let a customer of
         # business A order (and price) an item of business B (ANALYSIS_1 F-10).
         try:
-            menu_item = MenuItem.objects.select_related("menu").get(
-                pk=raw["menu_item_id"], menu__organization=organization
+            menu_item = (
+                MenuItem.objects.select_related("menu")
+                .prefetch_related("item_allergens__allergen")
+                .get(pk=raw["menu_item_id"], menu__organization=organization)
             )
         except MenuItem.DoesNotExist as exc:
             raise ValidationError(
@@ -171,7 +186,8 @@ def calculate_total_from_items(items_data: Iterable[dict[str, Any]], organizatio
             {
                 "menu_item": menu_item,
                 "quantity": quantity,
-                "notes": (raw.get("notes") or "")[:200],
+                "notes": (raw.get("notes") or "")[:MAX_LINE_NOTE_LENGTH],
+                "allergens": _allergen_names(menu_item),
                 "price": menu_item.price,
                 "name": menu_item.name,
                 "currency": menu_item.currency,
@@ -239,6 +255,7 @@ def create_order(
                 price=line["price"],
                 quantity=line["quantity"],
                 notes=line["notes"],
+                allergens=line["allergens"],
             )
             for line in validated
         ]

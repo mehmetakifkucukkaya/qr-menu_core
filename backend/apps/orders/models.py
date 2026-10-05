@@ -196,6 +196,9 @@ class OrderItem(models.Model):
     )
     quantity = models.PositiveIntegerField()
     notes = models.CharField(max_length=200, blank=True, default="")
+    # Turkish allergen names of the dish AT ORDER TIME (a later menu edit must
+    # not change what a past order told the kitchen).
+    allergens = models.JSONField(default=list, blank=True)
 
     class Meta:
         verbose_name = "Sipariş Kalemi"

@@ -562,6 +562,7 @@ class AdminOrderDetailView(APIView):
                 "price": str(item.price),
                 "quantity": item.quantity,
                 "notes": item.notes,
+                "allergens": item.allergens,
             }
             for item in order.items.all()
         ]

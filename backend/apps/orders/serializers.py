@@ -26,7 +26,7 @@ from .models import Order, OrderItem
 class OrderItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrderItem
-        fields = ("id", "menu_item", "name", "price", "quantity", "notes")
+        fields = ("id", "menu_item", "name", "price", "quantity", "notes", "allergens")
         read_only_fields = fields
 
 
@@ -72,7 +72,7 @@ class PublicOrderLineSerializer(serializers.Serializer):
     menu_item_id = serializers.IntegerField(min_value=1)
     quantity = serializers.IntegerField(min_value=1, max_value=99)
     notes = serializers.CharField(
-        max_length=200, required=False, allow_blank=True, default=""
+        max_length=120, required=False, allow_blank=True, default=""
     )
 
 
