@@ -108,6 +108,20 @@ def _org_repr(org) -> str:
     return f"{org.name} ({org.slug})"
 
 
+def _org_cascade(kwargs) -> bool:
+    """True while a whole business is being deleted.
+
+    Django passes the object (or queryset) a delete started from as
+    ``origin``. The children of a deleted business are not logged one by one:
+    the business' own "deleted" event is the record, and an event about a row
+    deleted in the same transaction could not point at its business anyway.
+    """
+    from apps.organizations.models import Organization
+
+    origin = kwargs.get("origin")
+    return isinstance(origin, Organization) or getattr(origin, "model", None) is Organization
+
+
 # ---------------------------------------------------------------------------
 # Menu
 # ---------------------------------------------------------------------------
@@ -162,6 +176,8 @@ def audit_menu_save(sender, instance, created, **kwargs):
 
 @receiver(post_delete, sender="menu.Menu")
 def audit_menu_delete(sender, instance, **kwargs):
+    if _org_cascade(kwargs):
+        return
     record_event(
         organization=instance.organization,
         action="deleted",
@@ -228,6 +244,8 @@ def audit_category_save(sender, instance, created, **kwargs):
 
 @receiver(post_delete, sender="menu.MenuCategory")
 def audit_category_delete(sender, instance, **kwargs):
+    if _org_cascade(kwargs):
+        return
     record_event(
         organization=instance.menu.organization,
         action="deleted",
@@ -343,6 +361,8 @@ def audit_item_save(sender, instance, created, **kwargs):
 
 @receiver(post_delete, sender="menu.MenuItem")
 def audit_item_delete(sender, instance, **kwargs):
+    if _org_cascade(kwargs):
+        return
     record_event(
         organization=instance.menu.organization,
         action="deleted",
@@ -408,6 +428,8 @@ def audit_branch_save(sender, instance, created, **kwargs):
 
 @receiver(post_delete, sender="branches.Branch")
 def audit_branch_delete(sender, instance, **kwargs):
+    if _org_cascade(kwargs):
+        return
     record_event(
         organization=instance.organization,
         action="deleted",
@@ -458,6 +480,8 @@ def audit_theme_save(sender, instance, created, **kwargs):
 
 @receiver(post_delete, sender="theme.ThemeConfig")
 def audit_theme_delete(sender, instance, **kwargs):
+    if _org_cascade(kwargs):
+        return
     record_event(
         organization=instance.organization,
         action="deleted",
@@ -507,12 +531,13 @@ def audit_org_save(sender, instance, created, **kwargs):
 
 @receiver(post_delete, sender="organizations.Organization")
 def audit_org_delete(sender, instance, **kwargs):
-    # Note: the FK to organization cascades, so the event log for this
-    # org is wiped at the same time. We still record a delete event so
-    # the lifecycle is captured for any downstream that runs before
-    # the cascade (e.g. Celery tasks in a later sprint).
+    # The business row is gone by now, so the event cannot point at it (that
+    # was a FOREIGN KEY failure at commit). It is kept with no organization and
+    # the name + slug in ``organization_label``: the agency's trail outlives
+    # the customer. The business' earlier events were detached (SET_NULL).
     record_event(
-        organization=instance,
+        organization=None,
+        organization_label=_org_repr(instance),
         action="deleted",
         target_type="organization",
         target_id=instance.pk,

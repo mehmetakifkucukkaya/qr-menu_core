@@ -154,5 +154,5 @@ class Membership(models.Model):
             models.Index(fields=["organization", "role"]),
         ]
 
-    def __str__(self) -> str:  # pragma: no cover
-        return f"{self.user_id} → org:{self.organization_id} ({self.role})"
+    def __str__(self) -> str:
+        return f"{self.user.email} — {self.get_role_display()}"

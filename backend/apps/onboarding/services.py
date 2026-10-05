@@ -22,13 +22,11 @@ function takes an ``Organization`` and never a raw user input.
 
 from __future__ import annotations
 
-from datetime import timedelta
 from typing import Optional
 
 from django.db import transaction
 from django.utils import timezone
 
-from apps.billing.constants import OPS
 from apps.billing.models import PlanSettings
 from apps.branches.models import Branch
 from apps.menu.models import MenuCategory, MenuItem, Menu
@@ -46,25 +44,18 @@ TRIAL_DAYS = 14
 # ---------------------------------------------------------------------------
 
 
-def start_trial(organization: Organization) -> PlanSettings:
-    """Flip the tenant to OPS for :data:`TRIAL_DAYS` days.
+def start_trial(organization: Organization, days: int = TRIAL_DAYS) -> PlanSettings:
+    """Flip the tenant to OPS for ``days`` days (:data:`TRIAL_DAYS` by default).
 
     Idempotent — calling twice on the same tenant refreshes the
-    trial window (only allowed for superusers in V1; the public
-    signup path calls it exactly once).
+    trial window (the public signup path and the agency's
+    ``provision_tenant`` call it exactly once; extending a running trial is
+    ``apps.billing.services.extend_trial``).
     """
-    from apps.billing.services import get_plan_settings
+    from apps.billing.services import begin_trial, get_plan_settings
 
     ps = get_plan_settings(organization)
-    ps.trial_started_at = timezone.now()
-    ps.trial_ends_at = ps.trial_started_at + timedelta(days=TRIAL_DAYS)
-    ps.active_plan = OPS
-    ps.billing_notes = f"Trial ({TRIAL_DAYS}d) — auto-downgrade to BASIC after."
-    # Re-apply OPS defaults so all 8 feature flags flip on for the trial.
-    from apps.billing.constants import default_features
-
-    for field, value in default_features(OPS).items():
-        setattr(ps, field, value)
+    begin_trial(ps, days)
     ps.save()
     return ps
 

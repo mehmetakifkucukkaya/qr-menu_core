@@ -223,7 +223,10 @@ class FirstQRView(APIView):
         target_url = f"/m/{organization.slug}"
         payload = {
             "id": qr.id,
-            "slug": qr.slug,
+            # A QR code has no slug of its own (this line used to read
+            # ``qr.slug`` and crash step 5 of the wizard): the business' slug
+            # is what the printed link carries.
+            "slug": organization.slug,
             "png_url": qr.png_url if hasattr(qr, "png_url") else "",
             "target_url": request.build_absolute_uri(target_url),
         }
