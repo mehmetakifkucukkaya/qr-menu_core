@@ -121,6 +121,11 @@ export default async function OrderDetailPage({ params }: PageProps) {
           </div>
           <div className="flex flex-col items-end gap-2">
             <OrderStatusBadge status={order.status} />
+            {order.cancel_reason_label ? (
+              <p className="text-sm font-medium text-danger">
+                İptal nedeni: {order.cancel_reason_label}
+              </p>
+            ) : null}
             <p className="font-heading text-2xl font-bold text-primary tabular-nums">
               {formatPrice(order.total_amount, order.currency)}
             </p>

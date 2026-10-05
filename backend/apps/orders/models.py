@@ -43,6 +43,14 @@ class OrderStatus(models.TextChoices):
     CANCELLED = "cancelled", "İptal Edildi"
 
 
+class CancelReason(models.TextChoices):
+    """Why a kitchen cancelled an order; the customer sees the label."""
+
+    OUT_OF_STOCK = "out_of_stock", "Ürün tükendi"
+    KITCHEN_BUSY = "kitchen_busy", "Mutfak yoğun"
+    OTHER = "other", "Diğer"
+
+
 class Order(TimeStampedModel):
     """A customer order belonging to one Organization.
 
@@ -122,6 +130,14 @@ class Order(TimeStampedModel):
 
     metadata = models.JSONField(default=dict, blank=True)
 
+    cancel_reason = models.CharField(
+        max_length=20, choices=CancelReason.choices, blank=True, default=""
+    )
+
+    # "#12": the short number the kitchen shouts. 1, 2, 3... per business per
+    # local day (``OrderCounter`` scope "org"); empty on orders that predate it.
+    daily_seq = models.PositiveIntegerField(null=True, blank=True)
+
     class Meta:
         verbose_name = "Sipariş"
         verbose_name_plural = "Siparişler"
@@ -135,6 +151,32 @@ class Order(TimeStampedModel):
 
     def __str__(self) -> str:  # pragma: no cover
         return f"{self.order_number} ({self.status})"
+
+
+class OrderCounter(models.Model):
+    """One counter per (scope, key, local day), advanced under a row lock.
+
+    * scope ``prefix``, key ``CA`` - the daily suffix of ``order_number``
+      (``CA-20261005-007``); shared by every business whose slug starts with
+      the same two letters, which keeps the number globally unique.
+    * scope ``org``, key ``<organization id>`` - ``Order.daily_seq``.
+    """
+
+    SCOPE_PREFIX = "prefix"
+    SCOPE_ORG = "org"
+
+    scope = models.CharField(max_length=10)
+    key = models.CharField(max_length=40)
+    day = models.DateField()
+    last_value = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        verbose_name = "Sipariş Sayacı"
+        verbose_name_plural = "Sipariş Sayaçları"
+        unique_together = (("scope", "key", "day"),)
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"{self.scope}:{self.key}:{self.day} = {self.last_value}"
 
 
 class OrderItem(models.Model):
@@ -166,6 +208,9 @@ class OrderItem(models.Model):
     )
     quantity = models.PositiveIntegerField()
     notes = models.CharField(max_length=200, blank=True, default="")
+    # Turkish allergen names of the dish AT ORDER TIME (a later menu edit must
+    # not change what a past order told the kitchen).
+    allergens = models.JSONField(default=list, blank=True)
 
     class Meta:
         verbose_name = "Sipariş Kalemi"

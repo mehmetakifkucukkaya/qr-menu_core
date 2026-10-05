@@ -256,6 +256,18 @@ docker compose --env-file .env.production -f docker-compose.production.yml exec 
     python manage.py createsuperuser
 ```
 
+Once, load the allergen and dietary-tag reference data (shared by every business;
+idempotent). Without it the product form offers no allergens and the kitchen
+screen's allergen labels stay empty:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.production.yml exec backend \
+    python manage.py seed_allergens_tags
+```
+
+The kitchen tablet's setup and daily use are in
+[`KITCHEN_GUIDE.md`](KITCHEN_GUIDE.md) (Turkish).
+
 ### 3.2 Demo data (private staging only - never on a customer-facing server)
 
 `seed_demo` creates a super-user whose **default password is published in the

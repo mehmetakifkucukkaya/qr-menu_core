@@ -151,3 +151,51 @@
   --glass-bg: rgb(var(--color-background) / 0.78);
   --glass-bg-strong: rgb(var(--color-surface) / 0.88);
 }
+
+/* ----- Kitchen screen ------------------------------------------------------
+ * A tablet on a kitchen wall, glanced at from a metre away in bright light:
+ * near-black ground, near-white text, status colours lifted to light tints.
+ * Scoped to the kitchen's own root (`.kitchen-dark`); there is no global dark
+ * mode switch. Every colour token is redefined so no light colour leaks through
+ * (`src/lib/kitchen-theme.test.ts` checks that and the contrast).
+ *
+ * Contrast (WCAG, on --color-surface #1A1F1C): text 15.5:1 · muted 10.6:1 ·
+ * outline 7.7:1 · primary 10.0:1 · warning 11.6:1 · success 11.9:1 ·
+ * danger 8.8:1 - all text at AAA (7:1). Dark labels on the bright button fills
+ * are 9.9-13.4:1. The control border (--color-input) is 5.4:1.
+ *
+ * Meaning of the colours on this screen: warning = new / waiting,
+ * primary = being prepared, success = ready, danger = cancel / late. */
+.kitchen-dark {
+  color-scheme: dark;
+
+  --color-primary: 125 211 252;           /* #7DD3FC sky: being prepared */
+  --color-primary-foreground: 4 32 46;    /* #04202E label on a primary fill */
+  --color-primary-soft: 18 48 61;         /* #12303D */
+  --color-secondary: 253 186 116;         /* #FDBA74 */
+  --color-secondary-soft: 58 36 16;       /* #3A2410 */
+  --color-accent: 134 239 172;            /* #86EFAC */
+
+  --color-background: 15 18 16;           /* #0F1210 */
+  --color-surface: 26 31 28;              /* #1A1F1C cards */
+  --color-surface-low: 20 24 21;          /* #141815 columns */
+  --color-surface-high: 38 45 40;         /* #262D28 counters, chips */
+  --color-text: 245 247 245;              /* #F5F7F5 */
+  --color-muted: 201 208 203;             /* #C9D0CB */
+  --color-outline: 169 179 172;           /* #A9B3AC */
+
+  --color-border: 59 68 62;               /* #3B443E */
+  --color-border-strong: 92 103 95;       /* #5C675F */
+  --color-input: 138 149 141;             /* #8A958D control border (5.4:1) */
+
+  --color-danger: 252 165 165;            /* #FCA5A5 */
+  --color-danger-soft: 61 21 21;          /* #3D1515 */
+  --color-success: 134 239 172;           /* #86EFAC */
+  --color-success-soft: 16 48 28;         /* #10301C */
+  --color-warning: 252 211 77;            /* #FCD34D amber */
+  --color-warning-soft: 58 45 10;         /* #3A2D0A */
+
+  --color-bg-base: 15 18 16;
+  --color-bg-overlay: 26 31 28;
+  --color-shadow-color: 0 0 0;
+}

@@ -21,7 +21,14 @@
     "test:cart-store": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test src/lib/cart-store.test.ts",
     "test:roles": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test src/lib/roles.test.ts",
     "test:datetime": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test src/lib/datetime.test.ts",
-    "test:set-cookie": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test src/lib/set-cookie.test.ts"
+    "test:set-cookie": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test src/lib/set-cookie.test.ts",
+    "test:kitchen-board": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test src/lib/kitchen-board.test.ts",
+    "test:board-poller": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test src/lib/board-poller.test.ts",
+    "test:kitchen-api": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test src/lib/kitchen-api.test.ts",
+    "test:kitchen-alert": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test src/lib/kitchen-alert.test.ts",
+    "test:kitchen-theme": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test src/lib/kitchen-theme.test.ts",
+    "test:cart-note": "TSX_TSCONFIG_PATH=tsconfig.test.json node --import tsx --import ./src/test-dom.ts --no-warnings=ExperimentalWarning --test src/components/public/CartLineNote.test.tsx src/components/public/OrderCancelledNotice.test.tsx",
+    "test:kitchen-ui": "TSX_TSCONFIG_PATH=tsconfig.test.json node --import tsx --import ./src/test-dom.ts --no-warnings=ExperimentalWarning --test \"src/app/(admin)/admin/kitchen/_components/*.test.tsx\" \"src/app/(admin)/_components/Kitchen*.test.tsx\""
   },
   "dependencies": {
     "clsx": "^2.1.1",

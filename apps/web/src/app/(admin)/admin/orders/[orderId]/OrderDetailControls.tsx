@@ -9,6 +9,8 @@ import {
   type AdminOrderDetail,
   type AdminOrderStatus,
 } from "@/lib/api-admin";
+import type { CancelReason } from "@/lib/kitchen-board";
+import { CancelDialog } from "@/app/(admin)/admin/kitchen/_components/CancelDialog";
 
 interface OrderDetailControlsProps {
   orderId: number;
@@ -78,6 +80,7 @@ export function OrderDetailControls({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [liveStatus, setLiveStatus] = useState<AdminOrderStatus>(initialStatus);
+  const [cancelling, setCancelling] = useState(false);
 
   // 30 s polling — refreshes the route via router.refresh() so the
   // timestamps + status badges re-render with the latest server data.
@@ -92,14 +95,14 @@ export function OrderDetailControls({
     return () => clearInterval(timer);
   }, [router, liveStatus]);
 
-  const handleUpdate = async (next: AdminOrderStatus) => {
+  const handleUpdate = async (next: AdminOrderStatus, cancelReason?: CancelReason) => {
     if (!csrfToken) {
       setError("CSRF token bulunamadı. Sayfayı yenileyin.");
       return;
     }
     setError(null);
     try {
-      const result = await updateOrderStatus(orderId, next, { csrfToken });
+      const result = await updateOrderStatus(orderId, next, { csrfToken, cancelReason });
       setLiveStatus(result.status);
       // Re-render the whole page so timestamps + items reflect the new state.
       router.refresh();
@@ -131,7 +134,7 @@ export function OrderDetailControls({
               <button
                 key={a.next}
                 type="button"
-                onClick={() => handleUpdate(a.next)}
+                onClick={() => (a.next === "cancelled" ? setCancelling(true) : handleUpdate(a.next))}
                 disabled={pending}
                 className={
                   "inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 " +
@@ -160,6 +163,24 @@ export function OrderDetailControls({
           {error}
         </p>
       ) : null}
+      {/* Cancelling asks for a reason (the customer reads it), like on the kitchen screen. */}
+      <CancelDialog
+        card={
+          cancelling
+            ? {
+                id: orderId,
+                daily_seq: initial.daily_seq,
+                order_number: initial.order_number,
+                table_number: initial.table_number,
+              }
+            : null
+        }
+        onConfirm={(reason) => {
+          setCancelling(false);
+          void handleUpdate("cancelled", reason);
+        }}
+        onClose={() => setCancelling(false)}
+      />
     </div>
   );
 }
