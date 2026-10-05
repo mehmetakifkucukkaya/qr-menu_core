@@ -1,6 +1,6 @@
 import type { APIRequestContext, Page } from "@playwright/test";
 
-import { API_ORIGIN, expect, loginAsAdmin, test } from "./support";
+import { API_ORIGIN, clickCentered, expect, loginAsAdmin, test } from "./support";
 
 /**
  * Flow 11 - the kitchen screen (SPEC_PILOT_READINESS 2 steps 5-6 and 8).
@@ -235,5 +235,52 @@ test.describe.serial("kitchen screen", () => {
     await context.setOffline(false);
     await expect(banner).toBeHidden({ timeout: 15_000 });
     await expect(cardIn(page, "Yeni", second.orderNumber)).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("flow 11e: a customer's note on a dish reaches the kitchen, and the reason for a cancellation reaches the customer", async ({
+    page,
+    browser,
+  }) => {
+    // The customer, on their own phone (a separate browser): one dish with a note.
+    const customer = await browser.newContext();
+    const shopper = await customer.newPage();
+    const table = `K${String(stamp).slice(-5)}-${(placed += 1)}`;
+
+    await shopper.goto("/m/modern-cafe");
+    const latte = shopper.locator("article").filter({
+      has: shopper.getByRole("heading", { level: 3, name: "Latte", exact: true }),
+    });
+    await clickCentered(latte.getByRole("button", { name: "Sepete Ekle" }));
+    const cart = shopper.getByRole("dialog", { name: "Sepetim" });
+    await expect(cart).toBeVisible();
+    await cart.getByRole("textbox", { name: "Latte için not" }).fill("az şekerli, sıcak olsun");
+    await cart.getByRole("button", { name: "Sipariş Ver" }).click();
+
+    const checkout = shopper.getByRole("dialog", { name: "Sipariş Onayı" });
+    await checkout.getByLabel(/^Ad Soyad/).fill("E2E Müşteri");
+    await checkout.getByLabel(/^Telefon/).fill(PHONE);
+    await checkout.getByLabel("Masa No").fill(table);
+    await checkout.getByRole("checkbox", { name: /Kapıda nakit ödeme/ }).check();
+    await checkout.getByRole("button", { name: "Onayla" }).click();
+    await shopper.waitForURL(/\/order-confirmation\/[A-Z]{2}-\d{8}-\d{3}$/);
+    const orderNumber = shopper.url().split("/").pop()!;
+
+    // The kitchen sees the note on the dish...
+    await openKitchen(page);
+    const card = cardIn(page, "Yeni", orderNumber);
+    await expect(card).toBeVisible();
+    await expect(card).toContainText("az şekerli, sıcak olsun");
+
+    // ...and cancels it with a reason.
+    await card.getByRole("button", { name: "İptal", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Siparişi iptal et" });
+    await dialog.getByRole("radio", { name: "Mutfak yoğun" }).check();
+    await dialog.getByRole("button", { name: "Siparişi iptal et" }).click();
+    await expect(anywhere(page, orderNumber)).toHaveCount(0);
+
+    // The customer's page (it asks every 15 seconds) says why.
+    await expect(shopper.getByText("İptal Edildi").first()).toBeVisible({ timeout: 25_000 });
+    await expect(shopper.getByText("Neden: Mutfak yoğun")).toBeVisible();
+    await customer.close();
   });
 });
