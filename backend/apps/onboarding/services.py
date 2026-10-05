@@ -77,23 +77,17 @@ def is_in_trial(ps: PlanSettings) -> bool:
 
 
 def expire_trial_if_due(organization: Organization) -> bool:
-    """Downgrade OPS-trial tenants whose window closed. Returns True if
-    a downgrade happened. Called by the V2 SaaS Celery beat — V1 demo
-    uses the TrialBanner's first-page mount to drive this on demand.
+    """Downgrade an OPS-trial tenant whose window closed. Returns True if a
+    downgrade happened.
+
+    The logic lives in :func:`apps.billing.services.expire_trial` (it also runs
+    lazily inside ``get_plan_settings`` and from ``manage.py expire_trials``);
+    this wrapper keeps the onboarding API and reports whether *it* did the
+    downgrade, so it reads the row with ``expire=False``.
     """
-    from apps.billing.services import get_plan_settings
+    from apps.billing.services import expire_trial, get_plan_settings
 
-    ps = get_plan_settings(organization)
-    if ps.trial_ends_at and ps.trial_ends_at <= timezone.now() and ps.active_plan == OPS:
-        from apps.billing.constants import BASIC, default_features
-
-        ps.active_plan = BASIC
-        ps.billing_notes = "Trial süresi doldu — BASIC'e otomatik düşürüldü."
-        for field, value in default_features(BASIC).items():
-            setattr(ps, field, value)
-        ps.save()
-        return True
-    return False
+    return expire_trial(get_plan_settings(organization, expire=False))
 
 
 # ---------------------------------------------------------------------------

@@ -354,10 +354,12 @@ PAYMENT_WEBHOOK_BASE_URL = os.environ.get(
 # ---------------------------------------------------------------------------
 # Sprint B1 — Billing (D-026)
 # ---------------------------------------------------------------------------
-# Default plan for fresh tenants (no row yet). V1 demo posture: OPS
-# so Modern Cafe runs full feature set. Production / V2 SaaS flips to
-# ``basic`` and the seed / signup wizard upgrades as needed.
-BILLING_DEFAULT_PLAN = os.environ.get("BILLING_DEFAULT_PLAN", "ops")
+# Plan used for a tenant that has NO PlanSettings row (e.g. an Organization
+# created by hand in the Django admin). ``basic`` = the smallest tier: a
+# tenant nobody classified must not silently get every feature and no limits
+# (it used to fall back to OPS). apps.onboarding.provisioning and seed_demo
+# always create the row explicitly.
+BILLING_DEFAULT_PLAN = os.environ.get("BILLING_DEFAULT_PLAN", "basic")
 # Grace percent applied to tier limits before ``enforce_limit`` fails.
 # V1 hard-fails at the boundary (``BILLING_LIMIT_GRACE_PCT=0``); V2
 # SaaS uses a positive value (e.g. 10) to send a warning email at
