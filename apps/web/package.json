@@ -27,7 +27,7 @@
     "test:kitchen-api": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test src/lib/kitchen-api.test.ts",
     "test:kitchen-alert": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test src/lib/kitchen-alert.test.ts",
     "test:kitchen-theme": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test src/lib/kitchen-theme.test.ts",
-    "test:kitchen-ui": "TSX_TSCONFIG_PATH=tsconfig.test.json node --import tsx --import ./src/test-dom.ts --no-warnings=ExperimentalWarning --test \"src/app/(admin)/admin/kitchen/_components/*.test.tsx\""
+    "test:kitchen-ui": "TSX_TSCONFIG_PATH=tsconfig.test.json node --import tsx --import ./src/test-dom.ts --no-warnings=ExperimentalWarning --test \"src/app/(admin)/admin/kitchen/_components/*.test.tsx\" \"src/app/(admin)/_components/Kitchen*.test.tsx\""
   },
   "dependencies": {
     "clsx": "^2.1.1",

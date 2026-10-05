@@ -81,20 +81,23 @@ test.describe.serial("roles and team", () => {
     await expect(row.getByText("Geçici şifre")).toBeVisible();
   });
 
-  test("the kitchen user: forced password change, kitchen only, server refuses the rest", async ({
+  test("the kitchen user: forced password change, the kitchen screen only, server refuses the rest", async ({
     browser,
   }) => {
     const { context, page } = await signInAndChoosePassword(browser, KITCHEN_EMAIL, /\/admin\/kitchen$/);
 
-    const nav = page.getByRole("navigation", { name: "Admin navigasyonu" });
-    await expect(nav.getByRole("link", { name: "Mutfak" })).toBeVisible();
-    for (const hidden of ["Menüler", "Siparişler", "Ekip", "Plan & Limitler", "Müşteriler"]) {
-      await expect(nav.getByRole("link", { name: hidden })).toHaveCount(0);
-    }
+    // A kitchen tablet gets the kitchen's own frame - the business, the time, a
+    // way out - and no menu to wander off into.
+    await expect(page.getByRole("heading", { level: 1, name: "Mutfak Ekranı" })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Admin navigasyonu" })).toHaveCount(0);
+    await expect(page.getByText("Modern Cafe").first()).toBeVisible();
+    await expect(page.getByText(/^\d{2}:\d{2}$/).first()).toBeVisible();
+    await expect(page.locator(".kitchen-dark").first()).toBeVisible();
 
-    // A page this role may not open becomes a polite notice...
+    // A page this role may not open becomes a polite notice (inside the same frame)...
     await page.goto("/admin/menus");
     await expect(page.getByRole("heading", { name: "Bu sayfaya yetkiniz yok" })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Admin navigasyonu" })).toHaveCount(0);
 
     // ...and the server refuses the same thing independently of the UI.
     const refused = await page.request.get(`${API_ORIGIN}/api/v1/admin/menus/`);
@@ -102,7 +105,12 @@ test.describe.serial("roles and team", () => {
     expect((await refused.json()).error.code).toBe("auth.role_forbidden");
 
     // The one thing it is for works.
-    expect((await page.request.get(`${API_ORIGIN}/api/v1/admin/kitchen/tickets`)).status()).toBe(200);
+    expect((await page.request.get(`${API_ORIGIN}/api/v1/admin/kitchen/board`)).status()).toBe(200);
+
+    // One tap signs the tablet out.
+    await page.goto("/admin/kitchen");
+    await page.getByRole("button", { name: "Çıkış yap" }).click();
+    await expect(page).toHaveURL(/\/login/);
     await context.close();
   });
 
