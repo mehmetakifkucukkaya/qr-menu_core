@@ -43,7 +43,7 @@ run "web type-check"  bash -c "cd '$ROOT/apps/web' && npx tsc --noEmit"
 run "web lint"        bash -c "cd '$ROOT/apps/web' && npx next lint"
 run "e2e type-check"  bash -c "cd '$ROOT/apps/web' && npm run --silent type-check:e2e"
 
-for t in test:seo test:currency test:feature-flags test:trial-banner test:media-uploader test:ttl-cache test:cart-store test:media-url test:media-proxy test:roles test:datetime test:set-cookie test:kitchen-board test:board-poller test:kitchen-api; do
+for t in test:seo test:currency test:feature-flags test:trial-banner test:media-uploader test:ttl-cache test:cart-store test:media-url test:media-proxy test:roles test:datetime test:set-cookie test:kitchen-board test:board-poller test:kitchen-api test:kitchen-alert; do
     run "web unit tests ($t)" bash -c "cd '$ROOT/apps/web' && npm run --silent $t"
 done
 
