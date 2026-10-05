@@ -252,11 +252,21 @@ docker compose --env-file .env.production -f docker-compose.production.yml exec 
     python manage.py createsuperuser
 ```
 
-### 3.2 Seed demo data
+### 3.2 Demo data (private staging only - never on a customer-facing server)
+
+`seed_demo` creates a super-user whose **default password is published in the
+public repository** (and the Modern Cafe demo business). It therefore refuses to
+run when `DJANGO_DEBUG` is off, and `scripts/validate_prod_env.sh` rejects a
+production env file that carries `DEMO_ADMIN_PASSWORD=change-me-demo-only`, the
+demo login hint or `DJANGO_DEBUG=1`.
+
+Customers are opened in the Django admin (`/django-admin/`, §3.1). Only for a
+private staging/demo server, with a private password:
 
 ```bash
-docker compose --env-file .env.production -f docker-compose.production.yml exec backend \
-    python manage.py seed_demo
+docker compose --env-file .env.production -f docker-compose.production.yml exec \
+    -e DEMO_ADMIN_PASSWORD='<a private value>' backend \
+    python manage.py seed_demo --allow-non-debug
 ```
 
 ### 3.3 Smoke test
@@ -699,15 +709,9 @@ journalctl --vacuum-size=200M
 ### 10.8 AuditEvent / analytics missing
 
 If admin summary or `/api/v1/admin/analytics/overview` returns empty
-results, the `seed_demo` command may not have run. Re-run it:
-
-```bash
-docker compose --env-file .env.production -f docker-compose.production.yml exec backend \
-    python manage.py seed_demo
-```
-
-This creates the Modern Cafe business + 5 categories + 25 items + 5 QR
-codes (Sprint 6B will add 5 more for the full demo flow).
+results on a **staging/demo** server, the demo data may not have been seeded -
+see §3.2 (`seed_demo --allow-non-debug`, private password). On a real customer
+server an empty dashboard simply means the business has no data yet.
 
 ---
 

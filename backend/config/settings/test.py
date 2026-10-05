@@ -50,3 +50,8 @@ PAYMENTS_ENABLED = True
 
 # Don't try to send emails in tests.
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
+
+# Signup is closed by default in production; its own tests (and the existing
+# signup tests) run with it open. apps/accounts/tests/test_signup_closed.py
+# covers the closed state.
+SIGNUP_ENABLED = True

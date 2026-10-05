@@ -8,6 +8,7 @@ the csrftoken cookie, then echo it in the ``X-CSRFToken`` header.
 
 from __future__ import annotations
 
+from django.conf import settings
 from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -31,6 +32,17 @@ from .services import get_active_membership, resolve_membership_state, session_a
 
 def _error(code: str, message: str, http_status: int) -> Response:
     return Response({"error": {"code": code, "message": message}}, status=http_status)
+
+
+def _signup_closed() -> Response | None:
+    """The 404 for the signup endpoints while SIGNUP_ENABLED is off."""
+    if getattr(settings, "SIGNUP_ENABLED", False):
+        return None
+    return _error(
+        "signup.disabled",
+        "Kayıt şu an kapalı. Ajansınızla iletişime geçin.",
+        status.HTTP_404_NOT_FOUND,
+    )
 
 
 class CSRFView(APIView):
@@ -189,6 +201,10 @@ class SlugAvailabilityView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request: Request) -> Response:
+        closed = _signup_closed()
+        if closed is not None:
+            return closed
+
         from .serializers import SlugAvailabilitySerializer
 
         slug = (request.query_params.get("slug") or "").strip().lower()
@@ -255,6 +271,10 @@ class SignupView(APIView):
 
     @transaction.atomic
     def post(self, request: Request) -> Response:
+        closed = _signup_closed()
+        if closed is not None:
+            return closed
+
         from .serializers import SignupResponseSerializer, SignupSerializer
 
         serializer = SignupSerializer(data=request.data)

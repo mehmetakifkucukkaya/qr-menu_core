@@ -375,6 +375,13 @@ BILLING_LIMIT_GRACE_PCT = int(os.environ.get("BILLING_LIMIT_GRACE_PCT", "0"))
 INTERNAL_API_TOKEN = os.environ.get("INTERNAL_API_TOKEN", "")
 
 # ---------------------------------------------------------------------------
+# Pilot readiness — self-service signup
+# ---------------------------------------------------------------------------
+# Public signup (/api/v1/auth/signup, check-slug) is CLOSED by default: during
+# the pilot the agency opens every customer. Set SIGNUP_ENABLED=1 to reopen it.
+SIGNUP_ENABLED = _env_bool("SIGNUP_ENABLED", default=False)
+
+# ---------------------------------------------------------------------------
 # DRF
 # ---------------------------------------------------------------------------
 REST_FRAMEWORK = {
