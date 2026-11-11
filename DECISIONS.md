@@ -1615,6 +1615,7 @@ Local'de birden fazla Postgres instance çakışmasın diye ana stack'te host po
 | D-039 | 2026-11-11 | Kullanım Limitlerinin Tamamlanması + 402 Yükselt Banner'ı (USAGE_LIMIT_RESOURCES + enforce_usage_limit + AI sayaçları başarıdan sonra + views/scans limiti admin analytics'te public menüde değil + merkezi limit-notice store + LimitBanner shell'de) | aktif |
 | D-040 | 2026-11-11 | CI'nin Bulduğu Signup Submit Yarışı (slug kontrolü sürerken submit sessizce düşüyordu — deferred promise ile bekletme + slugStatusRef + Step1BusinessInfo.test.tsx regresyon testi) | aktif |
 | D-041 | 2026-11-11 | Kırık Bağımlılık Düzeltmesi (json-logging==1.4.1 PyPI'da yok — image build'ını kıran pin + var olmayan JSONFormatter sınıfı + bozuk fallback kaldırıldı; apps.core.logging.JsonLogFormatter stdlib ile yazıldı + davranış testleri) | aktif |
+| D-042 | 2026-11-11 | Frontend Testleri Node 20 Uyumu (--experimental-strip-types Node 22.6+ gerektiriyordu, Dockerfile Node 20 pinliyor → tsx'e geçildi + cart-store top-level await → before() hook + kitchen-ui glob → açık dosya listesi) | aktif |
 
 ---
 

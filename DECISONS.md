@@ -579,3 +579,49 @@ ERROR: No matching distribution found for json-logging==1.4.1
 - `docs/DEPLOYMENT.md` — operasyonel log talimatı güncellendi
 - Backend: **1216 passed, 2 skipped**
 - **Doğrulama:** temiz venv'de `pip install -r backend/requirements-dev.txt` → **exit 0** (CI'ın kırıldığı adım), sonra aynı venv'de `pytest` → 1216 passed. Production settings gerçekten formatter'ı instantiate edip geçerli JSON üretiyor.
+
+---
+
+# D-042 — Frontend Testleri Node 20'de Çalışmıyordu (CI'ın Üçüncü Koşusunun Bulduğu)
+
+**Tarih:** 2026-11-11
+
+**Bağlam:** D-041'den sonraki CI koşusu bağımlılık adımını geçti, backend 1216 test yeşildi, type-check ve lint geçti — sonra 5. adımda kırıldı:
+
+```
+node: bad option: --experimental-strip-types
+```
+
+Frontend unit test script'leri `node --experimental-strip-types` ile çalışıyordu. Bu bayrak **Node 22.6+** ile geldi; Node 20'de hiç yok. `apps/web/Dockerfile` `node:20-bookworm-slim` pinliyor ve CI da Node 20 kullanıyor — yani **test script'leri Dockerfile'ın pinlediği Node sürümünde hiç çalışmıyordu.**
+
+**Neden lokalde görünmedi:** Lokal makinede Node 25 kurulu. Node 25 `--experimental-strip-types`'ı destekliyor, dolayısıyla script'ler burada sessizce geçiyordu. CI'ın birebir aynı Node sürümünü kullanması bu hatayı ancak ortaya çıkarabilirdi.
+
+**Karar 1: `--experimental-strip-types` yerine `tsx`.**
+- Projede `tsx@4` zaten bir devDependency (JSX/TSX testleri `--import tsx` ile çalışıyordu). 15 script `--experimental-strip-types` yerine `--import tsx` kullanıyor artık.
+- `tsx` Node 20'de çalışıyor, TypeScript'i esbuild ile derliyor, `@/` alias'larını çözüyor — `--experimental-strip-types`'ın aksine Node sürümüne bağlı değil.
+- Node 20.18.1 indirilip **21 suite / 248 testin tamamı** Node 20'de çalıştırılarak doğrulandı. `tsc --noEmit`, `next lint` ve `next build` de Node 20'de temiz.
+
+**Karar 2: `cart-store.test.ts`'te top-level await kaldırıldı.**
+- Bu dosya store'u **dynamic import** ile yüklüyor: sıralama kritik — `window.localStorage` sahte nesnesi kurulduktan **sonra** import olmalı, yoksa zustand persist middleware'i sessizce kapanır ve testin konusu olan davranış hiç test edilmez.
+- Yazım `const { useCartStore } = await import("./cart-store.ts")` — yani top-level await. Bu yalnızca ESM'de çalışır. `apps/web/package.json` `"type": "module"` **değil** (CommonJS), ve Node 20'de `tsx` CJS'e derliyor → "Top-level await is currently not supported with the cjs output format".
+- Çözüm: `before()` hook. Aynı sıralama garantisi (import, sahte window'dan sonra; testlerden önce), top-level await gerekmez, CJS'te de çalışır. `useCartStore` bir `let` ile `before()` içinde atanıyor.
+
+**Karar 3: `test:kitchen-ui` glob'u açık dosya listesine çevrildi.**
+- Script `node --test "src/app/(admin)/admin/kitchen/_components/*.test.tsx"` kullanıyordu. Node'un `--test` runner'ı glob desteğini **Node 22+'da** ekledi; Node 20'de glob şablonu literal dosya adı olarak yorumlanıyor → "Could not find '.../*.test.tsx'".
+- 7 dosya açıkça listelendi. Node 20'de 55 test geçiyor.
+
+**Alternatifler:**
+- **CI'da Node 22 kullanmak** — reddedildi (birincil tercih). Dockerfile `node:20-bookworm-slim` pinliyor (D-007). CI'ın prod imajından farklı Node çalıştırması, "CI'da geçen kod prod'da çalışmıyor" riskini geri getirirdi — tam olarak bu hatayı üretmişti. Production ile aynı sürümde kalmak, sürüm farkını kapatmak.
+- **Node sürümünü 22'ye yükseltmek (Dockerfile dahil)** — düşünüldü, bu işin kapsamı dışında. Ayrı ve büyük bir değişiklik; prod imajının runtime'ını değiştirir. Şimdilik testler Node 20'da çalışır hâle getirildi, yükseltme ayrı bir karar olabilir.
+- **`"type": "module"` eklemek** — reddedildi. Next.js'in `next.config.mjs` dışındaki her şeyi etkiler; build ve runtime davranışını değiştiren geniş bir yüzey, test script'i düzeltmek için gereğinden fazla.
+- **cart-store testini `before()` yerine statik import yapmak** — reddedildi. Statik import, `window` tanımından **önce** çalışır ve testin konusu olan "store oluşturulurken kayıtlı sepet uygulanmaz" davranışı test edilemez hâle gelir.
+
+**Seçim gerekçesi:**
+- **CI, prod ile aynı Node sürümünü çalıştırmalı.** Dockerfile'ın pinlediği sürümde testler çalışmıyorsa, kapı hiçbir şey ölçmüyor demektir.
+- **`tsx` zaten projede var.** Yeni bir bağımlılık eklemeden, Node sürümüne bağlı olmayan bir yol var.
+- **Test script'leri, üretim sürümünde çalışmalı.** Lokal Node 25'te geçmesi, Node 20'da geçtiği anlamına gelmiyor.
+
+**Sonuçlar:**
+- `apps/web/package.json` — 15 script `--import tsx`'e geçti; `test:kitchen-ui` glob → 7 açık dosya
+- `apps/web/src/lib/cart-store.test.ts` — top-level await → `before()` hook
+- **Doğrulama:** Node 20.18.1 ile 21 suite / 248 frontend testi, `tsc --noEmit`, `next lint`, `next build`, `type-check:e2e` — hepsi temiz
