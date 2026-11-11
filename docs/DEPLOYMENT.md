@@ -513,8 +513,10 @@ docker compose --env-file .env.production -f docker-compose.production.yml logs 
 docker compose --env-file .env.production -f docker-compose.production.yml logs -f backend
 ```
 
-JSON log lines (when `json-logging` is installed) are shippable as-is
-to Better Stack / Loki / Datadog.
+Backend log lines are JSON in production (one object per line, from
+`apps/core/logging.py`) and shippable as-is to Better Stack / Loki /
+Datadog. The shape is fixed: `{"ts": "...Z", "level": "INFO",
+"logger": "...", "msg": "..."}`.
 
 ### 7.4 Disk + memory
 

@@ -1614,6 +1614,7 @@ Local'de birden fazla Postgres instance çakışmasın diye ana stack'te host po
 | D-038 | 2026-11-11 | GitHub Actions CI (push/pull_request/workflow_dispatch + concurrency cancel-in-progress + Python 3.12/Node 20 + tek job'da scripts/release_gate.sh — lokal ile CI birebir aynı kapı) | aktif |
 | D-039 | 2026-11-11 | Kullanım Limitlerinin Tamamlanması + 402 Yükselt Banner'ı (USAGE_LIMIT_RESOURCES + enforce_usage_limit + AI sayaçları başarıdan sonra + views/scans limiti admin analytics'te public menüde değil + merkezi limit-notice store + LimitBanner shell'de) | aktif |
 | D-040 | 2026-11-11 | CI'nin Bulduğu Signup Submit Yarışı (slug kontrolü sürerken submit sessizce düşüyordu — deferred promise ile bekletme + slugStatusRef + Step1BusinessInfo.test.tsx regresyon testi) | aktif |
+| D-041 | 2026-11-11 | Kırık Bağımlılık Düzeltmesi (json-logging==1.4.1 PyPI'da yok — image build'ını kıran pin + var olmayan JSONFormatter sınıfı + bozuk fallback kaldırıldı; apps.core.logging.JsonLogFormatter stdlib ile yazıldı + davranış testleri) | aktif |
 
 ---
 

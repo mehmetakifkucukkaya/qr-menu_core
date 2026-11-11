@@ -13,8 +13,8 @@ production. Key principles:
   (``X-Forwarded-Proto``) tells Django the request already arrived over TLS,
   so the redirect doesn't loop.
 - Logging is JSON to stdout (12-factor) so any log shipper can consume it.
-  ``json-logging`` is in :mod:`requirements-dev` because we also want it
-  available in local so log lines match between dev and prod.
+  The formatter lives in :mod:`apps.core.logging` — dependency-free, so it
+  cannot break the image build the way a third-party pin did.
 - Sentry is **opt-in** — only initialised when ``SENTRY_DSN`` is set. This
   lets the same image run with or without monitoring during the demo
   without changing the settings module.
@@ -212,27 +212,29 @@ ANALYTICS_SALT = os.environ.get("ANALYTICS_SALT") or os.environ.get(
 # ---------------------------------------------------------------------------
 # Logging — JSON to stdout
 # ---------------------------------------------------------------------------
-# Falls back to the base.py simple formatter if json-logging isn't installed
-# (it should be — it's in requirements-dev.txt — but we don't want import
-# time failures to break startup if a slimmer prod image omits it).
-try:
-    from json_logging import JSONFormatter  # type: ignore
-
-    _JSON_AVAILABLE = True
-except ImportError:  # pragma: no cover — json-logging is in requirements
-    _JSON_AVAILABLE = False
-
+# One JSON object per line, so any log shipper (Loki, Datadog, CloudWatch,
+# Better Stack) can index it without a grok pattern.
+#
+# This used to be the third-party ``json-logging`` package, configured as
+# ``json_logging.JSONFormatter``. That never worked: the pinned version
+# (1.4.1) was never published on PyPI, so a fresh install of the backend
+# requirements failed outright — and the Dockerfile installs those
+# requirements, so the production image build failed with it. The class
+# name was wrong too (``JSONFormatter`` does not exist in any published
+# version; it is ``JSONLogFormatter``), so the import always failed and
+# the silent fallback took over — production was never actually logging
+# JSON, and the fallback's format string produced invalid JSON whenever
+# the message contained a quote.
+#
+# apps.core.logging.JsonLogFormatter is dependency-free and cannot break an
+# image build. See that module for the field shape.
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "formatters": {
-        "json": (
-            {"()": "json_logging.JSONFormatter"} if _JSON_AVAILABLE else
-            {
-                "format": '{"time":"%(asctime)s","level":"%(levelname)s",'
-                          '"logger":"%(name)s","message":"%(message)s"}',
-            }
-        ),
+        "json": {
+            "()": "apps.core.logging.JsonLogFormatter",
+        },
         "simple": {
             "format": "[{asctime}] {levelname} {name}: {message}",
             "style": "{",

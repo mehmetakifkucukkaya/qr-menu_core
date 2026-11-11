@@ -524,3 +524,58 @@
 - Yeni: `apps/web/src/components/signup/Step1BusinessInfo.test.tsx` (4 test — 1. test tam olarak bu yarışı kilitler: kontrol sürerken tıklama düşmüyor; 2. test "taken" kontrolü hâlâ engelliyor; 3. test mutlu yol; 4. test auto-slug önerisinin kullanıcının slug'ını ezmediği)
 - `apps/web/package.json` → `test:signup-step1` script'i; `scripts/release_gate.sh` → gate'e eklendi (21 → 22 frontend suite)
 - `tsc --noEmit` temiz, `next lint` temiz, `signup.spec.ts` 2 passed
+
+---
+
+# D-041 — CI'nin İkinci Koşusunun Bulduğu Kırık Bağımlılık: `json-logging` Hiç Kurulmamış
+
+**Tarih:** 2026-11-11
+
+**Bağlam:** D-038'de kurulan CI'nin ikinci koşusu (elle tetiklenen) 4. adımda — "Install the backend dependencies" — kırıldı:
+
+```
+ERROR: Could not find a version that satisfies the requirement json-logging==1.4.1
+ERROR: No matching distribution found for json-logging==1.4.1
+```
+
+`json-logging` 1.4.1 **PyPI'da hiç yayımlanmamış**. Yayımlanan sürümler arasında 1.4.0, 1.4.1rc0 (release candidate) ve 1.5.x/1.6.0 var; tam sürüm 1.4.1 yok.
+
+**Bu neden daha önce görünmedi:** Lokal ortamda paket hiç kurulmamıştı (`ModuleNotFoundError: No module named 'json_logging'`) ve kod bunu `except ImportError` ile yutuyordu. Lokal backend testleri yeşildi — çünkü testler production log formatter'ını hiç instantiate etmiyordu.
+
+**Daha kötüsü: sadece CI değil, production imajı da kırılıyordu.** `backend/Dockerfile` her iki requirements dosyasını da kopyalayıp kuruyor (`pip install -r /app/requirements-dev.txt`). Yani `json-logging==1.4.1` **production Docker build'ini de** kırıyordu. Deploy sırasında fark edilecek bir hata.
+
+**İkinci hata: sınıf adı hiçbir sürümde yok.** Kod `from json_logging import JSONFormatter` yapıyordu. Yayımlanmış tüm sürümlerde sınıf adı `JSONLogFormatter` (1.0.0'dan itibaren) — `JSONFormatter` **hiçbir sürümde mevcut değil**. Yani import her zaman `ImportError` veriyor, `except ImportError` bloğu devreye giriyor ve **production hiçbir zaman JSON log üretmemiş**. Sessizce.
+
+**Üçüncü hata: fallback de JSON değildi.** Fallback format string'i `"message":"%(message)s"` idi. Mesajda tırnak veya newline varsa üretilen satır **geçersiz JSON** oluyordu — yani log shipper'a bozuk satır gidiyordu.
+
+**Karar: Bağımlılığı kaldır, formatter'ı yaz.**
+- **Yeni:** `backend/apps/core/logging.py` → `JsonLogFormatter` (saf stdlib: `json` + `logging`). Bağımlılık yok, image build'ı kıramaz.
+- Alan seti sabit: `{"ts", "level", "logger", "msg"}` (+ hata varsa `exc`, stack varsa `stack`). `ts` UTC ve `Z` designator'lı — `isoformat()` `+00:00` veriyordu, log shipper'ların timestamp parser'ı `Z` bekliyor.
+- `json.dumps` kaçışı yapar: mesajda tırnak/newline/unicode olsa bile **tek satır geçerli JSON** kalıyor.
+- `backend/config/settings/production.py` — `"json": {"()": "apps.core.logging.JsonLogFormatter"}`. `except ImportError` fallback'i tamamen kaldırıldı: artık kırılacak bir şey yok.
+- `backend/requirements-dev.txt` — `json-logging==1.4.1` satırı **kaldırıldı** (yorumla neden açıklandı).
+- `docs/DEPLOYMENT.md` — operasyonel talimat güncellendi (log şekli).
+
+**Karar 2: Test artık davranışı ölçüyor.**
+- Eski test (`test_json_logging`) settings kaynağında `"JSONFormatter"` ya da `"json_logging"` **string'i arıyordu** — yani var olmayan bir sınıf adını doğrulamış oluyordu. Bu yüzden hata testleri geçti.
+- Yeni: `backend/apps/core/tests/test_logging.py` — 9 test. Tek satır geçerli JSON mu, tırnaklı mesaj geçerli kalıyor mu, newline'lı mesaj tek satırda mı, unicode kaçışlanıyor mu, exception dahil ediliyor mu, production settings formatter'ı gerçekten bu sınıfa mı işaret ediyor mu.
+- `tests/test_production_settings.py::test_json_logging` artık `"JsonLogFormatter"` arıyor ve yorumla nedenini açıklıyor.
+
+**Alternatifler:**
+- **Sürümü düzeltip `json-logging==1.6.0` + `JSONLogFormatter` kullanmak** — reddedildi. Paket çalışır ama (a) hâlâ bir dış bağımlılık — bu hatayı bir daha çıkarabilir, (b) `JSONLogFormatter` çıktısı `written_at`/`msg`/`type`/`taskName` gibi alanlar üretiyor ve dokümanlanan `ts`/`level`/`logger`/`msg` şekliyle uyuşmuyor, (c) log formatter'ı için paket bağımlılığı değil savunulabilir bir maliyet değil.
+- **Fallback'i düzeltip `json-logging`'de kalmak** — reddedildi. Kırık pin yine image build'ını kırar; sadece semptom gizlenmiş olur.
+- **Sadece pin'i düzeltmek** — reddedildi. Sınıf adı hatası ve bozuk fallback yerinde kalır; prod hâlâ JSON log üretmez.
+
+**Seçim gerekçesi:**
+- **Bir log formatter'ı image build'ını kıramaz.** Bu paket build'ı kırdı; bu, bağımlılığın kendisi için yeterli bir gerekçe.
+- **Testler davranışı ölçmeli.** "Kaynakta şu string var" testi, var olmayan bir sınıf adını doğrulamış oldu. Aynı hatayı bir daha yakalayamayacak şekilde düzeltmek, düzeltmeden daha önemli.
+- **Dokümanlanan log şekli gerçek olmalı.** `DECISIONS.md` D-018 `ts`/`level`/`logger`/`msg` diyordu; gerçekte `written_at`/... üretiliyordu ve gerçekte hiçbir şey üretilmiyordu. Artık ikisi de aynı.
+
+**Sonuçlar:**
+- `backend/apps/core/logging.py` — **yeni**, `JsonLogFormatter`
+- `backend/apps/core/tests/test_logging.py` — **yeni**, 9 test
+- `backend/config/settings/production.py` — formatter + fallback kaldırıldı
+- `backend/requirements-dev.txt` — kırık pin kaldırıldı
+- `docs/DEPLOYMENT.md` — operasyonel log talimatı güncellendi
+- Backend: **1216 passed, 2 skipped**
+- **Doğrulama:** temiz venv'de `pip install -r backend/requirements-dev.txt` → **exit 0** (CI'ın kırıldığı adım), sonra aynı venv'de `pytest` → 1216 passed. Production settings gerçekten formatter'ı instantiate edip geçerli JSON üretiyor.
