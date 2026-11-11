@@ -95,6 +95,39 @@ class AnalyticsOverviewView(APIView):
                 status=status.HTTP_200_OK,
             )
 
+        # ---- The monthly cap ------------------------------------------------
+        #
+        # ``monthly_views`` / ``monthly_scans`` cap how much insight a
+        # tenant gets per month (BASIC: 1 000 views / 500 scans). The cap
+        # is enforced *here* and not on the public menu: a customer's
+        # guests must always be able to open the menu — that is the
+        # tenant's business, not a billable feature. What is billable is
+        # the analysis of those visits, so that is what stops.
+        from apps.billing.errors import LimitExceeded
+        from apps.billing.services import enforce_usage_limit
+
+        try:
+            enforce_usage_limit(
+                organization, "monthly_views", actor=request.user
+            )
+            enforce_usage_limit(
+                organization, "monthly_scans", actor=request.user
+            )
+        except LimitExceeded as exc:
+            return Response(
+                {
+                    "error": {
+                        "code": exc.code,
+                        "message": exc.message,
+                        **exc.extra,
+                    },
+                    "meta": {
+                        "request_id": request.META.get("HTTP_X_REQUEST_ID", "")
+                    },
+                },
+                status=exc.http_status,
+            )
+
         # ---- Window --------------------------------------------------------
         try:
             days = int(request.query_params.get("days", DEFAULT_WINDOW_DAYS))

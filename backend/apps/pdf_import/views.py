@@ -91,6 +91,27 @@ class PdfUploadView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        # The monthly AI cap (PRO: 10 imports). The feature flag says
+        # "may use AI at all", this says "how much of it this month" —
+        # both were needed: without the counter a tenant with the flag
+        # on could import PDFs forever on the cheap tier.
+        from apps.billing.errors import LimitExceeded
+        from apps.billing.services import enforce_usage_limit
+
+        try:
+            enforce_usage_limit(organization, "ai_pdf_imports", actor=request.user)
+        except LimitExceeded as exc:
+            return Response(
+                {
+                    "error": {
+                        "code": exc.code,
+                        "message": exc.message,
+                        **exc.extra,
+                    }
+                },
+                status=exc.http_status,
+            )
+
         uploaded = request.FILES.get("file")
         if uploaded is None:
             return _error(
@@ -233,6 +254,18 @@ class PdfUploadView(APIView):
                 "updated_at",
             ]
         )
+
+        # The AI call happened and cost money — charge it to the tenant's
+        # monthly counter. Recorded after the successful parse, so a
+        # failed import is not billed.
+        from apps.billing.services import record_usage
+
+        try:
+            record_usage(organization, "ai_pdf_imports", 1)
+        except Exception:  # noqa: BLE001
+            # The draft is already saved; a counter-side error must not
+            # turn a successful import into a 500.
+            pass
 
         return Response(
             {

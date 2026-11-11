@@ -78,6 +78,32 @@ export class AdminApiError extends Error {
   }
 }
 
+/**
+ * Record a 402 (limit reached) in the limit-notice store.
+ *
+ * The store is a client-side store, so this is a no-op on the server
+ * (server components render their own notice) — the `typeof window`
+ * check keeps the server bundle from pulling the store in.
+ */
+function raiseLimitNotice(
+  code: string,
+  message: string,
+  extra: Record<string, unknown>,
+): void {
+  if (typeof window === "undefined") return;
+  if (code !== "billing.limit_exceeded") return;
+  // Imported lazily: the store is client-only, and a static import would
+  // drag it into the server bundle.
+  void import("@/lib/stores/limit-notice").then(({ useLimitNoticeStore }) => {
+    useLimitNoticeStore.getState().raise({
+      resource: typeof extra.resource === "string" ? extra.resource : "limit",
+      current: typeof extra.current === "number" ? extra.current : null,
+      limit: typeof extra.limit === "number" ? extra.limit : null,
+      message,
+    });
+  });
+}
+
 export interface AdminFetchOptions {
   method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
   /** CSRF token to echo in the X-CSRFToken header (required for unsafe methods). */
@@ -185,13 +211,27 @@ export async function adminFetch<T>(
   if (!res.ok) {
     let errCode = "unknown";
     let errMessage = `Beklenmeyen hata (HTTP ${res.status})`;
+    const errExtra: Record<string, unknown> = {};
     try {
-      const errBody = (await res.json()) as
-        | { error?: { code: string; message: string } }
-        | { detail?: string };
+      const errBody = (await res.json()) as {
+        error?: {
+          code: string;
+          message: string;
+          resource?: string;
+          current?: number;
+          limit?: number;
+        };
+        detail?: string;
+      };
       if ("error" in errBody && errBody.error) {
         errCode = errBody.error.code;
         errMessage = errBody.error.message;
+        // The limit error carries the resource name and the numbers, so
+        // the banner can say "25/25 ürün" instead of a bare message.
+        if (errBody.error.resource) errExtra.resource = errBody.error.resource;
+        if (errBody.error.current !== undefined)
+          errExtra.current = errBody.error.current;
+        if (errBody.error.limit !== undefined) errExtra.limit = errBody.error.limit;
       } else if ("detail" in errBody && typeof errBody.detail === "string") {
         // DRF's default error shape (e.g. permission denied).
         errCode = res.status === 401 ? "auth.unauthenticated" : "api.error";
@@ -200,6 +240,14 @@ export async function adminFetch<T>(
     } catch {
       // body wasn't JSON — fall through with generic message.
     }
+
+    // A 402 means "your plan is too small" — not a bug. Record it so the
+    // admin shell can show the upgrade banner; the error still travels
+    // to the caller, which decides what to do inline.
+    if (res.status === 402) {
+      raiseLimitNotice(errCode, errMessage, errExtra);
+    }
+
     throw new AdminApiError(res.status, errCode, errMessage);
   }
 

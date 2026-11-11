@@ -48,6 +48,8 @@ from .constants import (
     PLAN_TIER_ORDER,
     PRO,
     RESOURCE_FIELDS,
+    USAGE_LIMIT_COUNTER_FIELD,
+    USAGE_LIMIT_RESOURCES,
     USAGE_METRICS,
     default_features,
     is_valid_plan,
@@ -296,6 +298,95 @@ def enforce_limit(
             message=(
                 f"'{resource}' limiti doldu ({current}/{tier_limit}). "
                 "Paket yükseltin."
+            ),
+            resource=resource,
+            current=current,
+            limit=tier_limit,
+        )
+
+
+def check_count_limit(
+    organization: Organization,
+    resource: str,
+    count: int,
+    *,
+    actor=None,
+) -> None:
+    """Hard-fail if ``count`` is above the tier cap for ``resource``.
+
+    :func:`enforce_limit` compares the tenant's *current* count with the
+    cap; this one takes the count the tenant is asking for. It is what
+    the language cap needs: a tenant that already serves two languages
+    may keep two, and may not ask for a third — the check must be on
+    the requested value, not on what the tenant owns today.
+
+    ``None`` tier limit = unlimited.
+    """
+    if resource not in RESOURCE_FIELDS:
+        raise ValueError(
+            f"Unknown resource '{resource}'. Valid: {RESOURCE_FIELDS}"
+        )
+
+    ps = get_plan_settings(organization)
+    tier_limit = PLAN_TIER_LIMITS[ps.active_plan][resource]
+    if tier_limit is None:
+        return  # unlimited
+
+    if count > tier_limit:
+        _audit_limit_exceeded(organization, resource, count, tier_limit)
+        raise LimitExceeded(
+            message=(
+                f"'{resource}' limiti doldu ({count}/{tier_limit}). "
+                "Paket yükseltin."
+            ),
+            resource=resource,
+            current=count,
+            limit=tier_limit,
+        )
+
+
+def enforce_usage_limit(
+    organization: Organization,
+    resource: str,
+    *,
+    units: int = 1,
+    actor=None,
+) -> None:
+    """Hard-fail if the tenant's *monthly usage* would pass the tier cap.
+
+    The counterpart of :func:`enforce_limit` for the resources that are
+    counted by usage rather than by live rows: the monthly view and scan
+    counters and the three AI operation counters.
+
+    :func:`enforce_limit` compares what the tenant *has* against the cap;
+    for these resources the tenant is charged as it uses them, so the
+    check is "has this month's counter reached the cap?". The caller
+    records the usage only after this call succeeds — the check is a
+    gate, not a reservation.
+
+    ``units`` is how much the operation is about to consume (one AI
+    translation, one PDF import, one view). The cap is checked against
+    ``current + units`` so the operation that would cross the line is
+    the one that is refused, not the one after it.
+    """
+    if resource not in USAGE_LIMIT_RESOURCES:
+        raise ValueError(
+            f"'{resource}' is not a usage-limited resource. "
+            f"Valid: {USAGE_LIMIT_RESOURCES}"
+        )
+
+    ps = get_plan_settings(organization)
+    tier_limit = PLAN_TIER_LIMITS[ps.active_plan][resource]
+    if tier_limit is None:
+        return  # unlimited
+
+    current = _resource_count(organization, resource)
+    if current + units > tier_limit:
+        _audit_limit_exceeded(organization, resource, current, tier_limit)
+        raise LimitExceeded(
+            message=(
+                f"'{resource}' aylık kullanım limiti doldu "
+                f"({current}/{tier_limit}). Paket yükseltin."
             ),
             resource=resource,
             current=current,

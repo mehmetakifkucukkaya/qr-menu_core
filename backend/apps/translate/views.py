@@ -103,6 +103,111 @@ def _scoped_category(organization, pk: int) -> MenuCategory | None:
 
 
 # ---------------------------------------------------------------------------
+# The AI guard: the feature flag + the monthly cap
+# ---------------------------------------------------------------------------
+
+
+def _ai_feature_guard(organization) -> Response | None:
+    """May this tenant use AI at all? (BASIC: no.)"""
+    from apps.billing.services import require_feature
+
+    try:
+        require_feature(organization, "ai_translate_enabled")
+    except Exception as exc:  # FeatureDisabled from billing
+        return Response(
+            {
+                "error": {
+                    "code": getattr(exc, "code", "billing.feature_disabled"),
+                    "message": getattr(exc, "message", str(exc)),
+                    "feature": getattr(exc, "extra", {}).get("feature"),
+                }
+            },
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    return None
+
+
+def _ai_usage_guard(
+    organization,
+    request: Request,
+    *,
+    limit_resource: str,
+    units: int = 1,
+) -> Response | None:
+    """Is there enough of the tenant's monthly AI allowance left?"""
+    from apps.billing.errors import LimitExceeded
+    from apps.billing.services import enforce_usage_limit
+
+    try:
+        enforce_usage_limit(
+            organization,
+            limit_resource,
+            units=units,
+            actor=request.user,
+        )
+    except LimitExceeded as exc:
+        return Response(
+            {
+                "error": {
+                    "code": exc.code,
+                    "message": exc.message,
+                    **exc.extra,
+                }
+            },
+            status=exc.http_status,
+        )
+    return None
+
+
+def _ai_guard(
+    organization,
+    request: Request,
+    *,
+    limit_resource: str,
+    units: int = 1,
+) -> Response | None:
+    """Check the tenant may use AI, and how much of it is left this month.
+
+    Two separate gates, and both are needed:
+
+    * ``require_feature(ai_translate_enabled)`` — may this tenant use AI
+      at all? (BASIC: no.)
+    * ``enforce_usage_limit`` — how much of it may it use this month?
+      (PRO: 100 translations / 100 descriptions.)
+
+    Before this, only the flag was checked and the monthly counters were
+    never incremented, so the caps in ``PLAN_TIER_LIMITS`` were a table
+    nobody enforced: a PRO tenant could translate its whole menu every
+    day and stay on PRO.
+
+    Returns an error :class:`Response` when the request must be refused,
+    ``None`` when it may proceed.
+    """
+    denied = _ai_feature_guard(organization)
+    if denied is not None:
+        return denied
+    return _ai_usage_guard(
+        organization, request, limit_resource=limit_resource, units=units
+    )
+
+
+def _record_ai_usage(organization, resource: str, units: int = 1) -> None:
+    """Charge the tenant's monthly counter for the AI calls it made.
+
+    Called after the AI actually answered: a failed provider call cost
+    the tenant nothing and must not be billed. Counter errors are
+    swallowed — the AI result is already in hand and must not turn into
+    a 500.
+    """
+    from apps.billing.services import record_usage
+
+    try:
+        record_usage(organization, resource, units)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+# ---------------------------------------------------------------------------
 # POST /api/v1/admin/translate/
 # ---------------------------------------------------------------------------
 class TranslateTextView(APIView):
@@ -124,25 +229,12 @@ class TranslateTextView(APIView):
                 status.HTTP_403_FORBIDDEN,
             )
 
-        # Sprint B1 — D-026 feature flag guard. ``ai_translate_enabled``
-        # must be True on the tenant's PlanSettings (BASIC tier returns
-        # 403 + audit). PRO / ORDERS / OPS all default the flag on but
-        # the operator can disable it.
-        from apps.billing.services import require_feature
-
-        try:
-            require_feature(organization, "ai_translate_enabled")
-        except Exception as exc:  # FeatureDisabled from billing
-            return Response(
-                {
-                    "error": {
-                        "code": getattr(exc, "code", "billing.feature_disabled"),
-                        "message": getattr(exc, "message", str(exc)),
-                        "feature": getattr(exc, "extra", {}).get("feature"),
-                    }
-                },
-                status=status.HTTP_403_FORBIDDEN,
-            )
+        # Sprint B1 — D-026 feature flag guard + the monthly AI cap.
+        denied = _ai_guard(
+            organization, request, limit_resource="ai_translate_ops", units=1
+        )
+        if denied is not None:
+            return denied
 
         serializer = TranslateTextSerializer(data=request.data)
         if not serializer.is_valid():
@@ -174,6 +266,8 @@ class TranslateTextView(APIView):
                 status.HTTP_502_BAD_GATEWAY,
             )
 
+        _record_ai_usage(organization, "ai_translate_ops", 1)
+
         return _wrap(outcome, request)
 
 
@@ -194,22 +288,14 @@ class TranslateMenuItemView(APIView):
                 status.HTTP_403_FORBIDDEN,
             )
 
-        # Sprint B1 — D-026 feature flag guard (ai_translate_enabled).
-        from apps.billing.services import require_feature
-
-        try:
-            require_feature(organization, "ai_translate_enabled")
-        except Exception as exc:  # FeatureDisabled from billing
-            return Response(
-                {
-                    "error": {
-                        "code": getattr(exc, "code", "billing.feature_disabled"),
-                        "message": getattr(exc, "message", str(exc)),
-                        "feature": getattr(exc, "extra", {}).get("feature"),
-                    }
-                },
-                status=status.HTTP_403_FORBIDDEN,
-            )
+        # Sprint B1 — D-026 feature flag guard (ai_translate_enabled) + the
+        # monthly cap. One menu item = one translation (name + description
+        # for one target locale).
+        denied = _ai_guard(
+            organization, request, limit_resource="ai_translate_ops", units=1
+        )
+        if denied is not None:
+            return denied
 
         item = _scoped_item(organization, pk)
         if item is None:
@@ -302,6 +388,8 @@ class TranslateMenuItemView(APIView):
             },
         )
 
+        _record_ai_usage(organization, "ai_translate_ops", 1)
+
         return _wrap(
             {
                 "item_id": item.id,
@@ -331,22 +419,13 @@ class TranslateMenuCategoryView(APIView):
                 status.HTTP_403_FORBIDDEN,
             )
 
-        # Sprint B1 — D-026 feature flag guard (ai_translate_enabled).
-        from apps.billing.services import require_feature
-
-        try:
-            require_feature(organization, "ai_translate_enabled")
-        except Exception as exc:  # FeatureDisabled from billing
-            return Response(
-                {
-                    "error": {
-                        "code": getattr(exc, "code", "billing.feature_disabled"),
-                        "message": getattr(exc, "message", str(exc)),
-                        "feature": getattr(exc, "extra", {}).get("feature"),
-                    }
-                },
-                status=status.HTTP_403_FORBIDDEN,
-            )
+        # Sprint B1 — D-026 feature flag guard (ai_translate_enabled) + the
+        # monthly cap. One category = one translation.
+        denied = _ai_guard(
+            organization, request, limit_resource="ai_translate_ops", units=1
+        )
+        if denied is not None:
+            return denied
 
         category = _scoped_category(organization, pk)
         if category is None:
@@ -434,6 +513,8 @@ class TranslateMenuCategoryView(APIView):
             },
         )
 
+        _record_ai_usage(organization, "ai_translate_ops", 1)
+
         return _wrap(
             {
                 "category_id": category.id,
@@ -463,22 +544,13 @@ class DescribeMenuItemView(APIView):
                 status.HTTP_403_FORBIDDEN,
             )
 
-        # Sprint B1 — D-026 feature flag guard (ai_translate_enabled).
-        from apps.billing.services import require_feature
-
-        try:
-            require_feature(organization, "ai_translate_enabled")
-        except Exception as exc:  # FeatureDisabled from billing
-            return Response(
-                {
-                    "error": {
-                        "code": getattr(exc, "code", "billing.feature_disabled"),
-                        "message": getattr(exc, "message", str(exc)),
-                        "feature": getattr(exc, "extra", {}).get("feature"),
-                    }
-                },
-                status=status.HTTP_403_FORBIDDEN,
-            )
+        # Sprint B1 — D-026 feature flag guard (ai_translate_enabled) + the
+        # monthly cap. One description is generated per call.
+        denied = _ai_guard(
+            organization, request, limit_resource="ai_description_ops", units=1
+        )
+        if denied is not None:
+            return denied
 
         item = _scoped_item(organization, pk)
         if item is None:
@@ -540,6 +612,8 @@ class DescribeMenuItemView(APIView):
             },
         )
 
+        _record_ai_usage(organization, "ai_description_ops", 1)
+
         return _wrap(
             {
                 "item_id": item.id,
@@ -573,21 +647,9 @@ class DescribeBulkView(APIView):
             )
 
         # Sprint B1 — D-026 feature flag guard (ai_translate_enabled).
-        from apps.billing.services import require_feature
-
-        try:
-            require_feature(organization, "ai_translate_enabled")
-        except Exception as exc:  # FeatureDisabled from billing
-            return Response(
-                {
-                    "error": {
-                        "code": getattr(exc, "code", "billing.feature_disabled"),
-                        "message": getattr(exc, "message", str(exc)),
-                        "feature": getattr(exc, "extra", {}).get("feature"),
-                    }
-                },
-                status=status.HTTP_403_FORBIDDEN,
-            )
+        denied = _ai_feature_guard(organization)
+        if denied is not None:
+            return denied
 
         serializer = DescribeBulkSerializer(data=request.data)
         if not serializer.is_valid():
@@ -606,6 +668,17 @@ class DescribeBulkView(APIView):
         if item_ids:
             qs = qs.filter(pk__in=item_ids)
         menu_items = list(qs.select_related("category", "menu"))
+
+        # The monthly cap is checked against the number of products this
+        # call is about to describe — the count is only known here.
+        denied = _ai_usage_guard(
+            organization,
+            request,
+            limit_resource="ai_description_ops",
+            units=len(menu_items),
+        )
+        if denied is not None:
+            return denied
 
         try:
             outcome = describe_bulk(
@@ -652,6 +725,8 @@ class DescribeBulkView(APIView):
                     ),
                 },
             )
+
+        _record_ai_usage(organization, "ai_description_ops", len(menu_items))
 
         return _wrap(outcome, request)
 

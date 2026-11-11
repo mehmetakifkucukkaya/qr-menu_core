@@ -228,6 +228,31 @@ USAGE_METRICS: Final = (
     "ai_description_ops",
 )
 
+# The resources that are metered by *usage* rather than by live rows: the
+# tenant is charged as it uses them, so the check is "has this month's
+# counter reached the cap?" instead of "does the tenant own more than the
+# cap?". ``services.enforce_usage_limit()`` is the gate for these.
+#
+# The mapping is not one-to-one with ``USAGE_METRICS``: the counter field
+# is named ``views`` / ``scans``, the limit key is ``monthly_views`` /
+# ``monthly_scans``. The AI counters keep the same name in both.
+USAGE_LIMIT_RESOURCES: Final = (
+    "monthly_views",
+    "monthly_scans",
+    "ai_pdf_imports",
+    "ai_translate_ops",
+    "ai_description_ops",
+)
+
+# Which counter field backs each usage-limited resource.
+USAGE_LIMIT_COUNTER_FIELD: Final = {
+    "monthly_views": "views",
+    "monthly_scans": "scans",
+    "ai_pdf_imports": "ai_pdf_imports",
+    "ai_translate_ops": "ai_translate_ops",
+    "ai_description_ops": "ai_description_ops",
+}
+
 
 # ---------------------------------------------------------------------------
 # Helpers
