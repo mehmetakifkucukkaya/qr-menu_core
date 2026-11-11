@@ -1,10 +1,12 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { ArrowRight } from "lucide-react";
 import clsx from "clsx";
 
 import { useSignupWizard, MAX_SUPPORTED_LOCALES } from "@/lib/stores/signup-wizard";
+import { saveOnboardingPreferences, onboardingWrite } from "@/lib/api-onboarding";
+import { AdminApiError } from "@/lib/api-admin";
 import type { AuthCurrency, AuthLocaleCode } from "@/lib/api-auth";
 
 // ---------------------------------------------------------------------------
@@ -55,14 +57,19 @@ const CURRENCY_OPTIONS: readonly CurrencyOption[] = [
  * default locale MUST appear in the supported list, otherwise the
  * user is bounced back to the form before they can advance.
  *
- * The wizard currently has no backend call here — everything lives in
- * the local zustand store. Sprint C3's onboarding/complete/ endpoint
- * will pick up the same payload shape.
+ * The choices are persisted when the operator presses "Devam et"
+ * (POST /api/v1/onboarding/preferences/). The tenant already exists at
+ * this point — step 1 created it — so these values could not ride along
+ * with the signup payload; before this write they stayed in the browser
+ * and were dropped, so the tenant's language and currency were always
+ * the defaults.
  */
 export function Step2LocaleCurrency() {
   const form = useSignupWizard((s) => s.formData);
   const updateForm = useSignupWizard((s) => s.updateForm);
   const setStep = useSignupWizard((s) => s.setStep);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const validation = useMemo(() => {
     const errors: Record<string, string> = {};
@@ -89,9 +96,40 @@ export function Step2LocaleCurrency() {
     updateForm({ supported_locales: next });
   }
 
-  function handleNext() {
-    if (hasErrors) return;
-    setStep(3);
+  /**
+   * Persist the choices before moving on.
+   *
+   * The tenant already exists at this point (step 1 created it), so these
+   * values could not travel with the signup payload — they used to live
+   * only in the browser and were dropped when the wizard finished. The
+   * write is CSRF-protected like every other admin write, so it goes
+   * through `onboardingWrite`.
+   */
+  async function handleNext() {
+    if (hasErrors || submitting) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await onboardingWrite((csrfToken) =>
+        saveOnboardingPreferences(
+          {
+            default_locale: form.default_locale,
+            supported_locales: form.supported_locales,
+            currency: form.currency,
+          },
+          { csrfToken },
+        ),
+      );
+      setStep(3);
+    } catch (err) {
+      setError(
+        err instanceof AdminApiError
+          ? err.message
+          : "Dil ve para birimi kaydedilemedi. Lütfen tekrar deneyin.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -219,6 +257,12 @@ export function Step2LocaleCurrency() {
         </div>
       </fieldset>
 
+      {error ? (
+        <p role="alert" className="text-xs font-medium text-danger">
+          {error}
+        </p>
+      ) : null}
+
       <div className="flex items-center justify-between border-t border-border pt-4">
         <button
           type="button"
@@ -230,7 +274,7 @@ export function Step2LocaleCurrency() {
         <button
           type="button"
           onClick={handleNext}
-          disabled={hasErrors}
+          disabled={hasErrors || submitting}
           className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
         >
           Devam et

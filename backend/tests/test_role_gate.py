@@ -67,6 +67,7 @@ MATRIX = [
     ("GET", "/api/v1/payment/admin/payment/settings/", {OWNER}),
     ("GET", "/api/v1/onboarding/trial-status", EVERYONE),
     ("POST", "/api/v1/onboarding/complete", {OWNER, MANAGER}),
+    ("POST", "/api/v1/onboarding/preferences", {OWNER}),
 ]
 
 

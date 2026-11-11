@@ -27,6 +27,7 @@ from .serializers import (
     DemoSeedResponseSerializer,
     FirstQRResponseSerializer,
     OnboardingCompleteSerializer,
+    OnboardingPreferencesSerializer,
     TrialStatusSerializer,
 )
 
@@ -184,6 +185,99 @@ class DemoSeedView(APIView):
                 ).data,
                 "meta": {},
             }
+        )
+
+
+# ---------------------------------------------------------------------------
+# Step 2 — dil ve para birimi
+# ---------------------------------------------------------------------------
+
+
+class OnboardingPreferencesView(APIView):
+    """``POST /api/v1/onboarding/preferences/`` — persist the wizard's
+    step-2 choices (default language, supported languages, currency).
+
+    The tenant is created in step 1, so these values could not ride along
+    with the signup payload: the wizard showed them on the summary screen
+    and then dropped them. They are written here, right after step 2 is
+    confirmed, so the tenant's menu and prices use the language and the
+    currency the operator actually chose.
+
+    Owner only — the role gate sends every other role to the fallback
+    (owner + manager); the tenant's own settings belong to its owner.
+    """
+
+    permission_classes = [IsAuthenticated, IsOrganizationMember]
+
+    def post(self, request: Request) -> Response:
+        organization = _resolve_organization(request)
+        if not organization:
+            return Response(
+                {
+                    "error": {
+                        "code": "onboarding.no_organization",
+                        "message": "İşletme bulunamadı.",
+                    }
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = OnboardingPreferencesSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        # The tier caps how many languages a tenant may serve (BASIC: 2,
+        # PRO: 4). The wizard's step 2 is a write like any other — it
+        # must not be a way around the cap.
+        from apps.billing.errors import LimitExceeded
+        from apps.billing.services import check_count_limit
+
+        try:
+            check_count_limit(
+                organization,
+                "locales",
+                len(data["supported_locales"]),
+                actor=request.user,
+            )
+        except LimitExceeded as exc:
+            return Response(
+                {
+                    "error": {
+                        "code": exc.code,
+                        "message": exc.message,
+                        **exc.extra,
+                    }
+                },
+                status=exc.http_status,
+            )
+
+        organization = services.apply_preferences(
+            organization,
+            default_locale=data["default_locale"],
+            supported_locales=data["supported_locales"],
+            currency=data["currency"],
+        )
+
+        _audit_event(
+            organization,
+            action="onboarding_preferences_updated",
+            payload={
+                "default_locale": data["default_locale"],
+                "supported_locales": data["supported_locales"],
+                "currency": data["currency"],
+            },
+        )
+
+        return Response(
+            {
+                "data": {
+                    "default_locale": organization.default_locale,
+                    "supported_locales": organization.supported_locales,
+                    "currency": organization.currency,
+                },
+                "meta": {},
+            },
+            status=status.HTTP_200_OK,
         )
 
 

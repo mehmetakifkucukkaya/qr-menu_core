@@ -106,6 +106,10 @@ export default defineConfig({
         DEMO_BUSINESS_SLUG: "modern-cafe",
         DEMO_ADMIN_EMAIL: process.env.E2E_ADMIN_EMAIL!,
         DEMO_ADMIN_PASSWORD: process.env.E2E_ADMIN_PASSWORD!,
+        // The self-serve signup is closed in production (the agency opens
+        // every customer by hand during the pilot). The signup flow has its
+        // own browser test, so the throwaway stack opens it.
+        SIGNUP_ENABLED: "1",
         // PAYMENTS_ENABLED is left unset on purpose: the default (off) is what
         // production runs, so checkout must offer "cash at the venue".
       },

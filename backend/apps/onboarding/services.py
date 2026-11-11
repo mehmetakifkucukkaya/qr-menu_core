@@ -82,6 +82,46 @@ def expire_trial_if_due(organization: Organization) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Step 2 — languages and currency
+# ---------------------------------------------------------------------------
+
+
+@transaction.atomic
+def apply_preferences(
+    organization: Organization,
+    *,
+    default_locale: str,
+    supported_locales: list[str],
+    currency: str,
+) -> Organization:
+    """Persist the wizard's step-2 choices on the tenant.
+
+    The tenant's menus carry their own ``default_locale`` /
+    ``supported_locales`` (a menu can serve a subset of the tenant's
+    languages), so the existing menus are brought along — otherwise a
+    tenant that set its language after the menu was created would keep
+    serving the old one.
+
+    The prices are *not* converted: the wizard's step-4 prices are
+    entered in the chosen currency, and the currency is applied when the
+    items are created (``complete_onboarding``).
+    """
+    organization.default_locale = default_locale
+    organization.supported_locales = list(supported_locales)
+    organization.currency = currency
+    organization.save(
+        update_fields=["default_locale", "supported_locales", "currency"]
+    )
+
+    Menu.objects.filter(organization=organization).update(
+        default_locale=default_locale,
+        supported_locales=list(supported_locales),
+    )
+
+    return organization
+
+
+# ---------------------------------------------------------------------------
 # Wizard materialization
 # ---------------------------------------------------------------------------
 
@@ -101,6 +141,19 @@ def complete_onboarding(
     (Decimal), ``description`` (optional). Empty list + ``skip_items=True``
     is allowed (the wizard's "İlk kategori ve ürünleri sonra ekleyeceğim"
     branch).
+
+    **Idempotent.** The wizard fires this POST from the browser and a lost
+    response, a double mount or an impatient retry can send it twice. The
+    first call created a category row every time, so the second call left
+    the tenant with two categories of the same name. Now the category is
+    matched on ``(menu, slug)`` — the pair the model already declares
+    unique — and the items on ``(menu, category, name)``: a repeated call
+    updates the existing rows instead of adding new ones, and returns the
+    same rows the first call created.
+
+    The ``(menu, slug)`` lookup has to be re-checked by hand because
+    ``MenuCategory`` has no unique constraint on the slug alone and two
+    tenants can legitimately use the same category name.
     """
     # Find or create the tenant's default menu.
     menu, _ = Menu.objects.get_or_create(
@@ -119,21 +172,41 @@ def complete_onboarding(
 
     cat_slug = slugify(category_name, allow_unicode=True) or "kategori"
 
-    category = MenuCategory.objects.create(
+    category, created = MenuCategory.objects.get_or_create(
         menu=menu,
-        name=category_name,
         slug=cat_slug,
-        description=f"{category_icon} {category_name}",  # icon as emoji prefix
-        sort_order=0,
-        is_active=True,
+        defaults={
+            "name": category_name,
+            "description": f"{category_icon} {category_name}",  # icon as emoji prefix
+            "sort_order": 0,
+            "is_active": True,
+        },
     )
+    if not created:
+        # A repeated call: keep the operator's latest wording, don't add a
+        # second row.
+        category.name = category_name
+        category.description = f"{category_icon} {category_name}"
+        category.is_active = True
+        category.save(update_fields=["name", "description", "is_active"])
 
-    created_items: list[MenuItem] = []
+    result_items: list[MenuItem] = []
     if not skip_items:
         for idx, item in enumerate(items):
-            item_slug = slugify(item["name"], allow_unicode=True) or f"urun-{idx}"
-            created_items.append(
-                MenuItem.objects.create(
+            # ``MenuItem`` has no slug column — the wizard's product name is
+            # the natural key inside a category. Matching on it keeps a
+            # repeated call from adding the same dish twice.
+            menu_item = (
+                MenuItem.objects.filter(
+                    menu=menu,
+                    category=category,
+                    name=item["name"],
+                )
+                .order_by("sort_order", "id")
+                .first()
+            )
+            if menu_item is None:
+                menu_item = MenuItem.objects.create(
                     menu=menu,
                     category=category,
                     name=item["name"],
@@ -144,9 +217,23 @@ def complete_onboarding(
                     is_active=True,
                     is_available=True,
                 )
-            )
+            else:
+                # The price may have been corrected between two attempts.
+                menu_item.price = item["price"]
+                menu_item.description = item.get("description", "")
+                menu_item.currency = organization.currency
+                menu_item.sort_order = idx
+                menu_item.save(
+                    update_fields=[
+                        "price",
+                        "description",
+                        "currency",
+                        "sort_order",
+                    ]
+                )
+            result_items.append(menu_item)
 
-    return category, created_items
+    return category, result_items
 
 
 # ---------------------------------------------------------------------------
