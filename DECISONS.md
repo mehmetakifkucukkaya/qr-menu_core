@@ -366,3 +366,161 @@
 - Image lazy loading priority (LCP image eager, rest lazy)
 - Bottom sheet adisyon özeti (masa başı cart)
 
+
+---
+
+# D-037 — Signup Akışının Uçtan Uca Çalışır Hale Getirilmesi (CSRF + Idempotency + Locale Kalıcılığı)
+
+**Tarih:** 2026-11-11
+
+**Bağlam:** Signup wizardı görsel olarak "bitmiş" görünüyordu ama gerçekte üç ayrı eksik vardı ve hepsi sessizdi. (1) `Step5SuccessQR.tsx` session-cookie'li POST'ları CSRF token **olmadan** gönderiyordu — Django `SessionAuthentication` her session-auth POST'ta CSRF zorunlu kılar, yani 403. Kullanıcı yine de "başarılı" ekranını görüyordu, arkasında hiçbir şey yoktu. (2) `complete_onboarding` idempotent değildi — istek tekrarlandığında (kayıp yanıt retry'si) ilk kategori iki kez oluşuyordu. (3) Step 2'de seçilen dil ve para birimi **hiçbir yere yazılmıyordu**; tenant her zaman varsayılanları alıyordu. Django test client'ı CSRF uygulamadığı için backend testleri bunların hiçbirini göremiyordu — sadece tarayıcı görüyordu.
+
+**Karar 1: CSRF token'ı write'ların içine taşı (`onboardingWrite`)**
+- `apps/web/src/lib/api-onboarding.ts` — `onboardingWrite(run, options)` yardımcısı: `fetchCsrfToken()` çağırır, token'ı `run(csrfToken)`'a verir, çağrı bittikten sonra token'ı önbellekten düşürür (`resetOnboardingCsrfToken()`). Token her write'ta yeniden alınmaz — üç write'ta üç CSRF round-trip'i değil, bir tane.
+- `Step5SuccessQR.tsx` — `completeOnboarding`, `generateFirstQR`, `importDemoTemplate` artık `onboardingWrite((csrfToken) => ...)` ile gönderiliyor. CSRF'siz gönderilen tek bir POST kalmadı.
+
+**Karar 2: `complete_onboarding` idempotent (`get_or_create`)**
+- `backend/apps/onboarding/services.py` — kategori `(menu, slug)` üzerinden `get_or_create` (MenuCategory `unique_together = ("menu", "slug")`). Ürünler `(menu, category, name)` üzerinden eşleştirilir; yoksa oluşturulur, varsa fiyat/açıklama güncellenir.
+- **Not:** `MenuItem` modelinde `slug` alanı **yok** — eşleştirme `name` üzerinden yapıldı. Kategori slug'ı `slugify(name)` ile üretiliyor.
+- Retry'da fiyat değişikliği de yansıyor: "Menemen 85 → 90 TL" ikinci write'ta güncelleniyor, silinmiyor.
+
+**Karar 3: Step 2 locale/currency için ayrı kalıcılık endpoint'i**
+- **Yeni:** `POST /api/v1/onboarding/preferences` (`OnboardingPreferencesView` + `OnboardingPreferencesSerializer`). Payload: `default_locale`, `supported_locales` (max 8), `currency` (TRY/EUR/USD/GBP). `default_locale` `supported_locales` içinde olmalı.
+- Neden ayrı endpoint, `complete_onboarding` payload'ına eklemek değil: tenant zaten Step 1'de oluşuyor. Locale seçimi Step 2'de, `complete` çağrısı ise Step 5'te oluyor. Tek payload'da birleştirmek, tenant oluşmadan önce locale yazmaya çalışmak demek — yani ya tenant'ı Step 1'de oluşturmak (artık çok geç, kullanıcı Step 2'de zaten ilerlemiş olur) ya da write'ları ikiye bölmek. İki write zaten kaçınılmazdı; ayrı endpoint ikisini de açık ve testlenebilir kıldı.
+- `apply_preferences(organization, *, default_locale, supported_locales, currency)` — tenant'ı **ve mevcut Menu kayıtlarını** günceller.
+- Rol kuralı: `backend/apps/accounts/roles.py` → `^/api/v1/onboarding/preferences$` → WRITE, ONLY_OWNER. `backend/tests/test_role_gate.py` MATRIX'e satır eklendi.
+
+**Karar 4: `check_count_limit` ayrı `enforce_limit`'den**
+- `backend/apps/billing/services.py` — `check_count_limit(org, resource, count)` **istenen** değere göre kontrol eder; `enforce_limit` mevcut sayıyı baz alır. Locales limiti için `enforce_limit` kullanılamazdı: 2 dilli bir tenant kendi 2 dilini bile kaydedemezdi (mevcut=2, istenen=2 → `2 > 2` değil ama mevcut dil + yeni dil = 3 → yine de kırılıyordu). Doğru kontrol `current + (yeni - eski)` veya doğrudan istenen sayıdır.
+
+**Karar 5: Auto-slug yarış koşulu düzeltmesi (Step1)**
+- `suggestSlugFromBusiness` artık `window.setTimeout(..., 0)` ile focus'un oturmasını bekliyor, `slugFocusedRef` ve `slugRef` kullanıyor. Önceden slug alanına yazan kullanıcının yazımı ortasına öneri giriyordu: `e2e-cafee2e-cafe-mwckb6u5`. Slug doluysa öneri hiç yapılmıyor.
+
+**Karar 6: CSRF regresyon testi gerçek enforcement ile**
+- Django test client `enforce_csrf_checks=True` verilmezse CSRF uygulamaz — eski testler 403'ü göremiyordu. Doğru desen: `APIClient(enforce_csrf_checks=True)` + `force_login(user)` + `client.get("/api/v1/auth/csrf").json()["csrfToken"]` + `HTTP_X_CSRFTOKEN=token`. Token'sız → 403, token'lı → 201. `backend/apps/onboarding/tests/test_signup_flow.py` (11 test).
+
+**Alternatifler:**
+- **CSRF'yi exempt etmek** (`authentication_classes = []` veya `@csrf_exempt`) — reddedildi. Django'nun neden böyle kurulduğunu bozuyor; frontend zaten doğru token'ı alabiliyor. Sorun frontend'deydi, korumayı kaldırmak sorunu çözmezdi.
+- **Locale'ı `complete_onboarding` payload'ına eklemek** — reddedildi, yukarıdaki zamanlama sorunu.
+- **Ürün eşleştirmesini `slug` ile yapmak** — mümkün değil, `MenuItem`'da slug alanı yok.
+
+**Seçim gerekçesi:**
+- Idempotency frontend'de değil backend'de yapılmalı — ağ kaybı, tarayıcı retry'si ve iki sekme aynı isteği gönderebilir. Sunucu tarafında `get_or_create` tek doğru yer.
+- Locale kalıcılığı ayrı endpoint — write'lar zaten iki adımda gerçekleşiyor, birleştirmek zamanlama sorunu yaratırdı.
+- Test gerçek enforcement ile — Django test client'ın CSRF'i varsayılan olarak uygulamaması, bu alandaki hataların backend testlerinde görünmez olmasının sebebiydi. Test, production davranışını taklit etmeli.
+
+**Sonuçlar:**
+- Yeni: `backend/apps/onboarding/tests/test_signup_flow.py` (11 test), `apps/web/e2e/signup.spec.ts` (2 browser testi)
+- Backend: **1207 passed, 2 skipped** (1197'den +10 net)
+- `apps/web/playwright.config.ts` → `SIGNUP_ENABLED: "1"` (e2e stack throwaway; prod'da signup kapalı)
+- e2e: signup spec 2 passed; `tsc --noEmit` ve `next lint` temiz
+
+---
+
+# D-038 — GitHub Actions CI: `scripts/release_gate.sh` Her Push'ta
+
+**Tarih:** 2026-11-11
+
+**Bağlam:** Projede CI yoktu. Tüm doğrulama (`scripts/release_gate.sh`) lokalde, geliştiricinin terminalinde çalışıyordu — ve "çalıştırmadım" demek, kod yazmak kadar kolay bir seçenekti. Pilot müşterilere teslim edilecek bir kod tabanı için bu kabul edilemez: regresyon ancak müşteri başında fark edilirdi.
+
+**Karar:**
+- **Yeni** `.github/workflows/ci.yml` — trigger: `push` (tüm branch'ler) + `pull_request` + `workflow_dispatch`.
+- **Concurrency:** `group: ${{ github.workflow }}-${{ github.ref }}`, `cancel-in-progress: true` — aynı branch'e arka arkaya push'larda eski koşuş iptal edilir, CI kuyruğu tıkanmaz.
+- **Environment:** Python 3.12 + Node 20 (Dockerfile pinleriyle birebir aynı — CI ile prod arasında sürüm farkı olmaz).
+- **Install:** `pip install -r backend/requirements-dev.txt` + `npm ci`.
+- **Playwright:** `npx playwright install --with-deps chromium`.
+- **Gate:** `CI: "1"` env ile `bash scripts/release_gate.sh` — **tek job, tek komut**. CI, geliştiricinin lokalde çalıştırdığıyla birebir aynı kapıdan geçer. Ayrı bir CI özel adım listesi yazmak, iki kapının ayrışması demekti.
+- **`.env.production` yok → prod env doğrulaması atlanır** (release_gate.sh içinde kasıtlı; `.env.production` sunucuda local). CI'da bu adımın "geçti" görünmesi yanıltıcı olurdu, bu yüzden açıkça atlandı.
+
+**Alternatifler:**
+- **Ayrı CI adımları** (pytest / tsc / lint / playwright ayrı job'lar) — reddedildi. Paralel job'lar hızlıdır ama kapıyı tanımı iki yere bölünür; `release_gate.sh` bozulan/eskimiş bir script olur ve kimse fark etmez. Tek kapı, tek doğru yer.
+- **GitHub Actions yerine başka CI** — yok, repo zaten GitHub'da.
+
+**Seçim gerekçesi:**
+- Lokal ile CI aynı kapıdan geçmeli. Kapı iki yere bölünürse "lokalde geçti" ile "CI yeşil" arasındaki fark bir hata noktası olur.
+- Tarayıcı flow'ları kapatılmadı. Projenin temel değeri orada (`/m/[slug]` menü, sipariş, mutfak). CI'da bunları kapatmak, kapıyı ucuzlatmak ama anlamsızlaştırmak olurdu.
+
+**Sonuçlar:**
+- Her push artık tam kapıdan geçiyor: backend pytest → tsc → lint → e2e tsc → 21 frontend unit suite → Playwright 7 flow.
+- **Kanıt:** ilk CI koşusu signup e2e testini yakaladı (aşağıdaki D-039) — yani CI tam da yakalamak için kurulduğu şeyi yakaladı.
+
+---
+
+# D-039 — Kullanım Limitlerinin Tamamlanması + 402 "Yükselt" Banner'ı
+
+**Tarih:** 2026-11-11
+
+**Bağlam:** `PLAN_TIER_LIMITS` matrisinde tanımlı 6 limit vardı ama bunların hiçbiri enforcement'a bağlı değildi — `PlanSettings`'te gösteriliyor, ölçülmüyor, uygulanmıyordu. Yani bir tenant BASIC paketteyken sınırsız AI çeviri çağırabiliyordu. Bu, "limit" kelimesinin pazarlama malzemesi olmaktan çıkması demek.
+
+**Karar 1: Limit enforcement'ı backend'de**
+- `backend/apps/billing/constants.py` — `USAGE_LIMIT_RESOURCES` (monthly_views, monthly_scans, ai_pdf_imports, ai_translate_ops, ai_description_ops) + `USAGE_LIMIT_COUNTER_FIELD` eşlemesi (kaynak → `TenantUsageCounter` alanı).
+- `backend/apps/billing/services.py` — `enforce_usage_limit(org, resource, units=1)`: `current + units > limit` ise `LimitExceeded` fırlatır. `LimitExceeded.extra` dict'inde `resource`, `current`, `limit` taşır; `http_status == 402`, `code == "billing.limit_exceeded"`.
+- `check_count_limit(org, resource, count)` — istenen değere göre kontrol (locales için; D-037 Karar 4).
+
+**Karar 2: Limitler nerede uygulanıyor (ve nerede uygulanmıyor)**
+- **AI endpoint'leri** (`backend/apps/translate/views.py`): 5 endpoint (`/translate/`, `/translate/menu-item/`, `/translate/menu-category/`, describe tek, describe bulk) `_ai_guard()` ile korundu. **Sayaç başarılı provider çağrısından sonra artırılır** — başarısız çağrı faturalanmaz. Bulk'ta `units=len(menu_items)`.
+- **PDF import** (`backend/apps/pdf_import/views.py`): `ai_pdf_imports` aylık limiti + başarılı parse sonrası sayaç artırma.
+- **Locales** (`backend/apps/organizations/views.py` `update()` override + `backend/apps/onboarding/views.py` preferences): `check_count_limit` ile kontrol.
+- **monthly_views / monthly_scans** (`backend/apps/analytics/views_admin.py`): **admin analytics overview'da** uygulanıyor — public menüde **değil**.
+
+**Karar 3: Neden views/scans limiti public menüde değil**
+- Müşterinin misafirleri menüyü **her zaman** açabilmeli. Menüyü kesmek = işletmenin müşterisine satış faturası kesmek. Satın alınabilir olan şey **ziyaret analitiği**: işletme "aylık 5.000 ziyaret görüntüleme" paketini aldıysa, analitik verisini göremez. Bu, plan satışının satın alınabilir kısmı.
+- Bu ayrım bilinçlidir ve bir sonraki kişiye yanlış anlaşılmasın diye burada yazıyor.
+
+**Karar 4: 402 bildirimi merkezi**
+- `apps/web/src/lib/api-admin.ts` — `adminFetch` 402'yi yakalar, `resource`/`current`/`limit` çıkarır, `raiseLimitNotice()` ile client store'a yazar (lazy dynamic import — server bundle'ı kirletmemek için).
+- `apps/web/src/lib/stores/limit-notice.ts` — zustand store (`raise`/`dismiss`), `LimitResource` tipi, `LIMIT_LABEL` sözlüğü, `limitLabel()`.
+- `apps/web/src/components/billing/LimitBanner.tsx` — amber "Yükselt" banner'ı, `data-testid="limit-banner"`.
+- `apps/web/src/app/(admin)/admin/layout.tsx` — `<LimitBanner />` admin shell'e eklendi.
+- **Neden her formun kendi banner'ı yok:** 402 birden fazla yerde çıkabilir (analytics, AI çeviri, PDF import). Her forma ayrı banner koymak, "hangi butonda ne oldu" takibi gerektirir ve banner'ların birbirini ezmesine yol açar. Tek nokta (shell) + banner'ın kaynağı (store) → tek doğru yer.
+
+**Karar 5: Analytics sayfasında 402 mesajı**
+- `apps/web/src/app/(admin)/admin/analytics/page.tsx` — 402'de genel "tekrar deneyin" hatası yerine limit mesajı + Yükselt CTA. "Tekrar deneyin" yanlıştı — limite ulaşıldığında tekrar denemek hiçbir şeyi düzeltmez.
+
+**Alternatifler:**
+- **Limitleri public menüde uygulamak** — reddedildi, yukarıdaki gerekçe.
+- **Başarısız AI çağrısını da saymak** — reddedildi. Kullanıcıya faturası kesilmemesi gerekir; başarısız çağrı onun hatası değil, sağlayıcının.
+- **Her forma ayrı limit banner'ı** — reddedildi, yukarıdaki gerekçe.
+- **Limit kontrolünü yalnızca frontend'de yapmak** — reddedildi. Frontend kontrolü bir kontrol değil, bir bilgi. Enum endpoint'ler doğrudan çağrılabilir.
+
+**Seçim gerekçesi:**
+- Limit enforcement **backend'de** olmalı — API herhangi bir istemciden çağrılabilir.
+- Kullanım sayacı **başarıdan sonra** artmalı — faturalanabilir olan başarılı iş.
+- Banner **tek noktada** — 402 bir sistem durumu, form durumu değil.
+
+**Sonuçlar:**
+- Yeni: `backend/apps/billing/tests/test_usage_limits.py` (10 test), `apps/web/src/components/billing/LimitBanner.test.tsx` (6 test)
+- `apps/web/package.json` → `test:limit-banner` script'i; `scripts/release_gate.sh` → gate'e eklendi
+- Backend: **1207 passed, 2 skipped**
+
+---
+
+# D-040 — CI'nin İlk Koşusunun Bulduğu Yarış: Signup Submit'i Sessizce Düşüyordu
+
+**Tarih:** 2026-11-11
+
+**Bağlam:** D-038'de kurulan CI'nin ilk tam koşusunda 43 e2e testinden 1'i düştü: `signup.spec.ts` — "Dil ve para birimi" başlığı hiç görünmedi, wizard step 1'de takılı kaldı. Test tek başına çalışınca **geçiyordu**; tam suite içinde düşüyordu. Klasik "flake" görüntüsü, ama flake'in altında gerçek bir ürün hatası var.
+
+**Karar:**
+- **Kök neden:** `Step1BusinessInfo.handleSubmit` içinde slug kontrolü sürerken submit sessizce düşürülüyordu:
+  ```ts
+  if (slugStatus.kind === "checking") return;   // ← hata mesajı yok, spinner yok
+  ```
+  Slug kontrolü 300ms debounce'lu. Kullanıcı slug'ı yazıp hemen "Devam et"e tıklarsa kontrol hâlâ sürüyor → buton hiçbir şey yapmıyor → wizard donmuş gibi görünüyor. Kullanıcı ne hata görüyor ne de ilerleme. **Bu bir test hatası değil, ürün hatasıydı** — hızlı bir gerçek kullanıcı da aynı ekranda kalırdı.
+  Neden tam suite'te düştü ama tek başına geçti: makine yoğunken denetim tamamlanmadan tıklama gerçekleşti; boşta çalışırken 300ms içinde bitmişti.
+- **Çözüm:** Submit, süren kontrolü **bekler** (reddetmez). Uygulama deferred promise ile yürütülür: `slugCheckRef` içinde `{ slug, promise }` tutulur, debounce timer'ı promise'i çözer. `handleSubmit` `slugStatusRef.current.kind === "checking"` ise `await pending.promise` yapar, sonra durumu **yeniden okur** — kontrol "taken" bulduysa submit hâlâ engellenir, ama artık neden söylenir. Efekt temizlendiğinde (`settle({kind:"idle"})`) bekleyen submit asla sıkışmaz.
+- **Bonus düzeltme:** `slugStatus` render sırasında okunan bir state'di; submit anındaki güncel değere ihtiyaç vardı → `slugStatusRef` eklendi. `setSubmitting(true)` beklemeden **önce** çağrılıyor, böylece buton bekleme boyunca spinner gösteriyor.
+
+**Alternatifler:**
+- **Testi "daha yavaş" yapmak** (`waitFor` ile slug'ın uygun olmasını bekle) — reddedildi. Testi yamamak, ekranda gerçekten donan bir butonu gizlerdi. Asıl düzeltme bileşende.
+- **Debounce'u 0'a indirmek** — reddedildi. Her tuş vuruşunda istek atmak spam'e yol açar; debounce'un amacı bu.
+- **Backend'e güvenmek ("zaten slug'ı doğruluyor")** ve frontend kontrolünü kaldırmak — kısmen doğru: backend `validate_slug` slug'ın benzersizliğini zaten reddediyor. Ama frontend kontrolü "taken"ı **erken** gösteriyor ve kullanıcıya düzeltilebilir bir mesaj veriyor; tamamen kaldırmak bu avantajı kaybettirirdi.
+
+**Seçim gerekçesi:**
+- Bir testin "flake" görünmesi, altında ürün hatası olabileceğinin sinyalidir. CI kurmanın asıl değeri de tam burada ortaya çıktı: hata lokalde 40+ koşuda görünmemişti.
+- "Bekle" yaklaşımı "reddet" yaklaşımından doğru: kullanıcının niyeti "Devam et" demek; kontrol onu engellememeli, **bilgilendirmeli**.
+
+**Sonuçlar:**
+- Yeni: `apps/web/src/components/signup/Step1BusinessInfo.test.tsx` (4 test — 1. test tam olarak bu yarışı kilitler: kontrol sürerken tıklama düşmüyor; 2. test "taken" kontrolü hâlâ engelliyor; 3. test mutlu yol; 4. test auto-slug önerisinin kullanıcının slug'ını ezmediği)
+- `apps/web/package.json` → `test:signup-step1` script'i; `scripts/release_gate.sh` → gate'e eklendi (21 → 22 frontend suite)
+- `tsc --noEmit` temiz, `next lint` temiz, `signup.spec.ts` 2 passed
