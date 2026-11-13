@@ -29,6 +29,11 @@ on:
   push:
     branches: ["**"]
   pull_request:
+    # "edited" is here on purpose: it fires when the PR's base branch
+    # changes. Without it, retargeting a PR to a different base leaves the
+    # old check in place — the run that passed against the old base is
+    # reported as the PR's status, and nothing verifies the new one.
+    types: [opened, synchronize, reopened, edited]
   workflow_dispatch:
 
 # A new push to the same branch cancels the run that is still going.
