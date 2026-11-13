@@ -625,3 +625,55 @@ Frontend unit test script'leri `node --experimental-strip-types` ile çalışıy
 - `apps/web/package.json` — 15 script `--import tsx`'e geçti; `test:kitchen-ui` glob → 7 açık dosya
 - `apps/web/src/lib/cart-store.test.ts` — top-level await → `before()` hook
 - **Doğrulama:** Node 20.18.1 ile 21 suite / 248 frontend testi, `tsc --noEmit`, `next lint`, `next build`, `type-check:e2e` — hepsi temiz
+
+---
+
+# D-043 — "Hesabınız Hazır" Ekranı Menü Yazılmadan Önce Görünüyordu (CI'ın Dördüncü Koşusunun Bulduğu)
+
+**Tarih:** 2026-11-13
+
+**Bağlam:** main'e ilk merge sonrası CI koşusu "1 flaky" ile bitti. Flaky test **bizim yazdığımız signup testi**ydi (`e2e/signup.spec.ts`) ve hata son adımdaydı: `page.goto(/m/<slug>)` sonrası "Menemen" başlığı görünmedi. Log'da `GET /api/v1/public/menus/<slug>` → **404**.
+
+**Kök neden: bu bir test hatası değil, ürün hatasıydı.**
+- `Step5SuccessQR.tsx` — `completeOnboarding` "fire and forget" ile çağrılıyordu: `useEffect` içinde promise başlatılıp sonucu beklenmiyordu. Yani **"Tebrikler! Hesabınız hazır." ekranı, tenant'ın menüsü henüz yazılmadan** render ediliyordu.
+- O ekrandaki **"Menü önizleme"** bağlantısı `/m/<slug>`'a gidiyordu — tenant'ın menüsü yoksa 404. Yani kullanıcıya "hesabınız hazır" deyip 404'e gönderen bir ekran.
+- Daha kötüsü: yazma başarısız olursa hata yalnızca `console.error`'a düşüyordu. Yorumda "surface failures in the banner area below" yazıyordu ama **banner hiç yoktu** — operatör menüsü oluşmamışken her şeyin yolunda olduğunu sanıyordu.
+- Test bu yüzden yarışa giriyordu: yazma bazen `/m/<slug>`'a gidişten önce, bazen sonra bitiyordu. Retry'da tutuyordu (log'da ilk deneme `mwew6axl` → 404, retry `mwew6kpf` → 200).
+
+**Karar: Başarı ekranı yazma bitene kadar görünmez.**
+- `Step5SuccessQR.tsx` — `completeState` durumu: `idle` | `saving` | `done` | `error`.
+  - `saving`/`idle` → "Menünüz hazırlanıyor…" + spinner (`data-testid="onboarding-saving"`). **Başarı başlığı ve menü bağlantısı render edilmez.**
+  - `done` → başarı ekranı, özet, "Menü önizleme" bağlantısı, QR butonu, demo seed paneli.
+  - `error` → `role="alert"` + hata mesajı + **"Tekrar dene"** butonu (`data-testid="onboarding-error"`).
+- Yazma `fire and forget` olmaktan çıktı: `.then(() => setCompleteState({kind:"done"}))`, `.catch(...)` → hata durumu.
+- **"Tekrar dene"** gerçekten yeniden yazıyor: `retryCount` state'i efektin bağımlılık listesinde, buton `setRetryCount(c => c+1)` yapıyor. `submittedRef.current = false` tek başına yetmez — efekt yalnızca bağımlılık değiştiğinde yeniden çalışır.
+
+**Karar 2: E2E testi artık yazmanın bitmesini açıkça bekliyor.**
+- `e2e/signup.spec.ts` — "Menü önizleme" **bağlantısının** görünürlüğü bekleniyor. Bu bağlantı yalnızca `done` durumunda render ediliyor, dolayısıyla testin senkronizasyon noktası "yazma gerçekten indi" anı. Başlık zaten aynı şekilde davranıyor ama bağlantı daha kesin bir işaret.
+
+**Karar 3: Regresyon testi (bileşen seviyesinde).**
+- Yeni: `apps/web/src/components/signup/Step5SuccessQR.test.tsx` (4 test).
+  1. Yazma sürerken başarı ekranı **görünmez** ("Menü önizleme" de görünmez).
+  2. Yazma bitince başarı ekranı görünür.
+  3. Hatalı yazma → hata görünür, başarı ekranı görünmez.
+  4. "Tekrar dene" yazmayı yeniden çalıştırır.
+- Test, Next.js'in kendi `AppRouterContext.Provider`'ı ile sarmalanıyor (bileşen `useRouter()` kullanıyor) — modül mocking yok, framework'ün sağladığı bağlam kullanılıyor.
+- `test:signup-step5` script'i `package.json`'a, `scripts/release_gate.sh`'a eklendi (22 suite).
+
+**Alternatifler:**
+- **Testi hızlandırmak** (menüyü beklemeden `/m/slug`'a gitmek) — reddedildi. Ekranın "hazır" dediği ama menünün olmadığı durumu maskeliyor; kullanıcı da aynı 404'ü görüyor.
+- **Sadece testi sabitlemek** (retry'ı artırmak, `waitFor` eklemek) — reddedildi. Yarışın altındaki ürün hatası duruyor kalır.
+- **"Hesabınız hazır" başlığını olduğu gibi bırakmak, sadece menü bağlantısını gizlemek** — reddedildi. Başlık bir taahhüt: "hesabınız hazır". Yazma bitmeden gösterilmemeli. (Ayrıca e2e testi başlığı bekliyordu; onu da değiştirmek gerekirdi.)
+- **Yazmayı sunucu tarafına taşımak** (step 5'i server component yapmak) — reddedildi, bu sprintin kapsamı dışında ve mevcut mimariyi gereksiz yere bozar.
+
+**Seçim gerekçesi:**
+- **"Hazır" demek, hazır olmak demektir.** Başarı ekranı bir taahhüt; yazma bitmeden gösterilirse kullanıcı bozuk bir sayfaya yönlendiriliyor.
+- **Sessiz hata en kötü hatadır.** Yazma başarısız olduğunda operatöre hiçbir şey söylememek, sorunu olduğundan daha büyük bir sorun.
+- **Test, ürünü doğrulamalı.** Yarışı testte yamamak yerine üründe kapatmak, ikisini de düzeltir.
+
+**Sonuçlar:**
+- `apps/web/src/components/signup/Step5SuccessQR.tsx` — durum makinesi + hata paneli + retry
+- `apps/web/src/components/signup/Step5SuccessQR.test.tsx` — **yeni**, 4 test
+- `apps/web/e2e/signup.spec.ts` — senkronizasyon noktası netleştirildi
+- `apps/web/package.json` → `test:signup-step5`; `scripts/release_gate.sh` → gate'e eklendi
+- Frontend: **22 suite / 252 test** Node 20'de yeşil; `tsc --noEmit` ve `next lint` temiz

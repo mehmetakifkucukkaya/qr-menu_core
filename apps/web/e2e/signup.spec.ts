@@ -57,9 +57,16 @@ test.describe("self-serve signup", () => {
     await page.getByRole("button", { name: "Devam et" }).click();
 
     // --- Step 5: the success screen -------------------------------------------
+    // The success screen only renders once `complete_onboarding` has
+    // landed, so waiting for it is also the synchronisation point for the
+    // write. It used to render while the write was still in flight — the
+    // "Menü önizleme" link then led to a 404 because the tenant had no
+    // menu yet. The link is the precise marker: it exists only in the
+    // finished state.
     await expect(
       page.getByRole("heading", { name: /Hesabınız hazır/ }),
     ).toBeVisible();
+    await expect(page.getByRole("link", { name: /Menü önizleme/ })).toBeVisible();
 
     // The writes really went through: the tenant's category exists, with
     // the product the wizard collected. Without the CSRF token the wizard

@@ -18,6 +18,7 @@
     "test:limit-banner": "TSX_TSCONFIG_PATH=tsconfig.test.json node --import tsx --import ./src/test-dom.ts --no-warnings=ExperimentalWarning --test src/components/billing/LimitBanner.test.tsx",
     "test:media-uploader": "TSX_TSCONFIG_PATH=tsconfig.test.json node --import tsx --import ./src/test-dom.ts --no-warnings=ExperimentalWarning --test src/components/admin/MediaUploader.test.tsx",
     "test:signup-step1": "TSX_TSCONFIG_PATH=tsconfig.test.json node --import tsx --import ./src/test-dom.ts --no-warnings=ExperimentalWarning --test src/components/signup/Step1BusinessInfo.test.tsx",
+    "test:signup-step5": "TSX_TSCONFIG_PATH=tsconfig.test.json node --import tsx --import ./src/test-dom.ts --no-warnings=ExperimentalWarning --test src/components/signup/Step5SuccessQR.test.tsx",
     "test:e2e": "playwright test",
     "type-check:e2e": "tsc -p e2e/tsconfig.json",
     "test:cart-store": "node --import tsx --no-warnings=ExperimentalWarning --test src/lib/cart-store.test.ts",

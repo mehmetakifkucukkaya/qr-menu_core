@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  AlertCircle,
   ArrowRight,
   CheckCircle2,
   Download,
@@ -84,6 +85,14 @@ export function Step5SuccessQR() {
   // and accidental re-fires (e.g. dev hot reload). A real retry is
   // possible by reloading /signup, but that's a brand-new tenant.
   const submittedRef = useRef(false);
+  // Bumped by the "Tekrar dene" button. It is in the effect's dependency
+  // list so a retry actually re-runs the write — clearing the ref alone
+  // would not, because the effect only re-runs when a dependency changes.
+  const [retryCount, setRetryCount] = useState(0);
+  const [completeState, setCompleteState] = useState<
+    { kind: "idle" } | { kind: "saving" } | { kind: "done" } | { kind: "error"; message: string }
+  >({ kind: "idle" });
+
   useEffect(() => {
     if (submittedRef.current) return;
     const category = form.first_category;
@@ -95,13 +104,12 @@ export function Step5SuccessQR() {
     const namedItems = items.filter((it) => it.name.trim().length > 0);
     const skipItems = namedItems.length === 0;
 
-    // Fire and forget — surface failures in the banner area below.
-    //
     // The write goes through `onboardingWrite`, which attaches the CSRF
     // token Django demands on every session-authenticated POST. Without
     // it the server answers 403 ("CSRF token missing") and the tenant's
     // first category is never created — the backend tests did not catch
     // it because Django's test client does not enforce CSRF.
+    setCompleteState({ kind: "saving" });
     onboardingWrite((csrfToken) =>
       completeOnboarding(
         {
@@ -116,14 +124,23 @@ export function Step5SuccessQR() {
         },
         { csrfToken },
       ),
-    ).catch((err) => {
-      // eslint-disable-next-line no-console
-      console.error("onboarding/complete failed", err);
-      // Allow retry on the next mount — this only fires on strict-mode
-      // double-mount or dev HMR, both of which are rare.
-      submittedRef.current = false;
-    });
-  }, [form.first_category, form.first_items]);
+    )
+      .then(() => setCompleteState({ kind: "done" }))
+      .catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error("onboarding/complete failed", err);
+        // Allow retry on the next mount — this only fires on strict-mode
+        // double-mount or dev HMR, both of which are rare.
+        submittedRef.current = false;
+        setCompleteState({
+          kind: "error",
+          message:
+            err instanceof AdminApiError
+              ? err.message
+              : "Menü oluşturulamadı. Lütfen tekrar deneyin.",
+        });
+      });
+  }, [form.first_category, form.first_items, retryCount]);
 
   function handleGoToAdmin() {
     // Push to /admin/dashboard — the (admin) layout will pick up the
@@ -141,67 +158,135 @@ export function Step5SuccessQR() {
 
   return (
     <div className="space-y-6 text-center">
-      <div className="flex flex-col items-center gap-3">
+      {/*
+        The success screen is shown only once the tenant's first category
+        really landed. It used to render as soon as the wizard reached
+        step 5, while `completeOnboarding` was still in flight — so
+        "Hesabınız hazır" could be on screen while the tenant had no
+        menu at all, and the "Menü önizleme" link led to a 404.
+
+        That is not a cosmetic problem: the success screen is a promise
+        that the account is ready. It should not appear before the
+        write is done, and a failed write has to be visible — the old
+        code only console.error'd it.
+      */}
+      {completeState.kind === "saving" || completeState.kind === "idle" ? (
         <div
-          aria-hidden
-          className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary"
+          className="flex flex-col items-center gap-3"
+          role="status"
+          data-testid="onboarding-saving"
         >
-          <CheckCircle2 className="h-8 w-8" strokeWidth={2} />
-        </div>
-        <div>
-          <h2 className="font-heading text-xl font-semibold text-text">
-            Tebrikler! Hesabınız hazır.
-          </h2>
-          <p className="mt-1 text-sm text-muted">
-            Dijital menünüzü oluşturmaya başlayabilirsiniz.
-          </p>
-        </div>
-      </div>
-
-      <SummaryPanel form={form} />
-
-      <div className="flex flex-col gap-2 sm:flex-row sm:justify-center">
-        <button
-          type="button"
-          onClick={handleGoToAdmin}
-          className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-        >
-          <LayoutDashboard className="h-4 w-4" />
-          Admin paneline git
-          <ArrowRight className="h-4 w-4" />
-        </button>
-        <Link
-          href={form.slug ? `/m/${form.slug}` : "/"}
-          className="inline-flex items-center justify-center gap-2 rounded-md border border-border bg-surface px-5 py-2.5 text-sm font-semibold text-text transition hover:border-primary/40 hover:bg-background focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-          target="_blank"
-          rel="noreferrer"
-        >
-          <Eye className="h-4 w-4" />
-          Menü önizleme
-        </Link>
-        <QrDownloadButton />
-      </div>
-
-      <div className="rounded-md border border-dashed border-border bg-background/40 p-4 text-left text-xs text-muted">
-        <div className="flex items-start gap-2">
-          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <div className="space-y-1">
-            <p>
-              <strong className="text-text">QR kodu yönetimi:</strong>{" "}
-              admin panelindeki QR Codes menüsünden yeni QR&apos;lar
-              oluşturabilir, var olanları yeniden adlandırabilirsiniz.
-            </p>
-            <p className="flex items-center gap-1">
-              <Sparkles className="h-3 w-3" />
-              Deneme süreniz başladı — üst şeritteki{" "}
-              <strong className="text-text">Plan &amp; Limitler</strong>{" "}
-              bağlantısından kalan gün sayısını görebilirsiniz.
+          <div
+            aria-hidden
+            className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary"
+          >
+            <Loader2 className="h-8 w-8 animate-spin" />
+          </div>
+          <div>
+            <h2 className="font-heading text-xl font-semibold text-text">
+              Menünüz hazırlanıyor…
+            </h2>
+            <p className="mt-1 text-sm text-muted">
+              İlk kategorinizi ve ürünlerinizi kaydediyoruz.
             </p>
           </div>
         </div>
-      </div>
+      ) : null}
 
-      <DemoSeedPanel onAfterSeed={handleGoToAdminAfterSeed} />
+      {completeState.kind === "error" ? (
+        <div
+          role="alert"
+          data-testid="onboarding-error"
+          className="mx-auto max-w-md space-y-3 rounded-md border border-danger/30 bg-danger-soft px-4 py-3 text-left text-sm text-text"
+        >
+          <div className="flex items-start gap-2">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-danger" />
+            <div>
+              <p className="font-medium text-text">
+                Menü oluşturulamadı.
+              </p>
+              <p className="mt-1 text-muted">{completeState.message}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              submittedRef.current = false;
+              setCompleteState({ kind: "idle" });
+              setRetryCount((c) => c + 1);
+            }}
+            className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90"
+          >
+            Tekrar dene
+          </button>
+        </div>
+      ) : null}
+
+      {completeState.kind === "done" ? (
+        <>
+          <div className="flex flex-col items-center gap-3">
+            <div
+              aria-hidden
+              className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary"
+            >
+              <CheckCircle2 className="h-8 w-8" strokeWidth={2} />
+            </div>
+            <div>
+              <h2 className="font-heading text-xl font-semibold text-text">
+                Tebrikler! Hesabınız hazır.
+              </h2>
+              <p className="mt-1 text-sm text-muted">
+                Dijital menünüzü oluşturmaya başlayabilirsiniz.
+              </p>
+            </div>
+          </div>
+
+          <SummaryPanel form={form} />
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-center">
+            <button
+              type="button"
+              onClick={handleGoToAdmin}
+              className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+            >
+              <LayoutDashboard className="h-4 w-4" />
+              Admin paneline git
+              <ArrowRight className="h-4 w-4" />
+            </button>
+            <Link
+              href={form.slug ? `/m/${form.slug}` : "/"}
+              className="inline-flex items-center justify-center gap-2 rounded-md border border-border bg-surface px-5 py-2.5 text-sm font-semibold text-text transition hover:border-primary/40 hover:bg-background focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+              target="_blank"
+              rel="noreferrer"
+            >
+              <Eye className="h-4 w-4" />
+              Menü önizleme
+            </Link>
+            <QrDownloadButton />
+          </div>
+
+          <div className="rounded-md border border-dashed border-border bg-background/40 p-4 text-left text-xs text-muted">
+            <div className="flex items-start gap-2">
+              <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <div className="space-y-1">
+                <p>
+                  <strong className="text-text">QR kodu yönetimi:</strong>{" "}
+                  admin panelindeki QR Codes menüsünden yeni QR&apos;lar
+                  oluşturabilir, var olanları yeniden adlandırabilirsiniz.
+                </p>
+                <p className="flex items-center gap-1">
+                  <Sparkles className="h-3 w-3" />
+                  Deneme süreniz başladı — üst şeritteki{" "}
+                  <strong className="text-text">Plan &amp; Limitler</strong>{" "}
+                  bağlantısından kalan gün sayısını görebilirsiniz.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <DemoSeedPanel onAfterSeed={handleGoToAdminAfterSeed} />
+        </>
+      ) : null}
 
       <p className="text-xs text-muted">
         <Link href="/login" className="hover:text-primary">
