@@ -99,9 +99,9 @@ class QRCodeSerializer(serializers.ModelSerializer):
             branch_qs = Branch.objects.all()
             menu_qs = Menu.objects.all()
         else:
-            org_qs = Organization.objects.filter(memberships__user=user).distinct()
+            org_qs = Organization.objects.filter(memberships__user=user, memberships__is_active=True).distinct()
             branch_qs = Branch.objects.filter(
-                organization__memberships__user=user
+                organization__memberships__user=user, organization__memberships__is_active=True
             ).distinct()
             menu_qs = Menu.objects.for_user(user)
         self.fields["organization_id"].queryset = org_qs

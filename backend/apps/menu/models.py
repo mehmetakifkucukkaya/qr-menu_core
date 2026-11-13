@@ -86,7 +86,7 @@ class MenuQuerySet(models.QuerySet):
     def for_user(self, user):
         if getattr(user, "is_platform_admin", False):
             return self.all()
-        return self.filter(organization__memberships__user=user).distinct()
+        return self.filter(organization__memberships__user=user, organization__memberships__is_active=True).distinct()
 
 
 class Menu(TimeStampedModel):
@@ -179,7 +179,7 @@ class MenuCategoryQuerySet(models.QuerySet):
     def for_user(self, user):
         if getattr(user, "is_platform_admin", False):
             return self.all()
-        return self.filter(menu__organization__memberships__user=user).distinct()
+        return self.filter(menu__organization__memberships__user=user, menu__organization__memberships__is_active=True).distinct()
 
 
 class MenuCategory(TimeStampedModel):
@@ -275,7 +275,7 @@ class MenuItemQuerySet(models.QuerySet):
     def for_user(self, user):
         if getattr(user, "is_platform_admin", False):
             return self.all()
-        return self.filter(menu__organization__memberships__user=user).distinct()
+        return self.filter(menu__organization__memberships__user=user, menu__organization__memberships__is_active=True).distinct()
 
 
 class MenuItem(TimeStampedModel):

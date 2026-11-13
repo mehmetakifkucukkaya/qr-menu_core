@@ -96,7 +96,7 @@ def generate_order_number(organization) -> str:
     )
 
 
-def calculate_total_from_items(items_data: Iterable[dict[str, Any]]):
+def calculate_total_from_items(items_data: Iterable[dict[str, Any]], organization):
     """Validate line items + return ``(total, validated_lines)``.
 
     Each item dict must contain ``menu_item_id`` and ``quantity``.
@@ -129,9 +129,11 @@ def calculate_total_from_items(items_data: Iterable[dict[str, Any]]):
         if quantity < 1:
             raise ValidationError("Geçersiz miktar (en az 1 olmalı).")
 
+        # Only the business's own items: a bare ``pk`` lookup let a customer of
+        # business A order (and price) an item of business B (ANALYSIS_1 F-10).
         try:
             menu_item = MenuItem.objects.select_related("menu").get(
-                pk=raw["menu_item_id"]
+                pk=raw["menu_item_id"], menu__organization=organization
             )
         except MenuItem.DoesNotExist as exc:
             raise ValidationError(
@@ -187,7 +189,7 @@ def create_order(
     All kwargs are keyword-only. Customer fields are trimmed upstream
     (views) before being passed in.
     """
-    total, validated = calculate_total_from_items(items_data)
+    total, validated = calculate_total_from_items(items_data, organization)
     currency = _default_currency(validated)
 
     try:

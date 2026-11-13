@@ -17,7 +17,7 @@ class UserAdmin(DjangoUserAdmin):
 
     fieldsets = (
         (None, {"fields": ("email", "password")}),
-        ("Profil", {"fields": ("full_name", "role")}),
+        ("Profil", {"fields": ("full_name", "role", "must_change_password")}),
         (
             "Yetkiler",
             {"fields": ("is_active", "is_staff", "is_superuser", "groups", "user_permissions")},
@@ -38,7 +38,7 @@ class UserAdmin(DjangoUserAdmin):
 
 @admin.register(Membership)
 class MembershipAdmin(admin.ModelAdmin):
-    list_display = ("user", "organization", "role", "created_at")
-    list_filter = ("role",)
+    list_display = ("user", "organization", "role", "is_active", "created_at")
+    list_filter = ("role", "is_active")
     search_fields = ("user__email", "organization__name", "organization__slug")
     autocomplete_fields = ("user", "organization")

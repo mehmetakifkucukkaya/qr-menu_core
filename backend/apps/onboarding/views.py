@@ -33,14 +33,9 @@ from .serializers import (
 
 def _resolve_organization(request):
     """D-022 + D-028 + D-030 helper — first membership wins."""
-    from apps.accounts.models import Membership
+    from apps.accounts.services import get_active_membership
 
-    membership = (
-        Membership.objects.filter(user=request.user)
-        .select_related("organization")
-        .order_by("created_at")
-        .first()
-    )
+    membership = get_active_membership(request.user)
     if not membership:
         return None
     return membership.organization

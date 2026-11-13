@@ -91,11 +91,9 @@ def _resolve_organization(user):
     keeps the "which org does this user operate as" question consistent.
     Returns ``None`` for users without an active membership.
     """
-    membership = (
-        Membership.objects.filter(user=user, organization__is_active=True)
-        .select_related("organization")
-        .first()
-    )
+    from apps.accounts.services import get_active_membership
+
+    membership = get_active_membership(user)
     return membership.organization if membership else None
 
 

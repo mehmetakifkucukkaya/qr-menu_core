@@ -34,11 +34,14 @@ import {
   login as apiLogin,
   logout as apiLogout,
 } from "@/lib/api-admin";
+import { parseSetCookie } from "@/lib/set-cookie";
 
 const CSRF_COOKIE = "qr_csrftoken";
 const SESSION_COOKIE = "qr_sessionid";
 const LOGIN_PATH = "/login";
-const DEFAULT_NEXT = "/admin/dashboard";
+// "/admin" is the role-aware front door: it redirects to the landing page of
+// the signed-in role (dashboard, orders or the kitchen board).
+const DEFAULT_NEXT = "/admin";
 
 function resolveBaseUrl(): string {
   return (
@@ -65,7 +68,7 @@ function readCookieHeader(): string {
 /**
  * Sanitize the `next` param to prevent open-redirects — only allow
  * relative paths that start with `/admin`. Anything else falls back to
- * the dashboard.
+ * the front door.
  */
 function safeNextPath(raw: unknown): string {
   if (typeof raw !== "string") return DEFAULT_NEXT;
@@ -104,6 +107,10 @@ export async function loginAction(
       email,
     };
   }
+
+  // Set on success and acted on AFTER the try/catch: redirect() works by
+  // throwing, and a catch-all would swallow it.
+  let redirectTo: string | null = null;
 
   try {
     // Step 1: prime the CSRF cookie on the browser side. We use the
@@ -145,20 +152,17 @@ export async function loginAction(
 
     // Forward Set-Cookie headers from the backend to the browser. DRF
     // sets both qr_sessionid and (optionally) a refreshed qr_csrftoken.
+    // The attributes travel with them: HttpOnly / Secure / SameSite keep the
+    // session cookie out of reach of scripts, and Max-Age keeps a kitchen
+    // tablet signed in across browser restarts (ANALYSIS_1 F-35).
     const setCookies = response.headers.getSetCookie?.() ?? [];
     if (setCookies.length > 0) {
       const jar = cookies();
       for (const raw of setCookies) {
-        // crude Set-Cookie parser — we only need name + value for the
-        // session and CSRF cookies. The other attributes are already
-        // baked into the Django defaults (Path=/, SameSite=Lax, etc.).
-        const [pair] = raw.split(";");
-        const eq = pair.indexOf("=");
-        if (eq === -1) continue;
-        const name = pair.slice(0, eq).trim();
-        const value = pair.slice(eq + 1).trim();
-        if (name === SESSION_COOKIE || name === CSRF_COOKIE) {
-          jar.set(name, value);
+        const parsed = parseSetCookie(raw);
+        if (!parsed) continue;
+        if (parsed.name === SESSION_COOKIE || parsed.name === CSRF_COOKIE) {
+          jar.set(parsed.name, parsed.value, parsed.options);
         }
       }
     }
@@ -166,23 +170,23 @@ export async function loginAction(
     if (response.status === 200) {
       // Success — bounce to the protected route. The middleware will
       // see the session cookie and let us through.
-      redirect(nextPath);
+      redirectTo = nextPath;
+    } else {
+      // Try to extract the error code/message so the form can show it
+      // (wrong password, suspended business, account without a business).
+      let errorMessage = "Email veya şifre hatalı.";
+      try {
+        const body = (await response.json()) as {
+          error?: { code: string; message: string };
+          detail?: string;
+        };
+        if (body.error?.message) errorMessage = body.error.message;
+        else if (body.detail) errorMessage = body.detail;
+      } catch {
+        // body wasn't JSON; use the default.
+      }
+      return { ok: false, error: errorMessage, email };
     }
-
-    // Try to extract the error code/message so the form can show it.
-    let errorMessage = "Email veya şifre hatalı.";
-    try {
-      const body = (await response.json()) as {
-        error?: { code: string; message: string };
-        detail?: string;
-      };
-      if (body.error?.message) errorMessage = body.error.message;
-      else if (body.detail) errorMessage = body.detail;
-    } catch {
-      // body wasn't JSON; use the default.
-    }
-
-    return { ok: false, error: errorMessage, email };
   } catch (err) {
     if (err instanceof AdminApiError) {
       return { ok: false, error: err.message, email };
@@ -193,6 +197,8 @@ export async function loginAction(
       email,
     };
   }
+
+  redirect(redirectTo);
 }
 
 /**

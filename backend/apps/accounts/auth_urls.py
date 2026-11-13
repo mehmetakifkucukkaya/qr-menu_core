@@ -6,6 +6,7 @@ from .auth_views import (
     CSRFView,
     LoginView,
     LogoutView,
+    PasswordChangeView,
     SignupView,
     SlugAvailabilityView,
 )
@@ -14,6 +15,11 @@ urlpatterns = [
     path("csrf", CSRFView.as_view(), name="auth-csrf"),
     path("login", LoginView.as_view(), name="auth-login"),
     path("logout", LogoutView.as_view(), name="auth-logout"),
+    path(
+        "password/change",
+        PasswordChangeView.as_view(),
+        name="auth-password-change",
+    ),
     # Sprint C1 — self-serve onboarding step 1 (slug availability check).
     path(
         "check-slug",

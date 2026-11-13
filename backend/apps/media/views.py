@@ -60,9 +60,9 @@ MAX_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
 
 def _resolve_organization(user):
     """Same resolution used in admin summary — first active membership."""
-    membership = Membership.objects.filter(
-        user=user, organization__is_active=True
-    ).first()
+    from apps.accounts.services import get_active_membership
+
+    membership = get_active_membership(user)
     return membership.organization if membership else None
 
 

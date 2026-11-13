@@ -22,4 +22,4 @@ class ThemeConfigViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if getattr(user, "is_platform_admin", False):
             return qs
-        return qs.filter(organization__memberships__user=user).distinct()
+        return qs.filter(organization__memberships__user=user, organization__memberships__is_active=True).distinct()

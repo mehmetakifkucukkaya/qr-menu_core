@@ -20,6 +20,7 @@ import {
   AdminApiError,
   type AdminOrderStatus,
 } from "@/lib/api-admin";
+import { formatTime } from "@/lib/datetime";
 
 interface KitchenTicketCardProps {
   orderId: number;
@@ -115,10 +116,7 @@ function formatAge(seconds: number): string {
 }
 
 function formatPlacedAt(iso: string): string {
-  return new Date(iso).toLocaleTimeString("tr-TR", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return formatTime(iso);
 }
 
 export function KitchenTicketCard({

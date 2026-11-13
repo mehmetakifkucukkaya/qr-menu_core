@@ -19,7 +19,7 @@ import os
 from decimal import Decimal
 
 from django.conf import settings
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 
@@ -261,16 +261,55 @@ ITEMS: list[tuple] = [
 ]
 
 
+# The published default: it is in the public repository and printed on the
+# local login page, so it must never protect a real server.
+PUBLISHED_DEMO_PASSWORD = "change-me-demo-only"
+
+
 class Command(BaseCommand):
     help = (
         "Seed demo data: admin user + Modern Cafe organization + "
         "1 menu + 5 categories + 25 items + TR/EN translations + "
-        "allergen/tag M2M (idempotent)."
+        "allergen/tag M2M (idempotent). Local development only: it creates a "
+        "super-user and refuses to run when DEBUG is off."
     )
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--allow-non-debug",
+            action="store_true",
+            help=(
+                "Run even though DEBUG is off (a private demo server). "
+                "Requires DEMO_ADMIN_PASSWORD to be set to a private value."
+            ),
+        )
+
+    @staticmethod
+    def _guard_environment(allow_non_debug: bool) -> None:
+        """Refuse to create the demo super-user on a production-looking server."""
+        if settings.DEBUG:
+            return
+        if not allow_non_debug:
+            raise CommandError(
+                "seed_demo creates a super-user with a publicly known default "
+                "password and refuses to run with DEBUG off (production). Create "
+                "customers with `manage.py create_tenant` and staff accounts with "
+                "`manage.py createsuperuser`. For a private demo server pass "
+                "--allow-non-debug and set DEMO_ADMIN_PASSWORD."
+            )
+        password = os.environ.get("DEMO_ADMIN_PASSWORD", "")
+        if not password or password == PUBLISHED_DEMO_PASSWORD:
+            raise CommandError(
+                "With --allow-non-debug, DEMO_ADMIN_PASSWORD must be set to a "
+                "private value (not empty, not the published default)."
+            )
+
     def handle(self, *args, **options):
+        self._guard_environment(options["allow_non_debug"])
+
         from apps.accounts.models import Membership, MembershipRole, User, UserRole
-        from apps.billing.services import get_plan_settings
+        from apps.billing.constants import OPS, default_features
+        from apps.billing.models import PlanSettings
         from apps.menu.models import (
             Allergen,
             DietaryTag,
@@ -285,7 +324,7 @@ class Command(BaseCommand):
         from apps.organizations.models import Organization
 
         admin_email = os.environ.get("DEMO_ADMIN_EMAIL", "admin@modern-cafe.local")
-        admin_password = os.environ.get("DEMO_ADMIN_PASSWORD", "change-me-demo-only")
+        admin_password = os.environ.get("DEMO_ADMIN_PASSWORD", PUBLISHED_DEMO_PASSWORD)
         org_slug = os.environ.get("DEMO_BUSINESS_SLUG", "modern-cafe")
         menu_slug = "modern-cafe-menu"
 
@@ -350,11 +389,15 @@ class Command(BaseCommand):
             )
 
             # Sprint B1 — D-026 plan + feature flags. Modern Cafe is the
-            # V1 demo so it ships on the OPS tier (all 8 features on).
-            # ``get_plan_settings`` is idempotent — re-running the seed
-            # won't reset operator overrides the admin applied via the
-            # /admin/billing/plan/ endpoint.
-            get_plan_settings(organization)
+            # V1 demo so it ships on the OPS tier (all 8 features on). The row
+            # is created explicitly: a tenant WITHOUT a row now falls back to
+            # BILLING_DEFAULT_PLAN (basic), no longer to OPS. get_or_create is
+            # idempotent — re-running the seed won't reset operator overrides
+            # the admin applied via the /admin/billing/plan/ endpoint.
+            PlanSettings.objects.get_or_create(
+                organization=organization,
+                defaults={"active_plan": OPS, **default_features(OPS)},
+            )
 
             # --- Menu ---
             menu, menu_created = Menu.objects.get_or_create(

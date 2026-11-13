@@ -45,7 +45,7 @@ class QRCodeQuerySet(models.QuerySet):
     def for_user(self, user):
         if getattr(user, "is_platform_admin", False):
             return self.all()
-        return self.filter(organization__memberships__user=user).distinct()
+        return self.filter(organization__memberships__user=user, organization__memberships__is_active=True).distinct()
 
 
 class QRCode(TimeStampedModel):

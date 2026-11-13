@@ -9,7 +9,8 @@ interface PageProps {
 }
 
 const SESSION_COOKIE = "qr_sessionid";
-const DEFAULT_NEXT = "/admin/dashboard";
+// "/admin" is the role-aware front door (admin/page.tsx redirects per role).
+const DEFAULT_NEXT = "/admin";
 
 // Login reads cookies + may call /api/v1/me to short-circuit already-signed-in users.
 export const dynamic = "force-dynamic";

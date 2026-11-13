@@ -16,6 +16,7 @@
 
 import type {
   AdminMenu,
+  AssignableRole,
   AdminMenuCategory,
   AdminMenuItem,
   AdminLocaleCode,
@@ -53,6 +54,8 @@ import type {
   PlanSettingsUpdate,
   PlanUsage,
   ResetUsageResponse,
+  TeamMember,
+  TeamMemberWithPassword,
   ThemeConfig,
   UpgradePreview,
   UpgradePreviewRequest,
@@ -266,6 +269,85 @@ export async function fetchCurrentUser(
   options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
 ): Promise<CurrentUser> {
   return adminFetch<CurrentUser>("/api/v1/me", { ...options });
+}
+
+// ---------------------------------------------------------------------------
+// Password + team (pilot readiness)
+// ---------------------------------------------------------------------------
+
+/**
+ * POST /api/v1/auth/password/change - any signed-in user changes their own
+ * password. The server answers Turkish error messages (wrong current password,
+ * weak new password) that the form shows as they are.
+ */
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+  options: Pick<AdminFetchOptions, "baseUrl" | "csrfToken"> = {},
+): Promise<void> {
+  await adminFetch<{ ok: boolean }>("/api/v1/auth/password/change", {
+    method: "POST",
+    csrfToken: options.csrfToken,
+    baseUrl: options.baseUrl,
+    body: { current_password: currentPassword, new_password: newPassword },
+  });
+}
+
+/** GET /api/v1/admin/team/ - the members of the caller's business (owner only). */
+export async function fetchTeam(
+  options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
+): Promise<TeamMember[]> {
+  return adminFetch<TeamMember[]>("/api/v1/admin/team/", { ...options });
+}
+
+export interface AddTeamMemberPayload {
+  email: string;
+  full_name: string;
+  role: AssignableRole;
+}
+
+/** POST /api/v1/admin/team/ - add a member; the temporary password comes back once. */
+export async function addTeamMember(
+  payload: AddTeamMemberPayload,
+  options: Pick<AdminFetchOptions, "baseUrl" | "csrfToken"> = {},
+): Promise<TeamMemberWithPassword> {
+  return adminFetch<TeamMemberWithPassword>("/api/v1/admin/team/", {
+    method: "POST",
+    csrfToken: options.csrfToken,
+    baseUrl: options.baseUrl,
+    body: payload,
+  });
+}
+
+export interface UpdateTeamMemberPayload {
+  role?: AssignableRole;
+  is_active?: boolean;
+}
+
+/** PATCH /api/v1/admin/team/{id}/ - change the role, or (de)activate. */
+export async function updateTeamMember(
+  id: number,
+  payload: UpdateTeamMemberPayload,
+  options: Pick<AdminFetchOptions, "baseUrl" | "csrfToken"> = {},
+): Promise<TeamMember> {
+  return adminFetch<TeamMember>(`/api/v1/admin/team/${id}/`, {
+    method: "PATCH",
+    csrfToken: options.csrfToken,
+    baseUrl: options.baseUrl,
+    body: payload,
+  });
+}
+
+/** POST /api/v1/admin/team/{id}/reset-password/ - a new temporary password, shown once. */
+export async function resetTeamMemberPassword(
+  id: number,
+  options: Pick<AdminFetchOptions, "baseUrl" | "csrfToken"> = {},
+): Promise<TeamMemberWithPassword> {
+  return adminFetch<TeamMemberWithPassword>(`/api/v1/admin/team/${id}/reset-password/`, {
+    method: "POST",
+    csrfToken: options.csrfToken,
+    baseUrl: options.baseUrl,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -668,6 +750,46 @@ export async function deleteItem(
     csrfToken: options.csrfToken,
     ...options,
   });
+}
+
+/**
+ * GET /api/v1/admin/menu-items/?page=N, every page - all of the business's
+ * items (the list endpoint pages by 25). Used by the "Ürün durumu" page.
+ */
+export async function fetchAllMenuItems(
+  options: Pick<AdminFetchOptions, "baseUrl" | "internal" | "cookieHeader"> = {},
+): Promise<AdminMenuItem[]> {
+  const all: AdminMenuItem[] = [];
+  for (let page = 1; page <= 40; page += 1) {
+    const data = await adminFetch<{
+      count: number;
+      next: string | null;
+      results: AdminMenuItem[];
+    }>(`/api/v1/admin/menu-items/?page=${page}`, { ...options });
+    all.push(...(data.results ?? []));
+    if (!data.next) break;
+  }
+  return all;
+}
+
+/**
+ * POST /api/v1/admin/menu-items/{id}/availability - "tükendi / mevcut". The one
+ * catalogue write floor staff may do; owner and manager can use it too.
+ */
+export async function setItemAvailability(
+  id: number,
+  isAvailable: boolean,
+  options: Pick<AdminFetchOptions, "baseUrl" | "csrfToken"> = {},
+): Promise<{ id: number; is_available: boolean }> {
+  return adminFetch<{ id: number; is_available: boolean }>(
+    `/api/v1/admin/menu-items/${id}/availability`,
+    {
+      method: "POST",
+      csrfToken: options.csrfToken,
+      baseUrl: options.baseUrl,
+      body: { is_available: isAvailable },
+    },
+  );
 }
 
 // ---------------------------------------------------------------------------

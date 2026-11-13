@@ -65,6 +65,12 @@ class IsPlatformAdmin(permissions.BasePermission):
 
 def _resolve_organization(obj: Any):
     """Find the organization for any object that exposes one of these attrs."""
+    from apps.organizations.models import Organization
+
+    # The organization itself (ANALYSIS_1 F-30): it has no ``.organization``
+    # attribute, so a real tenant owner used to get 403 on their own business.
+    if isinstance(obj, Organization):
+        return obj
     if hasattr(obj, "organization"):
         return obj.organization
     if hasattr(obj, "organization_id") and hasattr(obj, "organization"):

@@ -1,14 +1,20 @@
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 
 import { AdminHeader } from "../_components/AdminHeader";
+import { AdminRoleGuard } from "../_components/AdminRoleGuard";
 import { AdminSidebar } from "../_components/AdminSidebar";
+import { ForcedPasswordChange } from "../_components/ForcedPasswordChange";
+import { NoPermission } from "../_components/NoPermission";
 import { fetchCurrentOrganization, fetchCurrentUser, AdminApiError } from "@/lib/api-admin";
 import { fetchTrialStatus } from "@/lib/api-onboarding";
+import { canAccessAdminPath, landingPathFor, uiRole } from "@/lib/roles";
 import { TrialBanner } from "@/components/billing/TrialBanner";
 import { logoutAction } from "../_actions/auth";
 
-const DEFAULT_NEXT = "/admin/dashboard";
+// "/admin" is the role-aware front door (admin/page.tsx redirects to the role's
+// landing page), so a stale session sends people back to it after signing in.
+const DEFAULT_NEXT = "/admin";
 
 // The layout reads cookies + calls fetch(`/api/v1/me`) on every render.
 // Opt out of Next.js's static prerender to avoid "Dynamic server usage"
@@ -32,10 +38,13 @@ function readCookieHeader(): string {
  *   1. Authoritative auth check via /api/v1/me. Middleware already
  *      redirected if there's no session cookie; here we verify the
  *      session is actually valid (cookie could be stale).
- *   2. Fetch the current organization for the sidebar brand area.
- *   3. Fetch the trial status for the sticky TrialBanner (Sprint C3b).
+ *   2. Decide what this person may see: an account on a temporary password
+ *      gets only the "set your password" screen; a page the role may not open
+ *      becomes a "no permission" notice (the server refuses it as well).
+ *   3. Fetch the current organization for the sidebar brand area.
+ *   4. Fetch the trial status for the sticky TrialBanner (owners only).
  *      Failure here is non-fatal — the banner just hides.
- *   4. Render sidebar + header + children.
+ *   5. Render sidebar + header + children.
  *
  * Login lives at `/(admin)/login` and intentionally sits outside this
  * layout so it doesn't render the sidebar/header.
@@ -62,11 +71,46 @@ export default async function AdminLayout({
       redirect("/login?next=" + DEFAULT_NEXT);
     }
     // Any other error (network, 5xx) is a server problem — re-throw so
-    // Next.js renders the error boundary.
+    // the admin error boundary shows a friendly screen.
     throw err;
   }
 
-  // ---- 2. Organization (for the sidebar / drawer brand + "view menu") ----
+  // ---- 2. Who is this, and what may they see? -----------------------------
+  const role = uiRole(user.membership_role, user.is_superuser || user.role === "admin");
+  const csrfToken = cookies().get("qr_csrftoken")?.value ?? null;
+
+  // Tied to no business: sign-in refuses such accounts, this is the safety net
+  // for a session that was already open.
+  if (role === null) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-background p-6">
+        <NoPermission
+          landingHref="/login"
+          linkLabel="Girişe dön"
+          title="Hesabınız bir işletmeye bağlı değil"
+          message="Ajansınızla iletişime geçin."
+        />
+      </main>
+    );
+  }
+
+  // A temporary password has to be replaced before anything else.
+  if (user.must_change_password) {
+    return (
+      <ForcedPasswordChange
+        csrfToken={csrfToken}
+        landingHref={landingPathFor(role)}
+        logoutAction={logoutAction}
+      />
+    );
+  }
+
+  // The URL comes from middleware (`x-pathname`); a missing header must never
+  // lock anyone out - the server enforces the real rules.
+  const pathname = headers().get("x-pathname") ?? "";
+  const mayOpenPage = pathname === "" || canAccessAdminPath(role, pathname);
+
+  // ---- 3. Organization (for the sidebar / drawer brand + "view menu") ----
   // Failure here shouldn't block the page — fall back to "İşletmem".
   let businessName = "İşletmem";
   let businessLogo: string | null = null;
@@ -83,24 +127,27 @@ export default async function AdminLayout({
     // Best-effort; the shell shows the default name and no menu shortcut.
   }
 
-  // ---- 3. Trial status (for the TrialBanner) ----------------------------
-  // Non-fatal: any failure (network, 403, etc.) → status stays null and
-  // the banner hides itself. The TrialBanner receives the cookie header
-  // we already read so the RSC fetch rides the same Django session.
+  // ---- 4. Trial status (for the TrialBanner) ----------------------------
+  // Owners only: the banner's call to action is the plan page, which only they
+  // can open. Non-fatal: any failure (network, 403, etc.) → status stays null
+  // and the banner hides itself.
   let trialStatus = null;
-  try {
-    trialStatus = await fetchTrialStatus({
-      internal: true,
-      cookieHeader,
-    });
-  } catch {
-    // Banner hides; we keep the layout renderable.
+  if (role === "owner") {
+    try {
+      trialStatus = await fetchTrialStatus({
+        internal: true,
+        cookieHeader,
+      });
+    } catch {
+      // Banner hides; we keep the layout renderable.
+    }
   }
 
-  // ---- 4. Shell ---------------------------------------------------------
+  // ---- 5. Shell ---------------------------------------------------------
   return (
     <div className="flex min-h-screen bg-background">
       <AdminSidebar
+        role={role}
         businessName={businessName}
         businessLogo={businessLogo}
         businessSlug={businessSlug}
@@ -111,6 +158,7 @@ export default async function AdminLayout({
         <TrialBanner status={trialStatus} />
         <AdminHeader
           user={user}
+          role={role}
           businessName={businessName}
           businessLogo={businessLogo}
           businessSlug={businessSlug}
@@ -121,7 +169,13 @@ export default async function AdminLayout({
           id="main-content"
           className="flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8"
         >
-          <div className="mx-auto max-w-6xl">{children}</div>
+          <div className="mx-auto max-w-6xl">
+            {mayOpenPage ? (
+              <AdminRoleGuard role={role}>{children}</AdminRoleGuard>
+            ) : (
+              <NoPermission landingHref={landingPathFor(role)} />
+            )}
+          </div>
         </main>
       </div>
     </div>

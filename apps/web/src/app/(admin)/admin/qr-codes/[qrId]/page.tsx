@@ -21,6 +21,7 @@ import {
   fetchCurrentUser,
   AdminApiError,
 } from "@/lib/api-admin";
+import { formatDateTime } from "@/lib/datetime";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -225,11 +226,11 @@ export default async function QRDetailPage({ params }: PageProps) {
           <footer className="mt-2 grid grid-cols-2 gap-3 border-t border-border pt-4 text-xs text-muted">
             <div>
               <p className="font-medium text-text">Oluşturuldu</p>
-              <p>{new Date(qr.created_at).toLocaleString("tr-TR")}</p>
+              <p>{formatDateTime(qr.created_at, {})}</p>
             </div>
             <div>
               <p className="font-medium text-text">Son güncelleme</p>
-              <p>{new Date(qr.updated_at).toLocaleString("tr-TR")}</p>
+              <p>{formatDateTime(qr.updated_at, {})}</p>
             </div>
           </footer>
         </section>

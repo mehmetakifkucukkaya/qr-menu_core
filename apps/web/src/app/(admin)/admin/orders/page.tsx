@@ -12,6 +12,7 @@ import {
 } from "@/lib/api-admin";
 import { formatPrice } from "@/lib/format";
 import { OrderStatusBadge } from "./OrderStatusBadge";
+import { formatDateTime } from "@/lib/datetime";
 
 // Admin list pages depend on cookies + the request user; opt out of static
 // prerender so Next.js doesn't try to bake them at build time.
@@ -247,7 +248,7 @@ export default async function OrdersListPage({ searchParams }: PageProps) {
                     <OrderStatusBadge status={o.status} />
                   </td>
                   <td data-label="Tarih" className="px-4 py-2.5 text-xs text-muted">
-                    {new Date(o.placed_at).toLocaleString("tr-TR", {
+                    {formatDateTime(o.placed_at, {
                       day: "2-digit",
                       month: "2-digit",
                       hour: "2-digit",

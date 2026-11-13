@@ -19,6 +19,7 @@ import {
 import { formatPrice } from "@/lib/format";
 import { OrderStatusBadge } from "../OrderStatusBadge";
 import { OrderDetailControls } from "./OrderDetailControls";
+import { formatDateTime } from "@/lib/datetime";
 
 // Detail page depends on cookies + the request user; opt out of static
 // prerender so Next.js doesn't try to bake it at build time.
@@ -49,16 +50,6 @@ const TIMELINE_FIELDS = [
   { key: "delivered_at", label: "Teslim Edildi" },
   { key: "cancelled_at", label: "İptal Edildi" },
 ] as const;
-
-function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString("tr-TR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 /**
  * /admin/orders/{id} — full order detail + status-update controls.

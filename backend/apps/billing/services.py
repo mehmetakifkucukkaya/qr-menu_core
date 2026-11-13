@@ -31,6 +31,7 @@ from __future__ import annotations
 import logging
 from typing import Optional, Union
 
+from django.conf import settings
 from django.db.models import Count, F, Sum
 from django.utils import timezone
 
@@ -62,20 +63,70 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-def get_plan_settings(organization: Organization) -> PlanSettings:
+def default_plan() -> str:
+    """Tier for a tenant that has no :class:`PlanSettings` row yet.
+
+    ``BILLING_DEFAULT_PLAN`` (``basic`` unless configured); an unknown value
+    falls back to BASIC rather than to something bigger.
+    """
+    plan = getattr(settings, "BILLING_DEFAULT_PLAN", BASIC)
+    return plan if is_valid_plan(plan) else BASIC
+
+
+def expire_trial(ps: PlanSettings) -> bool:
+    """Downgrade an OPS trial whose window has closed to BASIC.
+
+    Returns ``True`` when it downgraded (and audited it). A paid plan, a
+    running trial and a row that never had a trial are left alone.
+    """
+    if not (
+        ps.trial_ends_at and ps.active_plan == OPS and ps.trial_ends_at <= timezone.now()
+    ):
+        return False
+    before = {"active_plan": ps.active_plan, "features": ps.effective_features()}
+    ps.active_plan = BASIC
+    ps.billing_notes = "Trial süresi doldu — BASIC'e otomatik düşürüldü."
+    for field, value in default_features(BASIC).items():
+        setattr(ps, field, value)
+    ps.save()
+    record_event(
+        organization=ps.organization,
+        action="plan_changed",
+        target_type="plan_settings",
+        target_id=ps.id,
+        target_repr=str(ps),
+        payload={
+            "reason": "trial_expired",
+            "before": before,
+            "after": {
+                "active_plan": ps.active_plan,
+                "features": ps.effective_features(),
+            },
+        },
+    )
+    return True
+
+
+def get_plan_settings(organization: Organization, *, expire: bool = True) -> PlanSettings:
     """Get-or-create the :class:`PlanSettings` row for ``organization``.
 
-    Defaults to OPS (V1 demo posture — Modern Cafe runs full feature
-    set). Feature booleans are seeded from the static matrix at create
-    time; subsequent operator overrides survive re-fetches.
+    A missing row is created on :func:`default_plan` (BASIC unless
+    ``BILLING_DEFAULT_PLAN`` says otherwise); feature booleans are seeded from
+    the static matrix at create time and operator overrides survive
+    re-fetches. A finished OPS trial is ended here, lazily, so no code path can
+    read "trial" features after the window closed (``manage.py expire_trials``
+    sweeps the rest daily). ``expire=False`` returns the row untouched.
     """
+    plan = default_plan()
     obj, _ = PlanSettings.objects.get_or_create(
         organization=organization,
         defaults={
-            "active_plan": OPS,
-            **default_features(OPS),
+            "active_plan": plan,
+            **default_features(plan),
         },
     )
+    if expire:
+        expire_trial(obj)
     return obj
 
 
@@ -461,6 +512,10 @@ def update_plan_settings(
 
     if active_plan:
         ps.active_plan = new_active_plan
+        # An explicit plan decision ends any trial window: a stale
+        # ``trial_ends_at`` must not downgrade a plan the agency chose.
+        ps.trial_started_at = None
+        ps.trial_ends_at = None
         # Snap the booleans to the new tier's defaults.
         for feature, value in default_features(new_active_plan).items():
             setattr(ps, feature, value)

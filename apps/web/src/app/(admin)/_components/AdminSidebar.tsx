@@ -1,7 +1,10 @@
+import type { UiRole } from "@/lib/roles";
 import { AdminNavList } from "./AdminNav";
 import { AdminAccountLinks, AdminBrand } from "./AdminSidebarParts";
 
 interface AdminSidebarProps {
+  /** The signed-in role - decides which links are listed. */
+  role: UiRole;
   /** Display name for the sidebar brand area. */
   businessName: string;
   businessLogo?: string | null;
@@ -19,6 +22,7 @@ interface AdminSidebarProps {
  * in reach instead of sinking to the bottom of a long page.
  */
 export function AdminSidebar({
+  role,
   businessName,
   businessLogo,
   businessSlug,
@@ -31,7 +35,7 @@ export function AdminSidebar({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
-        <AdminNavList />
+        <AdminNavList role={role} />
       </div>
 
       <div className="border-t border-border p-3">

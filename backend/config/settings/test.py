@@ -50,3 +50,14 @@ PAYMENTS_ENABLED = True
 
 # Don't try to send emails in tests.
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
+
+# Signup is closed by default in production; its own tests (and the existing
+# signup tests) run with it open. apps/accounts/tests/test_signup_closed.py
+# covers the closed state.
+SIGNUP_ENABLED = True
+
+# The older suites create tenants WITHOUT a PlanSettings row and expect every
+# feature to be on (the former OPS fallback). Production defaults to ``basic``;
+# the tests that care about the default set ``settings.BILLING_DEFAULT_PLAN``
+# themselves (apps/billing/tests/test_plan_defaults_and_trial.py).
+BILLING_DEFAULT_PLAN = "ops"

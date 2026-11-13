@@ -16,15 +16,9 @@ from .serializers import BranchSerializer
 
 def _resolve_org_for_user(request):
     """First active membership → organization (D-022 + D-026 mirror)."""
-    from apps.accounts.models import Membership
+    from apps.accounts.services import get_active_membership
 
-    membership = (
-        Membership.objects.filter(
-            user=request.user, organization__is_active=True
-        )
-        .select_related("organization")
-        .first()
-    )
+    membership = get_active_membership(request.user)
     return membership.organization if membership else None
 
 

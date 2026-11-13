@@ -128,9 +128,9 @@ class MenuSerializer(serializers.ModelSerializer):
             org_qs = Organization.objects.all()
             branch_qs = Branch.objects.all()
         else:
-            org_qs = Organization.objects.filter(memberships__user=user).distinct()
+            org_qs = Organization.objects.filter(memberships__user=user, memberships__is_active=True).distinct()
             branch_qs = Branch.objects.filter(
-                organization__memberships__user=user
+                organization__memberships__user=user, organization__memberships__is_active=True
             ).distinct()
         self.fields["organization_id"].queryset = org_qs
         self.fields["branch_id"].queryset = branch_qs
@@ -191,10 +191,10 @@ class MenuCategorySerializer(serializers.ModelSerializer):
             cat_qs = MenuCategory.objects.all()
         else:
             menu_qs = Menu.objects.filter(
-                organization__memberships__user=user
+                organization__memberships__user=user, organization__memberships__is_active=True
             ).distinct()
             cat_qs = MenuCategory.objects.filter(
-                menu__organization__memberships__user=user
+                menu__organization__memberships__user=user, menu__organization__memberships__is_active=True
             ).distinct()
         self.fields["menu_id"].queryset = menu_qs
         self.fields["parent_id"].queryset = cat_qs
@@ -296,10 +296,10 @@ class MenuItemSerializer(serializers.ModelSerializer):
             cat_qs = MenuCategory.objects.all()
         else:
             menu_qs = Menu.objects.filter(
-                organization__memberships__user=user
+                organization__memberships__user=user, organization__memberships__is_active=True
             ).distinct()
             cat_qs = MenuCategory.objects.filter(
-                menu__organization__memberships__user=user
+                menu__organization__memberships__user=user, menu__organization__memberships__is_active=True
             ).distinct()
         self.fields["menu_id"].queryset = menu_qs
         self.fields["category_id"].queryset = cat_qs

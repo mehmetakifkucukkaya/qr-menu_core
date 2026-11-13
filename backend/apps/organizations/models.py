@@ -21,7 +21,7 @@ class OrganizationQuerySet(models.QuerySet):
         """
         if getattr(user, "is_platform_admin", False):
             return self.all()
-        return self.filter(memberships__user=user).distinct()
+        return self.filter(memberships__user=user, memberships__is_active=True).distinct()
 
 
 class Organization(SluggedModel, TimeStampedModel):
@@ -69,10 +69,10 @@ class Organization(SluggedModel, TimeStampedModel):
             return False
         if getattr(user, "is_platform_admin", False):
             return True
-        return self.memberships.filter(user=user).exists()
+        return self.memberships.filter(user=user, is_active=True).exists()
 
     def membership_for(self, user):
-        return self.memberships.filter(user=user).first()
+        return self.memberships.filter(user=user, is_active=True).first()
 
 
 # Late import to avoid circular dependency between accounts and organizations.
