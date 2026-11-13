@@ -1618,6 +1618,7 @@ Local'de birden fazla Postgres instance çakışmasın diye ana stack'te host po
 | D-042 | 2026-11-11 | Frontend Testleri Node 20 Uyumu (--experimental-strip-types Node 22.6+ gerektiriyordu, Dockerfile Node 20 pinliyor → tsx'e geçildi + cart-store top-level await → before() hook + kitchen-ui glob → açık dosya listesi) | aktif |
 | D-043 | 2026-11-13 | Başarı Ekranı Menü Yazılmadan Önce Görünmüyordu (completeOnboarding fire-and-forget idi — 'Hesabınız hazır' ekranı yazma bitmeden render ediliyor, menü önizleme 404'e gidiyor, hata sadece console.error'a düşüyordu → durum makinesi idle/saving/done/error + hata paneli + retry) | aktif |
 | D-044 | 2026-11-13 | Node 20 EOL'ya Girdi → Runtime Node 24 (Dockerfile 3× `node:24-bookworm-slim` + CI `node-version: 24` + `package.json` `engines.node >=24` + `@types/node` 24 + `.nvmrc` + GitHub Actions checkout/setup-node/setup-python v7 — deprecation uyarısı gitti) | aktif |
+| D-045 | 2026-11-13 | Next.js 14.2.18 → 14.2.35 Güvenlik Yaması (CVE-2025-67779 DoS + CVE-2025-55183 kaynak kodu ifşası — React Server Components, App Router etkileniyor, workaround yok) | aktif |
 
 ---
 

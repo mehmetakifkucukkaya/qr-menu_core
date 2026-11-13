@@ -731,3 +731,54 @@ Node 22'ye yükseltmek, beş ay sonra aynı taşmanın tekrarı demek. Node 24'e
 - `.nvmrc` — **yeni**, `24`
 - `docs/DEPLOYMENT.md`, `docs/SPRINT_3_PLAN.md`, `docs/SPRINT_4_PLAN.md`, `docs/SPRINT_6_PLAN.md`, `apps/web/e2e/README.md` — runtime referansları güncellendi
 - `DECISIONS.md` — D-007 "Node 20 LTS" satırı Node 24'e çekildi; D-044 indeks satırı eklendi
+
+---
+
+# D-045 — Next.js 14.2.18, Bilinen Güvenlik Açıklarından Etkileniyordu (14.2.35)
+
+**Tarih:** 2026-11-13
+
+**Bağlam:** D-044 (Node 24) değişikliğinin CI koşusunu okurken `npm ci` çıktısında şu satır çıktı:
+
+```
+npm warn deprecated next@14.2.18: This version has a security vulnerability.
+Please upgrade to a patched version. See https://nextjs.org/blog/security-update-2025-12-11
+```
+
+Bu, kuru bir uyarı değil: Next.js'in 11 Aralık 2025 tarihli güvenlik duyurusu, React Server Components protokolünde iki açığı duyuruyor.
+
+| CVE | Seviye | Etki |
+|---|---|---|
+| CVE-2025-55184 → CVE-2025-67779 | Yüksek (DoS) | Özel hazırlanmış bir istek, App Router uç noktasında sunucu sürecini sonsuz döngüye sokup kilitliyor |
+| CVE-2025-55183 | Orta | Özel hazırlanmış bir istek, bir Server Function'ın **derlenmiş kaynak kodunu** dışarı sızdırabiliyor (kodda gömülü sırlar dahil) |
+
+Bu depo **App Router** kullanıyor (D-003) → etkileniyor. Duyurunun kendi ifadesi: *"There is no workaround. Upgrading to a patched version is required."* 14.x hattı için yamalı sürüm **14.2.35**.
+
+**Karar: `next` ve `eslint-config-next` 14.2.18 → 14.2.35.**
+- İki paket de birebir (`--save-exact`) sabitlendi — depodaki mevcut pinleme stili korundu.
+- `react` 18.3.1 ve `react-dom` 18.3.1 **değişmedi**: 14.2.35'in peer dependency'si `react: ^18.2.0`, mevcut sürüm karşılıyor. Düzeltme, Next.js'in kendi `react-server-dom-webpack` paketinde; uygulamanın React'i etkilenmiyor.
+- `eslint-config-next` birlikte çekildi — ESLint kuralları Next sürümüyle eşleşmeli, ayrı bırakılırsa lint motoru eski kurallarla çalışır.
+
+**Doğrulama (Node 24.22.3):**
+- `tsc --noEmit` temiz, `next lint` temiz, `next build` temiz
+- 22 frontend suite / 252 test yeşil
+- **Tam kapı** (`scripts/release_gate.sh`): backend 1216 test + 22 suite + **43 browser testi** — hepsi yeşil, flaky yok
+- `npm ci` çıktısında next için güvenlik uyarısı **yok**
+
+**Alternatifler:**
+- **15.x'e geçmek** — reddedildi. Major atlama: async `request`/`params` API'leri, `middleware` davranışı, `next/image` ve cache semantiği değişir. Bu, ayrı ve büyük bir iş; güvenlik yamasının gerektirdiği minimum değil.
+- **16.x'e geçmek** — reddedildi, aynı gerekçe.
+- **Sadece uyarıyı bastırmak (`npm audit`/`--no-audit`)** — reddedildi. Açık kapatılmaz, sadece görünmez olur.
+- **Uyarıyı görmezden gelmek, sonraki sürümde halletmek** — reddedildi. Bu tam olarak D-044'te reddedilen "EOL'u kabul et" seçeneğinin aynısı: prod imajı yamasız çalışıyor.
+- **`overrides` ile zorla yama sürümü** — reddedildi. Paketi zorla değiştirmek yerine sürümü doğru yere yazmak daha okunabilir ve `npm ci`'ın tekrarlanabilirliğini bozmaz.
+
+**Seçim gerekçesi:**
+- **Uyarı tesadüf değil, kanıttı.** Depo zaten içine "güvenlik açığını" diye bir not düşmüş; bunu görmezden gelmek, onu bulmuş olmanın anlamını bozar.
+- **Aynı sınıf sorun, aynı düzeltme.** Node'un EOL'u da "prod yamasız runtime'da çalışıyor"du. İkisi de tek cümleyle: prod, yamalı olmayan bir yere çalışıyor.
+- **Yama seviyesinde kal.** 14.2.18 → 14.2.35 aynı hat içinde 17 patch. Davranış değişikliği riski en düşük seviyede, kapı da bunu ölçtü.
+
+**Sonuçlar:**
+- `apps/web/package.json` — `next` 14.2.35, `eslint-config-next` 14.2.35
+- `apps/web/package-lock.json` — bağımlılık ağacı güncellendi
+- CI log'unda next güvenlik uyarısı gitti
+- Frontend: **22 suite / 252 test** + **43 browser testi** yeşil
