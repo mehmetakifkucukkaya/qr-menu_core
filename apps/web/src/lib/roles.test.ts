@@ -7,6 +7,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  blockedNotice,
   canAccessAdminPath,
   filterNavGroups,
   landingPathFor,
@@ -114,4 +115,15 @@ test("navigation is filtered per role and empty groups disappear", () => {
     filterNavGroups(groups, "kitchen").map((g) => g.label),
     ["Operasyon"],
   );
+});
+
+test("an account that cannot use the panel is told why", () => {
+  assert.equal(blockedNotice("ok", "owner"), null);
+  assert.equal(blockedNotice("ok", "kitchen"), null);
+  assert.match(blockedNotice("suspended", null)?.title ?? "", /askıya alındı/);
+  assert.match(blockedNotice("suspended", "owner")?.title ?? "", /askıya alındı/);
+  assert.match(blockedNotice("no_membership", null)?.title ?? "", /bağlı değil/);
+  // Nothing says why and there is no role: still not tied to a business.
+  assert.match(blockedNotice(undefined, null)?.title ?? "", /bağlı değil/);
+  assert.equal(blockedNotice(undefined, "owner"), null);
 });

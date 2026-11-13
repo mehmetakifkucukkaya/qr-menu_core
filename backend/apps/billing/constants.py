@@ -191,6 +191,18 @@ FEATURE_FIELDS: Final = (
 # 9th flag = billing_notes (TextField, not a boolean). Not in the list
 # above because it's not a feature flag — it's an operator-visible note.
 
+# What the agency panel calls each flag.
+FEATURE_LABELS: Final = {
+    "cart_enabled": "Sepet",
+    "orders_enabled": "Sipariş + mutfak",
+    "loyalty_enabled": "Sadakat",
+    "customer_accounts_enabled": "Müşteri hesapları",
+    "payments_enabled": "Online ödeme",
+    "ai_pdf_import_enabled": "PDF içe aktarma",
+    "ai_translate_enabled": "Çeviri",
+    "advanced_analytics_enabled": "Gelişmiş analitik",
+}
+
 # Resources that ``enforce_limit()`` knows how to count. Each maps to a
 # resource-count helper in ``services._resource_count()``. Keys here MUST
 # match the keys in ``PLAN_TIER_LIMITS`` for the limit lookup to succeed.

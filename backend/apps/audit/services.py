@@ -26,6 +26,7 @@ def record_event(
     target_id: int,
     target_repr: str,
     payload: Mapping[str, Any] | None = None,
+    organization_label: str = "",
 ) -> AuditEvent:
     """Persist an audit event for the current request context.
 
@@ -33,6 +34,10 @@ def record_event(
     thread-local context (set by ``AuditContextMiddleware``); pass them
     explicitly to ``AuditEvent.objects.create`` if you need to record
     an event outside an HTTP request.
+
+    ``organization`` may be ``None`` only for an event about a business that
+    no longer exists (its deletion): pass ``organization_label`` then, since
+    the label is otherwise filled in from the business itself.
     """
     actor = get_current_actor()
     # ``request.user.is_authenticated`` is True for real users; the
@@ -41,6 +46,7 @@ def record_event(
     return AuditEvent.objects.create(
         actor=actor if getattr(actor, "is_authenticated", False) else None,
         organization=organization,
+        organization_label=organization_label[:300],
         action=action,
         target_type=target_type,
         target_id=target_id,

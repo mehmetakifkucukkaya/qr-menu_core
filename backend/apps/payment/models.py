@@ -54,6 +54,10 @@ class PaymentSettings(TimeStampedModel):
     is_test_mode = models.BooleanField(default=True)
     is_enabled = models.BooleanField(default=False)
 
+    class Meta:
+        verbose_name = "Ödeme ayarı"
+        verbose_name_plural = "Ödeme ayarları"
+
     def __str__(self) -> str:  # pragma: no cover
         return f"PaymentSettings<{self.organization_id}/{self.provider_name}>"
 
@@ -131,6 +135,8 @@ class OrderPayment(TimeStampedModel):
         return f"OrderPayment<{self.order_id}/{self.provider_name}/{self.provider_payment_id}>"
 
     class Meta:
+        verbose_name = "Sipariş ödemesi"
+        verbose_name_plural = "Sipariş ödemeleri"
         indexes = [
             models.Index(fields=["organization", "-created_at"]),
             models.Index(fields=["provider_payment_id"]),
@@ -188,6 +194,8 @@ class RefundRecord(TimeStampedModel):
     status = models.CharField(max_length=16, choices=STATUS, default="pending")
 
     class Meta:
+        verbose_name = "İade kaydı"
+        verbose_name_plural = "İade kayıtları"
         indexes = [
             models.Index(fields=["organization", "-created_at"]),
             models.Index(fields=["payment", "-created_at"]),
@@ -211,5 +219,7 @@ class WebhookEvent(models.Model):
     error = models.TextField(blank=True, default="")
 
     class Meta:
+        verbose_name = "Ödeme bildirimi"
+        verbose_name_plural = "Ödeme bildirimleri"
         unique_together = (("provider_name", "provider_event_id"),)
         indexes = [models.Index(fields=["provider_name", "-received_at"])]

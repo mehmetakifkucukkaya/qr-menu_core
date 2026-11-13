@@ -240,12 +240,16 @@ What you should see, in order:
 5. `frontend` — `▲ Next.js …`
 6. `caddy` — `obtained certificate` + `serving HTTPS on :443`
 
-### 3.1 Create the first admin
+### 3.1 Create the agency accounts
 
-(The Django admin site is at `https://menu.example.com/django-admin/`; the
-operator panel your customers' staff use is `https://menu.example.com/admin/`.
-Plan changes for a tenant are made in the Django admin: tenants cannot change
-their own plan.)
+The agency panel (the Django admin) is at `https://menu.example.com/django-admin/`;
+the operator panel your customers' staff use is `https://menu.example.com/admin/`.
+Customers are opened, suspended and given their plan in the agency panel (tenants
+cannot change their own plan). [`AGENCY_RUNBOOK.md`](AGENCY_RUNBOOK.md) (in
+Turkish) covers the day-to-day work, including opening a customer with "Yeni
+müşteri aç" or `manage.py create_tenant`.
+
+Every agency staff member gets a personal super-user:
 
 ```bash
 docker compose --env-file .env.production -f docker-compose.production.yml exec backend \
@@ -260,7 +264,8 @@ run when `DJANGO_DEBUG` is off, and `scripts/validate_prod_env.sh` rejects a
 production env file that carries `DEMO_ADMIN_PASSWORD=change-me-demo-only`, the
 demo login hint or `DJANGO_DEBUG=1`.
 
-Customers are opened in the Django admin (`/django-admin/`, §3.1). Only for a
+Customers are opened in the agency panel or with `manage.py create_tenant`
+([`AGENCY_RUNBOOK.md`](AGENCY_RUNBOOK.md) §2), never with `seed_demo`. Only for a
 private staging/demo server, with a private password:
 
 ```bash

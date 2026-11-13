@@ -27,6 +27,8 @@ source code or at API responses in isolation can see that.
 | 8f | `/media` is read-only (405) and refuses path tricks | `photos.spec.ts` | the public file route being usable for traversal |
 | 8g | A non-picture on the media volume (an imported PDF) is not served through `/media` | `photos.spec.ts` | the public file route leaking private files |
 | 8h | The cover photo is resized, shown in the hero, and has an absolute `og:image`; removing it restores the plain hero | `photos.spec.ts` | a 4–5 MB phone photo sent to every visitor as the first image; link previews with a relative image URL |
+| 9 | The owner adds a kitchen and a staff user on the Ekip page; each signs in with the temporary password, must choose a new one and lands on their own page; role limits hold in the UI and on the server; deactivating ends access at once | `roles.spec.ts` | roles that were never enforced (F-08), no way to create floor staff, a kitchen tablet that needed the owner's full login |
+| 10 | The agency opens a customer on the Django admin's "Yeni müşteri aç" screen; the owner signs in with the temporary password; suspending closes the owner's open session and the public menu; reactivating and a reissued owner password work; the audit trail shows all of it | `agency.spec.ts` | an agency tool nobody had ever driven in a browser; a stale session cookie sending `/login` and `/admin` into an endless redirect |
 
 Flows 1, 1b, 2, 2b and 2c also run on a phone viewport (Pixel 7): the product is
 used on phones.

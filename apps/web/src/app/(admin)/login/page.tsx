@@ -33,54 +33,48 @@ function safeNextPath(raw: string | undefined): string {
 }
 
 /**
- * Decide whether to short-circuit the login page when a session cookie
- * is already present. Returns the safe next-path on success, or null if
- * we should render the login form.
+ * Whether the browser holds a session the server still accepts.
  *
- * NOTE: this must NOT call `redirect()` itself — the caller does that
- * outside any try/catch. `redirect()` throws a NEXT_REDIRECT error that
- * looks like a normal exception to `catch {}` and gets swallowed.
+ * Only the answer of `/api/v1/me` counts: the cookie alone proves nothing (the
+ * server drops a session when its password changes, when it expires or after a
+ * clean-up), and a stale cookie that sent the visitor on to `/admin` made the
+ * layout bounce them straight back here - an endless redirect.
+ *
+ * NOTE: this must NOT call `redirect()` itself - the caller does that outside
+ * any try/catch. `redirect()` throws a NEXT_REDIRECT error that looks like a
+ * normal exception to `catch {}` and gets swallowed.
  */
-async function resolveAlreadySignedIn(
-  cookieHeader: string,
-): Promise<string | null> {
-  const hasSession = Boolean(cookies().get(SESSION_COOKIE)?.value);
-  if (!hasSession) return null;
+async function hasValidSession(cookieHeader: string): Promise<boolean> {
+  if (!cookies().get(SESSION_COOKIE)?.value) return false;
 
   try {
     await fetchCurrentUser({ internal: true, cookieHeader });
-    // Caller will redirect to this path on success.
-    return null;
+    return true;
   } catch (err) {
     // Only swallow auth failures (stale cookie). Re-throw network/5xx.
     if (err instanceof AdminApiError && (err.status === 401 || err.status === 403)) {
-      return null; // session was stale — render the form
+      return false; // session was stale - render the form
     }
     throw err;
   }
 }
 
 /**
- * /login — admin sign-in page.
+ * /login - admin sign-in page.
  *
  * Server-side: if the user already has a valid session, redirect to the
- * intended page (avoids an extra round-trip). Otherwise render the
- * client form.
+ * intended page (avoids an extra round-trip). Otherwise render the client
+ * form; signing in replaces a stale cookie.
  *
- * The middleware allows `/login` unconditionally, so we don't need to
- * worry about redirect loops here.
+ * The middleware allows `/login` unconditionally, so there is no redirect loop
+ * as long as the check above is the real one.
  */
 export default async function LoginPage({ searchParams }: PageProps) {
   const nextPath = safeNextPath(searchParams.next);
-  const cookieHeader = readCookieHeader();
-  await resolveAlreadySignedIn(cookieHeader);
 
-  // If the user has a valid session, bounce to the intended page.
-  // We do this AFTER `resolveAlreadySignedIn` (which throws on network
-  // errors) so the try/catch above doesn't accidentally swallow the
-  // redirect exception below.
-  const hasSession = Boolean(cookies().get(SESSION_COOKIE)?.value);
-  if (hasSession) {
+  // After the check (which throws on network errors) so its try/catch cannot
+  // swallow the redirect exception below.
+  if (await hasValidSession(readCookieHeader())) {
     redirect(nextPath);
   }
 

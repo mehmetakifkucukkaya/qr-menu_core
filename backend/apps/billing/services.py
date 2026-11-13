@@ -29,6 +29,7 @@ that batch-read (admin list views, dashboards) don't re-query the DB.
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 from typing import Optional, Union
 
 from django.conf import settings
@@ -105,6 +106,72 @@ def expire_trial(ps: PlanSettings) -> bool:
         },
     )
     return True
+
+
+def begin_trial(ps: PlanSettings, days: int) -> None:
+    """Put ``ps`` on the full-feature (OPS) trial for ``days`` days from now.
+
+    Mutates the row, does not save it. The trial ends in :func:`expire_trial`
+    by dropping the tenant to BASIC.
+    """
+    ps.trial_started_at = timezone.now()
+    ps.trial_ends_at = ps.trial_started_at + timedelta(days=days)
+    ps.active_plan = OPS
+    ps.billing_notes = f"Trial ({days}d) — auto-downgrade to BASIC after."
+    # Re-apply OPS defaults so all feature flags flip on for the trial.
+    for field, value in default_features(OPS).items():
+        setattr(ps, field, value)
+
+
+def extend_trial(organization: Organization, days: int) -> PlanSettings:
+    """Give ``organization`` ``days`` more days of the full-feature trial.
+
+    * a running trial: its end moves ``days`` further out;
+    * BASIC (never trialled, or the trial just ended): a new trial of ``days``
+      days starts now;
+    * any other plan: refused with ``ValueError`` - a trial ends by dropping the
+      tenant to BASIC, which would be a downgrade for a customer on PRO,
+      ORDERS or a paid OPS. Change the plan instead.
+
+    Audited as ``plan_changed`` (``reason`` = ``trial_extended`` /
+    ``trial_started``).
+    """
+    if days <= 0:
+        raise ValueError("Gün sayısı sıfırdan büyük olmalı.")
+    ps = get_plan_settings(organization)  # a finished trial is ended first
+    before = {"active_plan": ps.active_plan, "trial_ends_at": _iso(ps.trial_ends_at)}
+
+    if ps.active_plan == OPS and ps.trial_ends_at and ps.trial_ends_at > timezone.now():
+        ps.trial_ends_at = ps.trial_ends_at + timedelta(days=days)
+        ps.billing_notes = f"Deneme {days} gün uzatıldı — bitince BASIC'e düşer."
+        reason = "trial_extended"
+    elif ps.active_plan == BASIC:
+        begin_trial(ps, days)
+        reason = "trial_started"
+    else:
+        raise ValueError(
+            "Bu müşteri deneme üzerinde değil ve paketi basic değil; "
+            "denemeyi uzatmak yerine paketi değiştirin."
+        )
+    ps.save()
+    record_event(
+        organization=organization,
+        action="plan_changed",
+        target_type="plan_settings",
+        target_id=ps.id,
+        target_repr=str(ps),
+        payload={
+            "reason": reason,
+            "days": days,
+            "before": before,
+            "trial_ends_at": _iso(ps.trial_ends_at),
+        },
+    )
+    return ps
+
+
+def _iso(value) -> Optional[str]:
+    return value.isoformat() if value else None
 
 
 def get_plan_settings(organization: Organization, *, expire: bool = True) -> PlanSettings:

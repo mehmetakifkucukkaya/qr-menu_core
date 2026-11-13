@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { cookies, headers } from "next/headers";
 
+import { AccountBlocked } from "../_components/AccountBlocked";
 import { AdminHeader } from "../_components/AdminHeader";
 import { AdminRoleGuard } from "../_components/AdminRoleGuard";
 import { AdminSidebar } from "../_components/AdminSidebar";
@@ -8,7 +9,7 @@ import { ForcedPasswordChange } from "../_components/ForcedPasswordChange";
 import { NoPermission } from "../_components/NoPermission";
 import { fetchCurrentOrganization, fetchCurrentUser, AdminApiError } from "@/lib/api-admin";
 import { fetchTrialStatus } from "@/lib/api-onboarding";
-import { canAccessAdminPath, landingPathFor, uiRole } from "@/lib/roles";
+import { blockedNotice, canAccessAdminPath, landingPathFor, uiRole } from "@/lib/roles";
 import { TrialBanner } from "@/components/billing/TrialBanner";
 import { logoutAction } from "../_actions/auth";
 
@@ -79,18 +80,16 @@ export default async function AdminLayout({
   const role = uiRole(user.membership_role, user.is_superuser || user.role === "admin");
   const csrfToken = cookies().get("qr_csrftoken")?.value ?? null;
 
-  // Tied to no business: sign-in refuses such accounts, this is the safety net
-  // for a session that was already open.
-  if (role === null) {
+  // Suspended by the agency, or tied to no business: sign-in refuses such
+  // accounts, this is what a session that was already open gets to see.
+  const blocked = blockedNotice(user.access_state, role);
+  if (blocked !== null || role === null) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-background p-6">
-        <NoPermission
-          landingHref="/login"
-          linkLabel="Girişe dön"
-          title="Hesabınız bir işletmeye bağlı değil"
-          message="Ajansınızla iletişime geçin."
-        />
-      </main>
+      <AccountBlocked
+        title={blocked?.title ?? "Hesabınız bir işletmeye bağlı değil"}
+        message={blocked?.message ?? "Ajansınızla iletişime geçin."}
+        logoutAction={logoutAction}
+      />
     );
   }
 

@@ -8,9 +8,10 @@ from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
 from apps.organizations.models import Organization
+from apps.organizations.reserved import is_reserved
 
 from .models import User
-from .services import get_active_membership
+from .services import get_active_membership, resolve_membership_state
 
 
 _SLUG_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$")
@@ -28,9 +29,13 @@ class UserSerializer(serializers.ModelSerializer):
     (``owner`` / ``manager`` / ``staff`` / ``kitchen`` / ``agency_admin``), or
     ``None`` for a platform admin without a membership. The admin UI uses it to
     decide which pages to show; the server enforces the same table.
+    ``access_state`` says why an open session can do nothing once the agency
+    suspended its business (``suspended``) or it belongs to none
+    (``no_membership``).
     """
 
     membership_role = serializers.SerializerMethodField()
+    access_state = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -44,6 +49,7 @@ class UserSerializer(serializers.ModelSerializer):
             "is_superuser",
             "must_change_password",
             "membership_role",
+            "access_state",
             "date_joined",
             "created_at",
         )
@@ -51,6 +57,14 @@ class UserSerializer(serializers.ModelSerializer):
     def get_membership_role(self, obj: User) -> str | None:
         membership = get_active_membership(obj)
         return membership.role if membership else None
+
+    def get_access_state(self, obj: User) -> str:
+        """``ok`` / ``suspended`` / ``no_membership``: why a signed-in account can
+        (not) use its business. The agency's accounts are never tied to one."""
+        if getattr(obj, "is_platform_admin", False):
+            return "ok"
+        state, _ = resolve_membership_state(obj)
+        return state
 
 
 class SignupSerializer(serializers.Serializer):
@@ -95,13 +109,13 @@ class SignupSerializer(serializers.Serializer):
         return value.lower()
 
     def validate_slug(self, value: str) -> str:
+        if is_reserved(value):
+            raise serializers.ValidationError(
+                "Bu slug sistem için ayrılmış. Farklı bir slug deneyin."
+            )
         if Organization.objects.filter(slug=value).exists():
             raise serializers.ValidationError(
                 "Bu slug zaten kullanımda. Farklı bir slug deneyin."
-            )
-        if value in {"admin", "api", "www", "static", "media", "signup"}:
-            raise serializers.ValidationError(
-                "Bu slug sistem için ayrılmış. Farklı bir slug deneyin."
             )
         return value
 

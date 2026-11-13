@@ -20,10 +20,8 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 
-from apps.accounts.models import Membership, MembershipRole, User
-from apps.billing.constants import BASIC, default_features
-from apps.billing.models import PlanSettings
-from apps.organizations.models import Organization
+from apps.billing.constants import BASIC
+from apps.organizations.reserved import is_reserved
 from rest_framework.views import APIView
 
 from .serializers import LoginSerializer, UserSerializer
@@ -216,8 +214,7 @@ class SlugAvailabilityView(APIView):
                 }
             )
 
-        reserved = {"admin", "api", "www", "static", "media", "signup", "docs", "auth"}
-        if slug in reserved:
+        if is_reserved(slug):
             payload = {"slug": slug, "available": False, "reason": "reserved"}
         elif not SlugAvailabilityView._SLUG_RE.match(slug):
             payload = {"slug": slug, "available": False, "reason": "invalid"}
@@ -275,72 +272,45 @@ class SignupView(APIView):
         if closed is not None:
             return closed
 
+        from apps.onboarding.provisioning import ProvisioningError, provision_tenant
+        from apps.onboarding.services import TRIAL_DAYS
+
         from .serializers import SignupResponseSerializer, SignupSerializer
 
         serializer = SignupSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
-        # 1. Create User.
-        user = User.objects.create_user(
-            email=data["email"],
-            password=data["password"],
-            full_name=data.get("full_name", "") or "",
-            role="owner",
-        )
-
-        # 2. Create Organization.
-        organization = Organization.objects.create(
-            name=data["business_name"],
-            slug=data["slug"],
-            default_locale=data["default_locale"],
-            supported_locales=data["supported_locales"],
-            currency=data["currency"],
-            is_active=True,
-        )
-
-        # 3. Membership(OWNER).
-        membership = Membership.objects.create(
-            user=user,
-            organization=organization,
-            role=MembershipRole.OWNER,
-        )
-
-        # 4. PlanSettings(BASIC) — auto-assign per Sprint B1 default.
-        # Sprint C3b trial hook: flip the freshly-created tenant into a
-        # 14-day OPS trial. ``start_trial`` is idempotent and re-uses the
-        # BASIC PlanSettings row we just inserted (no extra row). Runs
-        # inside the @transaction.atomic decorator so a rollback also
-        # unwinds the trial flip — the operator never sees a half-built
-        # tenant with an "in trial" plan + missing org.
-        PlanSettings.objects.create(
-            organization=organization,
-            active_plan=BASIC,
-            billing_notes="Self-serve signup — BASIC default.",
-            **default_features(BASIC),
-        )
-        from apps.onboarding import services as onboarding_services
-
-        onboarding_services.start_trial(organization)
-
-        # 5. Audit — tenant_created (lazy migrate in Sprint C1 final commit).
+        # User + Organization + Membership(OWNER) + PlanSettings(BASIC, flipped
+        # into the 14-day OPS trial) + the ``tenant_created`` audit event: one
+        # service shared with the agency's create_tenant. The wizard makes the
+        # menu and the first QR code later, so no starter content here.
         try:
-            from apps.audit.services import record_event
-
-            record_event(
-                organization=organization,
-                action="tenant_created",
-                target_type="organization",
-                target_id=organization.id,
-                target_repr=f"Organization<{organization.slug}>",
-                payload={
-                    "owner_email": user.email,
-                    "plan": BASIC,
-                    "signup_source": "self_serve_wizard",
-                },
+            result = provision_tenant(
+                name=data["business_name"],
+                slug=data["slug"],
+                owner_email=data["email"],
+                owner_name=data.get("full_name", "") or "",
+                owner_password=data["password"],
+                plan=BASIC,
+                trial_days=TRIAL_DAYS,
+                default_locale=data["default_locale"],
+                supported_locales=data["supported_locales"],
+                currency=data["currency"],
+                starter_content=False,
+                open_payments=True,
+                source="self_serve_wizard",
             )
-        except Exception:  # noqa: BLE001 — audit is best-effort
-            pass
+        except ProvisioningError as exc:
+            # Lost a race against another signup between the serializer's checks
+            # and the insert: answer like a field error.
+            from rest_framework.exceptions import ValidationError
+
+            field_names = {"name": "business_name", "owner_email": "email"}
+            raise ValidationError(
+                {field_names.get(k, k): [v] for k, v in exc.errors.items()}
+            ) from exc
+        user, organization, membership = result.owner, result.organization, result.membership
 
         # 6. Auto-login so the wizard's next call (onboarding/complete/)
         # carries the session cookie. We must NOT rollback here on

@@ -13,8 +13,11 @@ Decisions encoded here:
   us audit any model without a schema migration. ``target_repr`` keeps a
   human-readable snapshot of the object name at the time of the event so
   recent-activity views survive deletion of the underlying record.
-- **Tenant-isolated** — every event has an explicit ``organization``
-  FK. Recent-events queries filter on it (see AdminSummaryView).
+- **Tenant-isolated** — every event carries the ``organization`` it
+  belongs to. Recent-events queries filter on it (see AdminSummaryView).
+  The FK is ``SET_NULL``: when the agency deletes a customer the trail
+  stays, and ``organization_label`` (name + slug at event time) says whose
+  it was.
 - **Immutable** — there is no UPDATE / DELETE endpoint; events are an
   append-only ledger.
 - **7-day retention** is the V1 plan (cron cleanup lands in Sprint 6).
@@ -144,8 +147,18 @@ class AuditEvent(models.Model):
     )
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
         related_name="audit_events",
+        help_text="Null once the business was deleted - see organization_label.",
+    )
+    organization_label = models.CharField(
+        max_length=300,
+        blank=True,
+        default="",
+        help_text="Name and slug of the business at event time "
+        "(e.g. 'Cafe A (cafe-a)'); survives its deletion.",
     )
     action = models.CharField(max_length=30, choices=ACTION_CHOICES)
     target_type = models.CharField(max_length=30, choices=TARGET_CHOICES)
@@ -166,12 +179,19 @@ class AuditEvent(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
-        verbose_name = "Audit Event"
-        verbose_name_plural = "Audit Events"
+        verbose_name = "Denetim olayı"
+        verbose_name_plural = "Denetim olayları"
         indexes = [
             models.Index(fields=["organization", "-created_at"]),
             models.Index(fields=["target_type", "target_id"]),
         ]
+
+    def save(self, *args, **kwargs):
+        # Snapshot "who it was" while the business still exists.
+        if not self.organization_label and self.organization_id:
+            org = self.organization
+            self.organization_label = f"{org.name} ({org.slug})"[:300]
+        super().save(*args, **kwargs)
 
     def __str__(self) -> str:  # pragma: no cover
         return (

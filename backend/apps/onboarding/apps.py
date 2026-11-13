@@ -5,5 +5,5 @@ from django.apps import AppConfig
 
 class OnboardingConfig(AppConfig):
     name = "apps.onboarding"
-    verbose_name = "Onboarding Wizard"
+    verbose_name = "Kayıt sihirbazı"
     default_auto_field = "django.db.models.BigAutoField"

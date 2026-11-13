@@ -78,8 +78,8 @@ class Customer(models.Model):
 
     class Meta:
         ordering = ("-created_at",)
-        verbose_name = "Müşteri"
-        verbose_name_plural = "Müşteriler"
+        verbose_name = "Müşteri hesabı"
+        verbose_name_plural = "Müşteri hesapları"
         indexes = [
             models.Index(fields=("email",)),
             models.Index(fields=("-last_login_at",)),
@@ -128,8 +128,8 @@ class MagicLinkToken(models.Model):
 
     class Meta:
         ordering = ("-created_at",)
-        verbose_name = "Magic Link Token"
-        verbose_name_plural = "Magic Link Tokens"
+        verbose_name = "Giriş bağlantısı"
+        verbose_name_plural = "Giriş bağlantıları"
         indexes = [
             models.Index(fields=("token", "expires_at")),
             models.Index(fields=("customer", "-created_at")),
