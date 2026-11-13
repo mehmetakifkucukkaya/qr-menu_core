@@ -1,9 +1,18 @@
 /**
  * Onboarding API client — Sprint C3b (D-030 follow-up).
  *
- * Four endpoints backing the wizard's steps 3-5 + the
+ * Five endpoints backing the wizard's steps 2-5 + the
  * `TrialBanner` data feed:
  *
+ *   - `POST /api/v1/onboarding/preferences/` — persist the step-2
+ *                                             choices (default language,
+ *                                             supported languages,
+ *                                             currency). The tenant
+ *                                             already exists at this
+ *                                             point (step 1 created
+ *                                             it), so these values
+ *                                             could not ride along with
+ *                                             the signup payload.
  *   - `POST /api/v1/onboarding/complete/`  — materialize the wizard's
  *                                             first category + items.
  *   - `POST /api/v1/onboarding/demo-seed/`  — copy Modern Cafe template
@@ -24,7 +33,7 @@
  * `adminFetch<T>` from `lib/api-admin.ts` — no duplicate fetch plumbing.
  */
 
-import { adminFetch } from "@/lib/api-admin";
+import { adminFetch, fetchCsrfToken } from "@/lib/api-admin";
 import type { AdminFetchOptions } from "@/lib/api-admin";
 
 // ---------------------------------------------------------------------------
@@ -76,6 +85,23 @@ export interface DemoSeedResponse {
   skipped: boolean;
 }
 
+/** Body of POST /api/v1/onboarding/preferences/. */
+export interface OnboardingPreferencesPayload {
+  /** The language a customer sees first when they open the QR menu. */
+  default_locale: string;
+  /** Every language the tenant serves. Must contain `default_locale`. */
+  supported_locales: string[];
+  /** TRY / EUR / USD / GBP. */
+  currency: string;
+}
+
+/** Response of POST /api/v1/onboarding/preferences/. */
+export interface OnboardingPreferencesResponse {
+  default_locale: string;
+  supported_locales: string[];
+  currency: string;
+}
+
 /** Response of POST /api/v1/qr-codes/first/. */
 export interface FirstQRResponse {
   id: number;
@@ -102,6 +128,25 @@ export interface TrialStatus {
 // ---------------------------------------------------------------------------
 // Wrappers
 // ---------------------------------------------------------------------------
+
+/**
+ * POST /api/v1/onboarding/preferences/ — persist the wizard's step 2.
+ *
+ * The tenant already exists (step 1 created it and signed the operator
+ * in), so the languages and the currency are written here instead of
+ * riding along with the signup payload. Without this the choices were
+ * shown on the summary screen and then dropped.
+ */
+export async function saveOnboardingPreferences(
+  payload: OnboardingPreferencesPayload,
+  options: OnboardingFetchOptions = {},
+): Promise<OnboardingPreferencesResponse> {
+  return adminFetch<OnboardingPreferencesResponse>("/api/v1/onboarding/preferences", {
+    method: "POST",
+    body: payload,
+    ...options,
+  });
+}
 
 /**
  * POST /api/v1/onboarding/complete/ — wizard step 3-4 materialization.
@@ -169,4 +214,48 @@ export async function fetchTrialStatus(
   return adminFetch<TrialStatus>("/api/v1/onboarding/trial-status", {
     ...options,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Browser-side CSRF
+// ---------------------------------------------------------------------------
+
+/**
+ * The wizard's writes happen in the browser, and Django enforces CSRF on
+ * every session-authenticated POST: without an `X-CSRFToken` header the
+ * request is answered with 403 ("CSRF token missing") even though the
+ * session cookie is perfectly valid. The other admin screens get the
+ * token from a server component that reads the cookie; the wizard has no
+ * server component between the click and the request, so it asks for one.
+ *
+ * The token is cached per page load: Django rotates it on login and
+ * accepts the same value for every later request, so one fetch covers
+ * the wizard's three writes (preferences, complete, first QR).
+ */
+let cachedCsrfToken: string | null = null;
+
+async function browserCsrfToken(): Promise<string> {
+  if (cachedCsrfToken) return cachedCsrfToken;
+  cachedCsrfToken = await fetchCsrfToken();
+  return cachedCsrfToken;
+}
+
+/**
+ * Run an onboarding write from the browser with a CSRF token attached.
+ *
+ * The caller's own options win: a server component that already has a
+ * token (or a forwarded cookie header) must not have it overwritten.
+ */
+export async function onboardingWrite<T>(
+  run: (csrfToken: string) => Promise<T>,
+  options: OnboardingFetchOptions = {},
+): Promise<T> {
+  if (options.csrfToken) return run(options.csrfToken);
+  const csrfToken = await browserCsrfToken();
+  return run(csrfToken);
+}
+
+/** Drop the cached token — used by the tests and after a 403. */
+export function resetOnboardingCsrfToken(): void {
+  cachedCsrfToken = null;
 }

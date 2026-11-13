@@ -129,6 +129,8 @@ RULES: Final[tuple[Rule, ...]] = (
     _rule(r"^/api/v1/payment/admin/", ANY, ONLY_OWNER),
     # --- Onboarding helpers ------------------------------------------------
     _rule(r"^/api/v1/onboarding/trial-status$", READ, EVERYONE),
+    # The tenant's own language and currency — the owner's decision.
+    _rule(r"^/api/v1/onboarding/preferences$", WRITE, ONLY_OWNER),
     _rule(r"^/api/v1/(onboarding|qr-codes)/", ANY, OWNER_MANAGER),
 )
 

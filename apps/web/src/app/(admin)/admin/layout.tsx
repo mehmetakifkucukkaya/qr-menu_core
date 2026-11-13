@@ -11,6 +11,7 @@ import { NoPermission } from "../_components/NoPermission";
 import { fetchCurrentOrganization, fetchCurrentUser, AdminApiError } from "@/lib/api-admin";
 import { fetchTrialStatus } from "@/lib/api-onboarding";
 import { blockedNotice, canAccessAdminPath, landingPathFor, uiRole } from "@/lib/roles";
+import { LimitBanner } from "@/components/billing/LimitBanner";
 import { TrialBanner } from "@/components/billing/TrialBanner";
 import { logoutAction } from "../_actions/auth";
 
@@ -170,6 +171,10 @@ export default async function AdminLayout({
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
+        {/* A limit that was hit anywhere in the admin surfaces here, with
+            the "Yükselt" call to action. Client-side: the notice is
+            raised by the API client when the backend answers 402. */}
+        <LimitBanner />
         <TrialBanner status={trialStatus} />
         <AdminHeader
           user={user}

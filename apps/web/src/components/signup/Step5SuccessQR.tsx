@@ -19,6 +19,7 @@ import {
   completeOnboarding,
   generateFirstQR,
   importDemoTemplate,
+  onboardingWrite,
   type FirstQRResponse,
 } from "@/lib/api-onboarding";
 import { AdminApiError } from "@/lib/api-admin";
@@ -95,16 +96,27 @@ export function Step5SuccessQR() {
     const skipItems = namedItems.length === 0;
 
     // Fire and forget — surface failures in the banner area below.
-    completeOnboarding({
-      category_name: category.name.trim(),
-      category_icon: category.icon || "🍽️",
-      items: namedItems.map((it) => ({
-        name: it.name.trim(),
-        price: it.price.trim() || "0",
-        description: it.description?.trim() ?? "",
-      })),
-      skip_items: skipItems,
-    }).catch((err) => {
+    //
+    // The write goes through `onboardingWrite`, which attaches the CSRF
+    // token Django demands on every session-authenticated POST. Without
+    // it the server answers 403 ("CSRF token missing") and the tenant's
+    // first category is never created — the backend tests did not catch
+    // it because Django's test client does not enforce CSRF.
+    onboardingWrite((csrfToken) =>
+      completeOnboarding(
+        {
+          category_name: category.name.trim(),
+          category_icon: category.icon || "🍽️",
+          items: namedItems.map((it) => ({
+            name: it.name.trim(),
+            price: it.price.trim() || "0",
+            description: it.description?.trim() ?? "",
+          })),
+          skip_items: skipItems,
+        },
+        { csrfToken },
+      ),
+    ).catch((err) => {
       // eslint-disable-next-line no-console
       console.error("onboarding/complete failed", err);
       // Allow retry on the next mount — this only fires on strict-mode
@@ -280,7 +292,9 @@ function QrDownloadButton() {
     setLoading(true);
     setError(null);
     try {
-      const res = await generateFirstQR();
+      const res = await onboardingWrite((csrfToken) =>
+        generateFirstQR({ csrfToken }),
+      );
       setQr(res);
     } catch (err) {
       const msg =
@@ -375,7 +389,9 @@ function DemoSeedPanel({
     if (status.kind === "loading") return;
     setStatus({ kind: "loading" });
     try {
-      const res = await importDemoTemplate();
+      const res = await onboardingWrite((csrfToken) =>
+        importDemoTemplate({ csrfToken }),
+      );
       setStatus({
         kind: "success",
         categories: res.categories_copied,

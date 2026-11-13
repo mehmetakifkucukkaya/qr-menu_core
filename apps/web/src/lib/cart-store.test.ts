@@ -8,7 +8,7 @@
  * reports a hydration mismatch for every returning customer. `<CartHydrator />`
  * restores the saved cart afterwards with `persist.rehydrate()`.
  */
-import { test } from "node:test";
+import { test, before } from "node:test";
 import assert from "node:assert/strict";
 
 const KEY = "qr-menu-cart";
@@ -36,7 +36,24 @@ Object.defineProperty(globalThis, "window", {
   value: { localStorage: fakeStorage },
 });
 
-const { useCartStore } = await import("./cart-store.ts");
+// The store is imported dynamically, AFTER the fake window exists — that
+// ordering is the whole point of this test.
+//
+// It used to be a top-level `await import(...)`. That only works in an ESM
+// module, and this package is CommonJS ("type" is not set in package.json),
+// so the test could not run under the CJS transform. It used to work locally
+// only because Node's --experimental-strip-types (Node 22.6+) loads .ts as
+// ESM; on Node 20 — the version the Dockerfile pins and CI runs — the flag
+// does not exist at all.
+//
+// `before()` gives the same ordering without top-level await: the import
+// happens after the fake window is installed, before the first test runs.
+type CartStore = typeof import("./cart-store.ts");
+let useCartStore: CartStore["useCartStore"];
+
+before(async () => {
+  ({ useCartStore } = await import("./cart-store.ts"));
+});
 
 test("a saved cart is not applied while the store is created (first render == server HTML)", () => {
   const state = useCartStore.getState();

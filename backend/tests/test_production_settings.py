@@ -114,7 +114,12 @@ class TestProductionSafetyRails:
 
     def test_json_logging(self):
         src = _read_source()
-        assert "JSONFormatter" in src or "json_logging" in src
+        # The formatter is ours now (apps.core.logging), not a third-party
+        # package. A test that only greps for a class name is what let a
+        # never-published package version and a non-existent class through
+        # in the first place — the behavioural test lives in
+        # apps/core/tests/test_logging.py.
+        assert "JsonLogFormatter" in src
         assert "formatters" in src
         assert "handlers" in src
 

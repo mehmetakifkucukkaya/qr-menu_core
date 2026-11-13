@@ -73,6 +73,24 @@ export function Step1BusinessInfo() {
   const [slugTouched, setSlugTouched] = useState(Boolean(form.slug));
   const [autoSlugTried, setAutoSlugTried] = useState(false);
 
+  // The auto-slug suggestion runs from a timeout (it has to wait for the
+  // focus to settle), so it cannot read the slug from the render closure —
+  // it reads these refs instead. `slugFocusedRef` tells it that the
+  // operator is already typing in the slug field.
+  const slugRef = useRef(form.slug);
+  const slugFocusedRef = useRef(false);
+  slugRef.current = form.slug;
+
+  // The slug status, mirrored in a ref: `handleSubmit` needs the *current*
+  // value at the moment of the click, not the value captured by the render
+  // that produced the click handler.
+  const slugStatusRef = useRef<SlugStatus>({ kind: "idle" });
+  // The in-flight availability check, so the submit can wait for it instead
+  // of dropping the click on the floor (see handleSubmit).
+  const slugCheckRef = useRef<{ slug: string; promise: Promise<SlugStatus> } | null>(
+    null,
+  );
+
   // ---- Validation (re-runs on every keystroke) ----------------------------
   const validation = useMemo(() => {
     const errors: Record<string, string> = {};
@@ -108,50 +126,96 @@ export function Step1BusinessInfo() {
     const slug = form.slug.trim();
     if (!slug || isSlugInvalidFormat) {
       setSlugStatus({ kind: "idle" });
+      slugStatusRef.current = { kind: "idle" };
+      slugCheckRef.current = null;
       return;
     }
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
     setSlugStatus({ kind: "checking" });
+    slugStatusRef.current = { kind: "checking" };
     const myReq = ++reqIdRef.current;
+
+    // A deferred promise: the debounce timer resolves it once the request
+    // has come back. The submit handler awaits this promise, so a click
+    // that lands mid-check waits for the answer instead of being dropped.
+    // It always settles — it never rejects — so a network failure becomes
+    // "idle" (unknown), not a stuck spinner.
+    let settle!: (status: SlugStatus) => void;
+    const promise = new Promise<SlugStatus>((resolve) => {
+      settle = resolve;
+    });
+
+    slugCheckRef.current = { slug, promise };
 
     debounceRef.current = setTimeout(async () => {
       try {
         const result = await checkSlugAvailability(slug);
         // Drop stale responses — only the latest request wins.
-        if (myReq !== reqIdRef.current) return;
-        setSlugStatus(reasonToStatus(result.reason, result.slug));
+        if (myReq !== reqIdRef.current) {
+          settle({ kind: "idle" });
+          return;
+        }
+        const status = reasonToStatus(result.reason, result.slug);
+        setSlugStatus(status);
+        slugStatusRef.current = status;
+        settle(status);
       } catch {
-        if (myReq !== reqIdRef.current) return;
+        if (myReq !== reqIdRef.current) {
+          settle({ kind: "idle" });
+          return;
+        }
         // Network blip — surface a soft "checking failed, retry" by
         // falling back to idle so the user knows we'll re-check on
         // the next keystroke.
-        setSlugStatus({ kind: "idle" });
+        const status: SlugStatus = { kind: "idle" };
+        setSlugStatus(status);
+        slugStatusRef.current = status;
+        settle(status);
       }
     }, DEBOUNCE_MS);
 
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
+      // The effect is torn down (the slug changed again): release anyone
+      // waiting on this check so a pending submit is not stranded.
+      settle({ kind: "idle" });
     };
   }, [form.slug, isSlugInvalidFormat]);
 
   // ---- Auto-slug suggestion (one-shot, only if slug is empty) --------------
+  //
+  // The suggestion runs when the operator leaves the business-name field.
+  // It must never touch a slug the operator has already written, and it
+  // must not fire while they are typing in the slug field: the blur
+  // happens a moment before the focus lands there, so the check has to
+  // wait for the next tick — otherwise the suggestion lands in the
+  // middle of the operator's typing and the slug comes out mangled
+  // ("e2e-cafee2e-cafe-mwckb6u5").
   function suggestSlugFromBusiness() {
     if (autoSlugTried) return;
-    const candidate = form.business_name
-      .trim()
-      .toLowerCase()
-      .normalize("NFKD")
-      .replace(/[\u0300-\u036f]/g, "") // strip diacritics
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 38);
-    if (candidate && SLUG_RE.test(candidate)) {
-      updateForm({ slug: candidate });
-      setSlugTouched(true);
-    }
-    setAutoSlugTried(true);
+    window.setTimeout(() => {
+      // The operator is already in the slug field → they are driving.
+      if (slugFocusedRef.current) return;
+      if (slugRef.current.trim()) {
+        setAutoSlugTried(true);
+        return;
+      }
+      const candidate = form.business_name
+        .trim()
+        .toLowerCase()
+        .normalize("NFKD")
+        .replace(/[\u0300-\u036f]/g, "") // strip diacritics
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 38);
+      if (candidate && SLUG_RE.test(candidate)) {
+        updateForm({ slug: candidate });
+        setSlugTouched(true);
+      }
+      setAutoSlugTried(true);
+    }, 0);
   }
 
   // ---- Submit --------------------------------------------------------------
@@ -165,19 +229,32 @@ export function Step1BusinessInfo() {
       return;
     }
 
-    // Refuse to submit with an unconfirmed slug.
-    if (slugStatus.kind === "checking") return;
-    if (
-      slugStatus.kind === "taken" ||
-      slugStatus.kind === "reserved" ||
-      slugStatus.kind === "invalid"
-    ) {
-      setFieldErrors({ slug: "Bu slug kullanılamaz, lütfen farklı bir tane seçin." });
-      return;
-    }
-
+    // Wait for the in-flight slug check instead of silently dropping the
+    // click. The old code did `if (slugStatus.kind === "checking") return;`
+    // — the button did nothing, with no error and no spinner, so the
+    // wizard looked frozen. A click that lands inside the 300ms debounce
+    // window (or while the request is in flight) is the normal case for a
+    // fast operator, not an error.
     setSubmitting(true);
     try {
+      const pending = slugCheckRef.current;
+      if (slugStatusRef.current.kind === "checking" && pending) {
+        await pending.promise;
+      }
+
+      // Re-read the status: the awaited check may have found the slug taken.
+      const status = slugStatusRef.current;
+      if (
+        status.kind === "taken" ||
+        status.kind === "reserved" ||
+        status.kind === "invalid"
+      ) {
+        setFieldErrors({
+          slug: "Bu slug kullanılamaz, lütfen farklı bir tane seçin.",
+        });
+        return;
+      }
+
       await signup({
         email: form.email.trim(),
         password: form.password,
@@ -341,6 +418,12 @@ export function Step1BusinessInfo() {
               setSlugTouched(true);
               setAutoSlugTried(true); // user is now driving
               updateForm({ slug: e.target.value.toLowerCase() });
+            }}
+            onFocus={() => {
+              slugFocusedRef.current = true;
+            }}
+            onBlur={() => {
+              slugFocusedRef.current = false;
             }}
             required
             aria-invalid={

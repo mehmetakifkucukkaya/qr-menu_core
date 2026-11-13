@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
-import { BarChart3, CalendarDays, Sparkles } from "lucide-react";
+import Link from "next/link";
+import { BarChart3, CalendarDays, Sparkles, TrendingUp } from "lucide-react";
 
 import { DailyViewsChart } from "@/app/(admin)/_components/DailyViewsChart";
 import { EventBreakdown } from "@/app/(admin)/_components/EventBreakdown";
@@ -50,6 +51,7 @@ export default async function AnalyticsPage() {
 
   let overview;
   let fetchError: string | null = null;
+  let limitReached = false;
   try {
     overview = await fetchAnalyticsOverview(WINDOW_DAYS, {
       internal: true,
@@ -58,6 +60,10 @@ export default async function AnalyticsPage() {
   } catch (err) {
     if (err instanceof AdminApiError) {
       fetchError = err.message;
+      // A 402 is not a failure — it says the tenant is at its monthly
+      // traffic cap. The page says so and points at the plan page; a
+      // generic "try again" would be a lie (retrying will not help).
+      limitReached = err.status === 402;
     } else {
       fetchError = err instanceof Error ? err.message : "Bilinmeyen hata";
     }
@@ -100,13 +106,37 @@ export default async function AnalyticsPage() {
       </header>
 
       {/* Fetch error banner (non-blocking) */}
-      {fetchError ? (
+      {fetchError && !limitReached ? (
         <div
           role="alert"
           className="rounded-xl border border-danger/30 bg-danger-soft p-4 text-sm text-danger"
         >
           Analitik verileri yüklenirken bir hata oluştu. Sayfayı yenilemeyi
           deneyin. ({fetchError})
+        </div>
+      ) : null}
+
+      {/* The monthly traffic cap — the tenant is at its plan's ceiling. */}
+      {limitReached ? (
+        <div
+          role="alert"
+          className="rounded-xl border border-warning/30 bg-warning-soft p-4 text-sm text-warning"
+        >
+          <p className="font-semibold">
+            Aylık görüntülenme limitiniz doldu.
+          </p>
+          <p className="mt-1">
+            Paketinizi yükselterek analitik verilerine kaldığınız yerden devam
+            edebilirsiniz. Menünüz çalışmaya devam eder.
+          </p>
+          <Link
+            href="/admin/billing"
+            prefetch={false}
+            className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-warning px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-white transition hover:bg-warning/90"
+          >
+            <TrendingUp className="h-3.5 w-3.5" aria-hidden />
+            <span>Yükselt</span>
+          </Link>
         </div>
       ) : null}
 

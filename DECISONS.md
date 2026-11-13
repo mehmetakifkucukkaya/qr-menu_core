@@ -366,3 +366,262 @@
 - Image lazy loading priority (LCP image eager, rest lazy)
 - Bottom sheet adisyon özeti (masa başı cart)
 
+
+---
+
+# D-037 — Signup Akışının Uçtan Uca Çalışır Hale Getirilmesi (CSRF + Idempotency + Locale Kalıcılığı)
+
+**Tarih:** 2026-11-11
+
+**Bağlam:** Signup wizardı görsel olarak "bitmiş" görünüyordu ama gerçekte üç ayrı eksik vardı ve hepsi sessizdi. (1) `Step5SuccessQR.tsx` session-cookie'li POST'ları CSRF token **olmadan** gönderiyordu — Django `SessionAuthentication` her session-auth POST'ta CSRF zorunlu kılar, yani 403. Kullanıcı yine de "başarılı" ekranını görüyordu, arkasında hiçbir şey yoktu. (2) `complete_onboarding` idempotent değildi — istek tekrarlandığında (kayıp yanıt retry'si) ilk kategori iki kez oluşuyordu. (3) Step 2'de seçilen dil ve para birimi **hiçbir yere yazılmıyordu**; tenant her zaman varsayılanları alıyordu. Django test client'ı CSRF uygulamadığı için backend testleri bunların hiçbirini göremiyordu — sadece tarayıcı görüyordu.
+
+**Karar 1: CSRF token'ı write'ların içine taşı (`onboardingWrite`)**
+- `apps/web/src/lib/api-onboarding.ts` — `onboardingWrite(run, options)` yardımcısı: `fetchCsrfToken()` çağırır, token'ı `run(csrfToken)`'a verir, çağrı bittikten sonra token'ı önbellekten düşürür (`resetOnboardingCsrfToken()`). Token her write'ta yeniden alınmaz — üç write'ta üç CSRF round-trip'i değil, bir tane.
+- `Step5SuccessQR.tsx` — `completeOnboarding`, `generateFirstQR`, `importDemoTemplate` artık `onboardingWrite((csrfToken) => ...)` ile gönderiliyor. CSRF'siz gönderilen tek bir POST kalmadı.
+
+**Karar 2: `complete_onboarding` idempotent (`get_or_create`)**
+- `backend/apps/onboarding/services.py` — kategori `(menu, slug)` üzerinden `get_or_create` (MenuCategory `unique_together = ("menu", "slug")`). Ürünler `(menu, category, name)` üzerinden eşleştirilir; yoksa oluşturulur, varsa fiyat/açıklama güncellenir.
+- **Not:** `MenuItem` modelinde `slug` alanı **yok** — eşleştirme `name` üzerinden yapıldı. Kategori slug'ı `slugify(name)` ile üretiliyor.
+- Retry'da fiyat değişikliği de yansıyor: "Menemen 85 → 90 TL" ikinci write'ta güncelleniyor, silinmiyor.
+
+**Karar 3: Step 2 locale/currency için ayrı kalıcılık endpoint'i**
+- **Yeni:** `POST /api/v1/onboarding/preferences` (`OnboardingPreferencesView` + `OnboardingPreferencesSerializer`). Payload: `default_locale`, `supported_locales` (max 8), `currency` (TRY/EUR/USD/GBP). `default_locale` `supported_locales` içinde olmalı.
+- Neden ayrı endpoint, `complete_onboarding` payload'ına eklemek değil: tenant zaten Step 1'de oluşuyor. Locale seçimi Step 2'de, `complete` çağrısı ise Step 5'te oluyor. Tek payload'da birleştirmek, tenant oluşmadan önce locale yazmaya çalışmak demek — yani ya tenant'ı Step 1'de oluşturmak (artık çok geç, kullanıcı Step 2'de zaten ilerlemiş olur) ya da write'ları ikiye bölmek. İki write zaten kaçınılmazdı; ayrı endpoint ikisini de açık ve testlenebilir kıldı.
+- `apply_preferences(organization, *, default_locale, supported_locales, currency)` — tenant'ı **ve mevcut Menu kayıtlarını** günceller.
+- Rol kuralı: `backend/apps/accounts/roles.py` → `^/api/v1/onboarding/preferences$` → WRITE, ONLY_OWNER. `backend/tests/test_role_gate.py` MATRIX'e satır eklendi.
+
+**Karar 4: `check_count_limit` ayrı `enforce_limit`'den**
+- `backend/apps/billing/services.py` — `check_count_limit(org, resource, count)` **istenen** değere göre kontrol eder; `enforce_limit` mevcut sayıyı baz alır. Locales limiti için `enforce_limit` kullanılamazdı: 2 dilli bir tenant kendi 2 dilini bile kaydedemezdi (mevcut=2, istenen=2 → `2 > 2` değil ama mevcut dil + yeni dil = 3 → yine de kırılıyordu). Doğru kontrol `current + (yeni - eski)` veya doğrudan istenen sayıdır.
+
+**Karar 5: Auto-slug yarış koşulu düzeltmesi (Step1)**
+- `suggestSlugFromBusiness` artık `window.setTimeout(..., 0)` ile focus'un oturmasını bekliyor, `slugFocusedRef` ve `slugRef` kullanıyor. Önceden slug alanına yazan kullanıcının yazımı ortasına öneri giriyordu: `e2e-cafee2e-cafe-mwckb6u5`. Slug doluysa öneri hiç yapılmıyor.
+
+**Karar 6: CSRF regresyon testi gerçek enforcement ile**
+- Django test client `enforce_csrf_checks=True` verilmezse CSRF uygulamaz — eski testler 403'ü göremiyordu. Doğru desen: `APIClient(enforce_csrf_checks=True)` + `force_login(user)` + `client.get("/api/v1/auth/csrf").json()["csrfToken"]` + `HTTP_X_CSRFTOKEN=token`. Token'sız → 403, token'lı → 201. `backend/apps/onboarding/tests/test_signup_flow.py` (11 test).
+
+**Alternatifler:**
+- **CSRF'yi exempt etmek** (`authentication_classes = []` veya `@csrf_exempt`) — reddedildi. Django'nun neden böyle kurulduğunu bozuyor; frontend zaten doğru token'ı alabiliyor. Sorun frontend'deydi, korumayı kaldırmak sorunu çözmezdi.
+- **Locale'ı `complete_onboarding` payload'ına eklemek** — reddedildi, yukarıdaki zamanlama sorunu.
+- **Ürün eşleştirmesini `slug` ile yapmak** — mümkün değil, `MenuItem`'da slug alanı yok.
+
+**Seçim gerekçesi:**
+- Idempotency frontend'de değil backend'de yapılmalı — ağ kaybı, tarayıcı retry'si ve iki sekme aynı isteği gönderebilir. Sunucu tarafında `get_or_create` tek doğru yer.
+- Locale kalıcılığı ayrı endpoint — write'lar zaten iki adımda gerçekleşiyor, birleştirmek zamanlama sorunu yaratırdı.
+- Test gerçek enforcement ile — Django test client'ın CSRF'i varsayılan olarak uygulamaması, bu alandaki hataların backend testlerinde görünmez olmasının sebebiydi. Test, production davranışını taklit etmeli.
+
+**Sonuçlar:**
+- Yeni: `backend/apps/onboarding/tests/test_signup_flow.py` (11 test), `apps/web/e2e/signup.spec.ts` (2 browser testi)
+- Backend: **1207 passed, 2 skipped** (1197'den +10 net)
+- `apps/web/playwright.config.ts` → `SIGNUP_ENABLED: "1"` (e2e stack throwaway; prod'da signup kapalı)
+- e2e: signup spec 2 passed; `tsc --noEmit` ve `next lint` temiz
+
+---
+
+# D-038 — GitHub Actions CI: `scripts/release_gate.sh` Her Push'ta
+
+**Tarih:** 2026-11-11
+
+**Bağlam:** Projede CI yoktu. Tüm doğrulama (`scripts/release_gate.sh`) lokalde, geliştiricinin terminalinde çalışıyordu — ve "çalıştırmadım" demek, kod yazmak kadar kolay bir seçenekti. Pilot müşterilere teslim edilecek bir kod tabanı için bu kabul edilemez: regresyon ancak müşteri başında fark edilirdi.
+
+**Karar:**
+- **Yeni** `.github/workflows/ci.yml` — trigger: `push` (tüm branch'ler) + `pull_request` + `workflow_dispatch`.
+- **Concurrency:** `group: ${{ github.workflow }}-${{ github.ref }}`, `cancel-in-progress: true` — aynı branch'e arka arkaya push'larda eski koşuş iptal edilir, CI kuyruğu tıkanmaz.
+- **Environment:** Python 3.12 + Node 20 (Dockerfile pinleriyle birebir aynı — CI ile prod arasında sürüm farkı olmaz).
+- **Install:** `pip install -r backend/requirements-dev.txt` + `npm ci`.
+- **Playwright:** `npx playwright install --with-deps chromium`.
+- **Gate:** `CI: "1"` env ile `bash scripts/release_gate.sh` — **tek job, tek komut**. CI, geliştiricinin lokalde çalıştırdığıyla birebir aynı kapıdan geçer. Ayrı bir CI özel adım listesi yazmak, iki kapının ayrışması demekti.
+- **`.env.production` yok → prod env doğrulaması atlanır** (release_gate.sh içinde kasıtlı; `.env.production` sunucuda local). CI'da bu adımın "geçti" görünmesi yanıltıcı olurdu, bu yüzden açıkça atlandı.
+
+**Alternatifler:**
+- **Ayrı CI adımları** (pytest / tsc / lint / playwright ayrı job'lar) — reddedildi. Paralel job'lar hızlıdır ama kapıyı tanımı iki yere bölünür; `release_gate.sh` bozulan/eskimiş bir script olur ve kimse fark etmez. Tek kapı, tek doğru yer.
+- **GitHub Actions yerine başka CI** — yok, repo zaten GitHub'da.
+
+**Seçim gerekçesi:**
+- Lokal ile CI aynı kapıdan geçmeli. Kapı iki yere bölünürse "lokalde geçti" ile "CI yeşil" arasındaki fark bir hata noktası olur.
+- Tarayıcı flow'ları kapatılmadı. Projenin temel değeri orada (`/m/[slug]` menü, sipariş, mutfak). CI'da bunları kapatmak, kapıyı ucuzlatmak ama anlamsızlaştırmak olurdu.
+
+**Sonuçlar:**
+- Her push artık tam kapıdan geçiyor: backend pytest → tsc → lint → e2e tsc → 21 frontend unit suite → Playwright 7 flow.
+- **Kanıt:** ilk CI koşusu signup e2e testini yakaladı (aşağıdaki D-039) — yani CI tam da yakalamak için kurulduğu şeyi yakaladı.
+
+---
+
+# D-039 — Kullanım Limitlerinin Tamamlanması + 402 "Yükselt" Banner'ı
+
+**Tarih:** 2026-11-11
+
+**Bağlam:** `PLAN_TIER_LIMITS` matrisinde tanımlı 6 limit vardı ama bunların hiçbiri enforcement'a bağlı değildi — `PlanSettings`'te gösteriliyor, ölçülmüyor, uygulanmıyordu. Yani bir tenant BASIC paketteyken sınırsız AI çeviri çağırabiliyordu. Bu, "limit" kelimesinin pazarlama malzemesi olmaktan çıkması demek.
+
+**Karar 1: Limit enforcement'ı backend'de**
+- `backend/apps/billing/constants.py` — `USAGE_LIMIT_RESOURCES` (monthly_views, monthly_scans, ai_pdf_imports, ai_translate_ops, ai_description_ops) + `USAGE_LIMIT_COUNTER_FIELD` eşlemesi (kaynak → `TenantUsageCounter` alanı).
+- `backend/apps/billing/services.py` — `enforce_usage_limit(org, resource, units=1)`: `current + units > limit` ise `LimitExceeded` fırlatır. `LimitExceeded.extra` dict'inde `resource`, `current`, `limit` taşır; `http_status == 402`, `code == "billing.limit_exceeded"`.
+- `check_count_limit(org, resource, count)` — istenen değere göre kontrol (locales için; D-037 Karar 4).
+
+**Karar 2: Limitler nerede uygulanıyor (ve nerede uygulanmıyor)**
+- **AI endpoint'leri** (`backend/apps/translate/views.py`): 5 endpoint (`/translate/`, `/translate/menu-item/`, `/translate/menu-category/`, describe tek, describe bulk) `_ai_guard()` ile korundu. **Sayaç başarılı provider çağrısından sonra artırılır** — başarısız çağrı faturalanmaz. Bulk'ta `units=len(menu_items)`.
+- **PDF import** (`backend/apps/pdf_import/views.py`): `ai_pdf_imports` aylık limiti + başarılı parse sonrası sayaç artırma.
+- **Locales** (`backend/apps/organizations/views.py` `update()` override + `backend/apps/onboarding/views.py` preferences): `check_count_limit` ile kontrol.
+- **monthly_views / monthly_scans** (`backend/apps/analytics/views_admin.py`): **admin analytics overview'da** uygulanıyor — public menüde **değil**.
+
+**Karar 3: Neden views/scans limiti public menüde değil**
+- Müşterinin misafirleri menüyü **her zaman** açabilmeli. Menüyü kesmek = işletmenin müşterisine satış faturası kesmek. Satın alınabilir olan şey **ziyaret analitiği**: işletme "aylık 5.000 ziyaret görüntüleme" paketini aldıysa, analitik verisini göremez. Bu, plan satışının satın alınabilir kısmı.
+- Bu ayrım bilinçlidir ve bir sonraki kişiye yanlış anlaşılmasın diye burada yazıyor.
+
+**Karar 4: 402 bildirimi merkezi**
+- `apps/web/src/lib/api-admin.ts` — `adminFetch` 402'yi yakalar, `resource`/`current`/`limit` çıkarır, `raiseLimitNotice()` ile client store'a yazar (lazy dynamic import — server bundle'ı kirletmemek için).
+- `apps/web/src/lib/stores/limit-notice.ts` — zustand store (`raise`/`dismiss`), `LimitResource` tipi, `LIMIT_LABEL` sözlüğü, `limitLabel()`.
+- `apps/web/src/components/billing/LimitBanner.tsx` — amber "Yükselt" banner'ı, `data-testid="limit-banner"`.
+- `apps/web/src/app/(admin)/admin/layout.tsx` — `<LimitBanner />` admin shell'e eklendi.
+- **Neden her formun kendi banner'ı yok:** 402 birden fazla yerde çıkabilir (analytics, AI çeviri, PDF import). Her forma ayrı banner koymak, "hangi butonda ne oldu" takibi gerektirir ve banner'ların birbirini ezmesine yol açar. Tek nokta (shell) + banner'ın kaynağı (store) → tek doğru yer.
+
+**Karar 5: Analytics sayfasında 402 mesajı**
+- `apps/web/src/app/(admin)/admin/analytics/page.tsx` — 402'de genel "tekrar deneyin" hatası yerine limit mesajı + Yükselt CTA. "Tekrar deneyin" yanlıştı — limite ulaşıldığında tekrar denemek hiçbir şeyi düzeltmez.
+
+**Alternatifler:**
+- **Limitleri public menüde uygulamak** — reddedildi, yukarıdaki gerekçe.
+- **Başarısız AI çağrısını da saymak** — reddedildi. Kullanıcıya faturası kesilmemesi gerekir; başarısız çağrı onun hatası değil, sağlayıcının.
+- **Her forma ayrı limit banner'ı** — reddedildi, yukarıdaki gerekçe.
+- **Limit kontrolünü yalnızca frontend'de yapmak** — reddedildi. Frontend kontrolü bir kontrol değil, bir bilgi. Enum endpoint'ler doğrudan çağrılabilir.
+
+**Seçim gerekçesi:**
+- Limit enforcement **backend'de** olmalı — API herhangi bir istemciden çağrılabilir.
+- Kullanım sayacı **başarıdan sonra** artmalı — faturalanabilir olan başarılı iş.
+- Banner **tek noktada** — 402 bir sistem durumu, form durumu değil.
+
+**Sonuçlar:**
+- Yeni: `backend/apps/billing/tests/test_usage_limits.py` (10 test), `apps/web/src/components/billing/LimitBanner.test.tsx` (6 test)
+- `apps/web/package.json` → `test:limit-banner` script'i; `scripts/release_gate.sh` → gate'e eklendi
+- Backend: **1207 passed, 2 skipped**
+
+---
+
+# D-040 — CI'nin İlk Koşusunun Bulduğu Yarış: Signup Submit'i Sessizce Düşüyordu
+
+**Tarih:** 2026-11-11
+
+**Bağlam:** D-038'de kurulan CI'nin ilk tam koşusunda 43 e2e testinden 1'i düştü: `signup.spec.ts` — "Dil ve para birimi" başlığı hiç görünmedi, wizard step 1'de takılı kaldı. Test tek başına çalışınca **geçiyordu**; tam suite içinde düşüyordu. Klasik "flake" görüntüsü, ama flake'in altında gerçek bir ürün hatası var.
+
+**Karar:**
+- **Kök neden:** `Step1BusinessInfo.handleSubmit` içinde slug kontrolü sürerken submit sessizce düşürülüyordu:
+  ```ts
+  if (slugStatus.kind === "checking") return;   // ← hata mesajı yok, spinner yok
+  ```
+  Slug kontrolü 300ms debounce'lu. Kullanıcı slug'ı yazıp hemen "Devam et"e tıklarsa kontrol hâlâ sürüyor → buton hiçbir şey yapmıyor → wizard donmuş gibi görünüyor. Kullanıcı ne hata görüyor ne de ilerleme. **Bu bir test hatası değil, ürün hatasıydı** — hızlı bir gerçek kullanıcı da aynı ekranda kalırdı.
+  Neden tam suite'te düştü ama tek başına geçti: makine yoğunken denetim tamamlanmadan tıklama gerçekleşti; boşta çalışırken 300ms içinde bitmişti.
+- **Çözüm:** Submit, süren kontrolü **bekler** (reddetmez). Uygulama deferred promise ile yürütülür: `slugCheckRef` içinde `{ slug, promise }` tutulur, debounce timer'ı promise'i çözer. `handleSubmit` `slugStatusRef.current.kind === "checking"` ise `await pending.promise` yapar, sonra durumu **yeniden okur** — kontrol "taken" bulduysa submit hâlâ engellenir, ama artık neden söylenir. Efekt temizlendiğinde (`settle({kind:"idle"})`) bekleyen submit asla sıkışmaz.
+- **Bonus düzeltme:** `slugStatus` render sırasında okunan bir state'di; submit anındaki güncel değere ihtiyaç vardı → `slugStatusRef` eklendi. `setSubmitting(true)` beklemeden **önce** çağrılıyor, böylece buton bekleme boyunca spinner gösteriyor.
+
+**Alternatifler:**
+- **Testi "daha yavaş" yapmak** (`waitFor` ile slug'ın uygun olmasını bekle) — reddedildi. Testi yamamak, ekranda gerçekten donan bir butonu gizlerdi. Asıl düzeltme bileşende.
+- **Debounce'u 0'a indirmek** — reddedildi. Her tuş vuruşunda istek atmak spam'e yol açar; debounce'un amacı bu.
+- **Backend'e güvenmek ("zaten slug'ı doğruluyor")** ve frontend kontrolünü kaldırmak — kısmen doğru: backend `validate_slug` slug'ın benzersizliğini zaten reddediyor. Ama frontend kontrolü "taken"ı **erken** gösteriyor ve kullanıcıya düzeltilebilir bir mesaj veriyor; tamamen kaldırmak bu avantajı kaybettirirdi.
+
+**Seçim gerekçesi:**
+- Bir testin "flake" görünmesi, altında ürün hatası olabileceğinin sinyalidir. CI kurmanın asıl değeri de tam burada ortaya çıktı: hata lokalde 40+ koşuda görünmemişti.
+- "Bekle" yaklaşımı "reddet" yaklaşımından doğru: kullanıcının niyeti "Devam et" demek; kontrol onu engellememeli, **bilgilendirmeli**.
+
+**Sonuçlar:**
+- Yeni: `apps/web/src/components/signup/Step1BusinessInfo.test.tsx` (4 test — 1. test tam olarak bu yarışı kilitler: kontrol sürerken tıklama düşmüyor; 2. test "taken" kontrolü hâlâ engelliyor; 3. test mutlu yol; 4. test auto-slug önerisinin kullanıcının slug'ını ezmediği)
+- `apps/web/package.json` → `test:signup-step1` script'i; `scripts/release_gate.sh` → gate'e eklendi (21 → 22 frontend suite)
+- `tsc --noEmit` temiz, `next lint` temiz, `signup.spec.ts` 2 passed
+
+---
+
+# D-041 — CI'nin İkinci Koşusunun Bulduğu Kırık Bağımlılık: `json-logging` Hiç Kurulmamış
+
+**Tarih:** 2026-11-11
+
+**Bağlam:** D-038'de kurulan CI'nin ikinci koşusu (elle tetiklenen) 4. adımda — "Install the backend dependencies" — kırıldı:
+
+```
+ERROR: Could not find a version that satisfies the requirement json-logging==1.4.1
+ERROR: No matching distribution found for json-logging==1.4.1
+```
+
+`json-logging` 1.4.1 **PyPI'da hiç yayımlanmamış**. Yayımlanan sürümler arasında 1.4.0, 1.4.1rc0 (release candidate) ve 1.5.x/1.6.0 var; tam sürüm 1.4.1 yok.
+
+**Bu neden daha önce görünmedi:** Lokal ortamda paket hiç kurulmamıştı (`ModuleNotFoundError: No module named 'json_logging'`) ve kod bunu `except ImportError` ile yutuyordu. Lokal backend testleri yeşildi — çünkü testler production log formatter'ını hiç instantiate etmiyordu.
+
+**Daha kötüsü: sadece CI değil, production imajı da kırılıyordu.** `backend/Dockerfile` her iki requirements dosyasını da kopyalayıp kuruyor (`pip install -r /app/requirements-dev.txt`). Yani `json-logging==1.4.1` **production Docker build'ini de** kırıyordu. Deploy sırasında fark edilecek bir hata.
+
+**İkinci hata: sınıf adı hiçbir sürümde yok.** Kod `from json_logging import JSONFormatter` yapıyordu. Yayımlanmış tüm sürümlerde sınıf adı `JSONLogFormatter` (1.0.0'dan itibaren) — `JSONFormatter` **hiçbir sürümde mevcut değil**. Yani import her zaman `ImportError` veriyor, `except ImportError` bloğu devreye giriyor ve **production hiçbir zaman JSON log üretmemiş**. Sessizce.
+
+**Üçüncü hata: fallback de JSON değildi.** Fallback format string'i `"message":"%(message)s"` idi. Mesajda tırnak veya newline varsa üretilen satır **geçersiz JSON** oluyordu — yani log shipper'a bozuk satır gidiyordu.
+
+**Karar: Bağımlılığı kaldır, formatter'ı yaz.**
+- **Yeni:** `backend/apps/core/logging.py` → `JsonLogFormatter` (saf stdlib: `json` + `logging`). Bağımlılık yok, image build'ı kıramaz.
+- Alan seti sabit: `{"ts", "level", "logger", "msg"}` (+ hata varsa `exc`, stack varsa `stack`). `ts` UTC ve `Z` designator'lı — `isoformat()` `+00:00` veriyordu, log shipper'ların timestamp parser'ı `Z` bekliyor.
+- `json.dumps` kaçışı yapar: mesajda tırnak/newline/unicode olsa bile **tek satır geçerli JSON** kalıyor.
+- `backend/config/settings/production.py` — `"json": {"()": "apps.core.logging.JsonLogFormatter"}`. `except ImportError` fallback'i tamamen kaldırıldı: artık kırılacak bir şey yok.
+- `backend/requirements-dev.txt` — `json-logging==1.4.1` satırı **kaldırıldı** (yorumla neden açıklandı).
+- `docs/DEPLOYMENT.md` — operasyonel talimat güncellendi (log şekli).
+
+**Karar 2: Test artık davranışı ölçüyor.**
+- Eski test (`test_json_logging`) settings kaynağında `"JSONFormatter"` ya da `"json_logging"` **string'i arıyordu** — yani var olmayan bir sınıf adını doğrulamış oluyordu. Bu yüzden hata testleri geçti.
+- Yeni: `backend/apps/core/tests/test_logging.py` — 9 test. Tek satır geçerli JSON mu, tırnaklı mesaj geçerli kalıyor mu, newline'lı mesaj tek satırda mı, unicode kaçışlanıyor mu, exception dahil ediliyor mu, production settings formatter'ı gerçekten bu sınıfa mı işaret ediyor mu.
+- `tests/test_production_settings.py::test_json_logging` artık `"JsonLogFormatter"` arıyor ve yorumla nedenini açıklıyor.
+
+**Alternatifler:**
+- **Sürümü düzeltip `json-logging==1.6.0` + `JSONLogFormatter` kullanmak** — reddedildi. Paket çalışır ama (a) hâlâ bir dış bağımlılık — bu hatayı bir daha çıkarabilir, (b) `JSONLogFormatter` çıktısı `written_at`/`msg`/`type`/`taskName` gibi alanlar üretiyor ve dokümanlanan `ts`/`level`/`logger`/`msg` şekliyle uyuşmuyor, (c) log formatter'ı için paket bağımlılığı değil savunulabilir bir maliyet değil.
+- **Fallback'i düzeltip `json-logging`'de kalmak** — reddedildi. Kırık pin yine image build'ını kırar; sadece semptom gizlenmiş olur.
+- **Sadece pin'i düzeltmek** — reddedildi. Sınıf adı hatası ve bozuk fallback yerinde kalır; prod hâlâ JSON log üretmez.
+
+**Seçim gerekçesi:**
+- **Bir log formatter'ı image build'ını kıramaz.** Bu paket build'ı kırdı; bu, bağımlılığın kendisi için yeterli bir gerekçe.
+- **Testler davranışı ölçmeli.** "Kaynakta şu string var" testi, var olmayan bir sınıf adını doğrulamış oldu. Aynı hatayı bir daha yakalayamayacak şekilde düzeltmek, düzeltmeden daha önemli.
+- **Dokümanlanan log şekli gerçek olmalı.** `DECISIONS.md` D-018 `ts`/`level`/`logger`/`msg` diyordu; gerçekte `written_at`/... üretiliyordu ve gerçekte hiçbir şey üretilmiyordu. Artık ikisi de aynı.
+
+**Sonuçlar:**
+- `backend/apps/core/logging.py` — **yeni**, `JsonLogFormatter`
+- `backend/apps/core/tests/test_logging.py` — **yeni**, 9 test
+- `backend/config/settings/production.py` — formatter + fallback kaldırıldı
+- `backend/requirements-dev.txt` — kırık pin kaldırıldı
+- `docs/DEPLOYMENT.md` — operasyonel log talimatı güncellendi
+- Backend: **1216 passed, 2 skipped**
+- **Doğrulama:** temiz venv'de `pip install -r backend/requirements-dev.txt` → **exit 0** (CI'ın kırıldığı adım), sonra aynı venv'de `pytest` → 1216 passed. Production settings gerçekten formatter'ı instantiate edip geçerli JSON üretiyor.
+
+---
+
+# D-042 — Frontend Testleri Node 20'de Çalışmıyordu (CI'ın Üçüncü Koşusunun Bulduğu)
+
+**Tarih:** 2026-11-11
+
+**Bağlam:** D-041'den sonraki CI koşusu bağımlılık adımını geçti, backend 1216 test yeşildi, type-check ve lint geçti — sonra 5. adımda kırıldı:
+
+```
+node: bad option: --experimental-strip-types
+```
+
+Frontend unit test script'leri `node --experimental-strip-types` ile çalışıyordu. Bu bayrak **Node 22.6+** ile geldi; Node 20'de hiç yok. `apps/web/Dockerfile` `node:20-bookworm-slim` pinliyor ve CI da Node 20 kullanıyor — yani **test script'leri Dockerfile'ın pinlediği Node sürümünde hiç çalışmıyordu.**
+
+**Neden lokalde görünmedi:** Lokal makinede Node 25 kurulu. Node 25 `--experimental-strip-types`'ı destekliyor, dolayısıyla script'ler burada sessizce geçiyordu. CI'ın birebir aynı Node sürümünü kullanması bu hatayı ancak ortaya çıkarabilirdi.
+
+**Karar 1: `--experimental-strip-types` yerine `tsx`.**
+- Projede `tsx@4` zaten bir devDependency (JSX/TSX testleri `--import tsx` ile çalışıyordu). 15 script `--experimental-strip-types` yerine `--import tsx` kullanıyor artık.
+- `tsx` Node 20'de çalışıyor, TypeScript'i esbuild ile derliyor, `@/` alias'larını çözüyor — `--experimental-strip-types`'ın aksine Node sürümüne bağlı değil.
+- Node 20.18.1 indirilip **21 suite / 248 testin tamamı** Node 20'de çalıştırılarak doğrulandı. `tsc --noEmit`, `next lint` ve `next build` de Node 20'de temiz.
+
+**Karar 2: `cart-store.test.ts`'te top-level await kaldırıldı.**
+- Bu dosya store'u **dynamic import** ile yüklüyor: sıralama kritik — `window.localStorage` sahte nesnesi kurulduktan **sonra** import olmalı, yoksa zustand persist middleware'i sessizce kapanır ve testin konusu olan davranış hiç test edilmez.
+- Yazım `const { useCartStore } = await import("./cart-store.ts")` — yani top-level await. Bu yalnızca ESM'de çalışır. `apps/web/package.json` `"type": "module"` **değil** (CommonJS), ve Node 20'de `tsx` CJS'e derliyor → "Top-level await is currently not supported with the cjs output format".
+- Çözüm: `before()` hook. Aynı sıralama garantisi (import, sahte window'dan sonra; testlerden önce), top-level await gerekmez, CJS'te de çalışır. `useCartStore` bir `let` ile `before()` içinde atanıyor.
+
+**Karar 3: `test:kitchen-ui` glob'u açık dosya listesine çevrildi.**
+- Script `node --test "src/app/(admin)/admin/kitchen/_components/*.test.tsx"` kullanıyordu. Node'un `--test` runner'ı glob desteğini **Node 22+'da** ekledi; Node 20'de glob şablonu literal dosya adı olarak yorumlanıyor → "Could not find '.../*.test.tsx'".
+- 7 dosya açıkça listelendi. Node 20'de 55 test geçiyor.
+
+**Alternatifler:**
+- **CI'da Node 22 kullanmak** — reddedildi (birincil tercih). Dockerfile `node:20-bookworm-slim` pinliyor (D-007). CI'ın prod imajından farklı Node çalıştırması, "CI'da geçen kod prod'da çalışmıyor" riskini geri getirirdi — tam olarak bu hatayı üretmişti. Production ile aynı sürümde kalmak, sürüm farkını kapatmak.
+- **Node sürümünü 22'ye yükseltmek (Dockerfile dahil)** — düşünüldü, bu işin kapsamı dışında. Ayrı ve büyük bir değişiklik; prod imajının runtime'ını değiştirir. Şimdilik testler Node 20'da çalışır hâle getirildi, yükseltme ayrı bir karar olabilir.
+- **`"type": "module"` eklemek** — reddedildi. Next.js'in `next.config.mjs` dışındaki her şeyi etkiler; build ve runtime davranışını değiştiren geniş bir yüzey, test script'i düzeltmek için gereğinden fazla.
+- **cart-store testini `before()` yerine statik import yapmak** — reddedildi. Statik import, `window` tanımından **önce** çalışır ve testin konusu olan "store oluşturulurken kayıtlı sepet uygulanmaz" davranışı test edilemez hâle gelir.
+
+**Seçim gerekçesi:**
+- **CI, prod ile aynı Node sürümünü çalıştırmalı.** Dockerfile'ın pinlediği sürümde testler çalışmıyorsa, kapı hiçbir şey ölçmüyor demektir.
+- **`tsx` zaten projede var.** Yeni bir bağımlılık eklemeden, Node sürümüne bağlı olmayan bir yol var.
+- **Test script'leri, üretim sürümünde çalışmalı.** Lokal Node 25'te geçmesi, Node 20'da geçtiği anlamına gelmiyor.
+
+**Sonuçlar:**
+- `apps/web/package.json` — 15 script `--import tsx`'e geçti; `test:kitchen-ui` glob → 7 açık dosya
+- `apps/web/src/lib/cart-store.test.ts` — top-level await → `before()` hook
+- **Doğrulama:** Node 20.18.1 ile 21 suite / 248 frontend testi, `tsc --noEmit`, `next lint`, `next build`, `type-check:e2e` — hepsi temiz

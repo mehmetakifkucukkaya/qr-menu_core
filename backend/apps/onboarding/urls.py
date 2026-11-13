@@ -3,6 +3,7 @@
 Mounted by ``config.urls`` under ``/api/v1/onboarding/`` and
 ``/api/v1/qr-codes/``:
 
+    POST /api/v1/onboarding/preferences/    → persist step 2 (locale + currency)
     POST /api/v1/onboarding/complete/        → materialize wizard step 3-4
     POST /api/v1/onboarding/demo-seed/       → Modern Cafe template import
     POST /api/v1/qr-codes/first/             → wizard step 5 first QR
@@ -15,6 +16,7 @@ from .views import (
     DemoSeedView,
     FirstQRView,
     OnboardingCompleteView,
+    OnboardingPreferencesView,
     TrialStatusView,
 )
 
@@ -25,6 +27,11 @@ urlpatterns = [
         "complete",
         OnboardingCompleteView.as_view(),
         name="onboarding-complete",
+    ),
+    path(
+        "preferences",
+        OnboardingPreferencesView.as_view(),
+        name="onboarding-preferences",
     ),
     path(
         "demo-seed",

@@ -44,6 +44,45 @@ class DemoSeedResponseSerializer(serializers.Serializer):
     skipped = serializers.BooleanField()
 
 
+class OnboardingPreferencesSerializer(serializers.Serializer):
+    """Step 2 of the wizard — the languages and the currency.
+
+    The wizard collects these *after* the account exists (step 1 creates
+    the tenant), so they could not travel with the signup payload: they
+    were displayed on the summary screen and then dropped on the floor.
+    This endpoint persists them for the tenant of the signed-in user.
+
+    The validation mirrors ``apps.accounts.serializers.SignupSerializer``
+    so a tenant cannot end up in a state the signup path would have
+    rejected: the default language must be among the supported ones, at
+    most 8 languages, and the currency must be one of the four the product
+    supports.
+    """
+
+    default_locale = serializers.CharField(max_length=8, default="tr")
+    supported_locales = serializers.ListField(
+        child=serializers.CharField(max_length=8),
+        min_length=1,
+        max_length=8,
+        default=["tr", "en"],
+    )
+    currency = serializers.ChoiceField(
+        choices=["TRY", "EUR", "USD", "GBP"],
+        default="TRY",
+    )
+
+    def validate(self, attrs):
+        supported = [v.lower() for v in attrs.get("supported_locales", [])]
+        default = attrs.get("default_locale", "tr").lower()
+        if default not in supported:
+            raise serializers.ValidationError(
+                "default_locale, supported_locales listesinde olmalı."
+            )
+        attrs["default_locale"] = default
+        attrs["supported_locales"] = supported
+        return attrs
+
+
 class FirstQRResponseSerializer(serializers.Serializer):
     """Response for POST /api/v1/qr-codes/first/ — short QR summary for
     the wizard's "İlk QR'ı indir" step."""
