@@ -36,6 +36,9 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+/** What the server accepts for a line's note (`OrderItem.notes`, SPEC_PILOT_READINESS 5.3). */
+export const MAX_LINE_NOTE_LENGTH = 120;
+
 export interface CartItem {
   /** Backend MenuItem PK. */
   menuItemId: number;
@@ -112,7 +115,9 @@ export const useCartStore = create<CartStore>()(
       updateNotes: (id, notes) =>
         set((state) => ({
           items: state.items.map((i) =>
-            i.menuItemId === id ? { ...i, notes } : i,
+            i.menuItemId === id
+              ? { ...i, notes: notes.slice(0, MAX_LINE_NOTE_LENGTH) }
+              : i,
           ),
         })),
 

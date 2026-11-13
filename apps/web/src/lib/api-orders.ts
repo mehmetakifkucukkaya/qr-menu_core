@@ -56,6 +56,9 @@ export interface CreateOrderResponse {
 export interface OrderStatusResponse {
   order_number: string;
   status: OrderStatus;
+  /** Why a cancelled order was cancelled (`null` otherwise) and its Turkish label. */
+  cancel_reason: string | null;
+  cancel_reason_label: string | null;
   placed_at: string;
   confirmed_at: string | null;
   preparing_at: string | null;

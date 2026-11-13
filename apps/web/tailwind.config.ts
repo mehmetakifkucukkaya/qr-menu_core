@@ -110,8 +110,6 @@ const config: Config = {
         "sheet-left": "sheet-left 320ms var(--ease-out-cubic)",
         pop: "pop 260ms var(--ease-spring)",
         shimmer: "shimmer 1.6s ease-in-out infinite",
-        // Legacy kitchen pulse kept for the `.kitchen-ticket-pending` rule.
-        "kitchen-pulse": "kitchen-pulse 2s ease-in-out infinite",
       },
       keyframes: {
         "pulse-soft": {
@@ -145,10 +143,6 @@ const config: Config = {
         shimmer: {
           "0%": { backgroundPosition: "200% 0" },
           "100%": { backgroundPosition: "-200% 0" },
-        },
-        "kitchen-pulse": {
-          "0%, 100%": { boxShadow: "0 0 0 0 rgba(224, 120, 86, 0)" },
-          "50%": { boxShadow: "0 0 0 8px rgba(224, 120, 86, 0.15)" },
         },
       },
     },

@@ -128,7 +128,7 @@ def test_no_award_on_pending_or_cancelled(org_a, branch_a, menu_a, category_a, i
     )
     # confirmed → cancelled
     transition_status(order, OrderStatus.CONFIRMED)
-    transition_status(order, OrderStatus.CANCELLED)
+    transition_status(order, OrderStatus.CANCELLED, cancel_reason="other")
     assert not LoyaltyTransaction.objects.filter(customer=customer).exists()
 
 

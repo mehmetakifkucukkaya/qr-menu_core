@@ -1,6 +1,6 @@
 # QR Menü — Pilot Kullanıma Hazırlık Tasarımı (Spec)
 
-Tarih: 2026-10-03 (güncelleme 2026-10-05) · Durum: **tasarım ve spec onaylandı; Dilim 1 yürütüldü (PR #6, açık); Dilim 2 yürütüldü (PR #7, açık, Dilim 1'in üstüne yığılı)** (`PLAN_DILIM1_TEMEL_2026-10-05.md`, `PLAN_DILIM2_AJANS_2026-10-05.md`; plan aşamasında bulunan sapmalar bu belgeye işlendi) · Sabit sürüm: `origin/main` `05b3c12`
+Tarih: 2026-10-03 (güncelleme 2026-10-05) · Durum: **tasarım ve spec onaylandı; Dilim 1 yürütüldü (PR #6, açık); Dilim 2 yürütüldü (PR #7, açık, Dilim 1'in üstüne yığılı); Dilim 3 yürütüldü (PR açık, Dilim 2'nin üstüne yığılı)** (`PLAN_DILIM1_TEMEL_2026-10-05.md`, `PLAN_DILIM2_AJANS_2026-10-05.md`, `PLAN_DILIM3_MUTFAK_2026-10-05.md`; plan aşamasında bulunan sapmalar bu belgeye işlendi) · Sabit sürüm: `origin/main` `05b3c12`
 Kanıt belgesi: `READINESS_AUDIT_2026-10-03.md` (bulgular ve `path:line` kanıtları burada). Bu belge **ne yapılacağını** söyler, nedenini oradan okuyun.
 
 ## 1. Amaç ve karar günlüğü
@@ -122,6 +122,20 @@ Ajans (platform yöneticisi: `role=admin`, `is_superuser`) hepsini tüm işletme
 **5.6 Mutfak rolü:** `kitchen` kullanıcısı girişte doğrudan `/admin/kitchen`'e düşer; admin layout rolü görünce yan menüsüz `KitchenShell` (işletme adı, saat, bağlantı durumu, Çıkış) çizer; yalnız pano + durum uçları açıktır (§3.1). Her tablet kendi hesabını kullanır; denetim olayında gerçek aktör görünür.
 
 **5.7 Testler:** backend: durum makinesi (kilit, idempotency, çift geçiş, iptal nedeni), pano sorgusu (yalnız aktif, sınır, `is_stale`, kuruluş izolasyonu, telefon yok), sayaçlar (eşzamanlı üretim), alerjen kopyası; frontend: `useBoardPolling` ve yaş rengi birim testleri; Playwright: §2'nin 5-6 ve 8. adımları (çevrimdışı simülasyonu dahil).
+
+**5.8 Plan aşamasında bulunan sapmalar ve eklemeler (2026-10-05, ayrıntı: `PLAN_DILIM3_MUTFAK_2026-10-05.md`)**
+
+1. `confirmed` doğrudan hâlâ geçerli (sipariş sayfasındaki "Onayla"); "Hazırlamaya başla" `preparing` ister, sunucu `confirmed` üzerinden iki adımı tek çağrıda yapar. Geçersiz geçiş 409 + Türkçe cümle; hedef zaten mevcutsa sessiz 200.
+2. **İptal nedeni her yerde zorunlu:** mutfak ekranı ve sahibin sipariş ayrıntı sayfası aynı iptal penceresini kullanır (sipariş sayfasının nedensiz iptali kayıt sonunda bulunan bir gerilemeydi, T13). Sipariş sayfası nedeni gösterir.
+3. Sayaç satırı bir gün için ilk kez oluşurken o günkü en yüksek eski sonekten başlar (sayaçtan önceki siparişlerle çakışma yok); eski siparişlerde `daily_seq` boş, pano tam numarayı gösterir.
+4. **Bağlantı durumu panoda:** başlıkta "Canlı · son güncelleme SS:DD:SS" satırı ve bağlantı kopunca üstte şerit (donmuş ekran ile sakin mutfak ayırt edilir); `KitchenShell` işletme adı, saat ve "Çıkış yap" taşır. Kabuk yalnız `kitchen` rolüne verilir; sahip ve personel mutfak sayfasını normal kabukta koyu panel olarak görür.
+5. Eklemeler: "Servisi bitir"; oturum bitti (401/403) şeridi ve "Yeniden giriş yap"; ürün notu sayacı (≥ 100 karakter). `useBoardPolling` = çerçeve bağımsız `BoardPoller` (birim testli) + ince React kancası.
+6. Eski `GET /api/v1/admin/kitchen/tickets` ve testleri kalır; ön yüzdeki kullanılmayan istemcisi kaldırıldı.
+7. **Kurulum eksiği:** `seed_demo` alerjen referans tablosu boşsa alerjenleri sessizce atlıyor ve `seed_allergens_tags` komutunu hiçbir belge söylemiyordu; tarayıcı düzeneği komutu önce çalıştırır, `DEPLOYMENT.md` §3.1 ve `docs/KITCHEN_GUIDE.md` adımı içerir.
+8. "Yüksek kontrast" sayıya bağlandı: metin renklerinin hepsi AAA (7:1), `kitchen-theme.test.ts` gerçek stil dosyasını okur. Dokunma hedefi ≥ 48 px ve yazı ≥ 16 px sınıf düzeyinde testle zorlanır.
+9. Müşteri onay sayfası yalnız iptal nedenini ekler ("Neden: ..."); sepet satırında ≤ 120 karakterlik not alanı (`CartLineNote`).
+10. Yolda bulunan gerçek hatalar: sipariş sayfasının nedensiz iptali (T13), uzun masa adının sipariş numarasını sıkıştırması (tarayıcı akışı), ürün notu sayacının alan adına karışması (birim testi).
+11. **Gece yarısına duyarlı iki test:** plan 00:00'dan sonra yürütülürken tabandaki `test_overview_daily_aggregation` (UTC tarihi ile yerel gün karışıyordu; depodan gelen test hatası, ürün doğru) ve benim `is_stale` testlerim (gece yarısından sonraki ilk dakikalarda yanlış) kırmızıydı. İlki ayrı bir test commit'i (`T0`), ikincisi T4'ün testleri (saat öğlene sabitlendi).
 
 ## 6. Dilim 4 — İşletme paneli cilası (≈ 2 gün)
 

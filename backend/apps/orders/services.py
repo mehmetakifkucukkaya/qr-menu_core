@@ -3,8 +3,7 @@
 Three pure-Python helpers plus a state machine.
 
 * :func:`generate_order_number` — builds a daily-counter order number
-  (``{slug2}-{YYYYMMDD}-{NNN}``) and falls back to retry-on-collision
-  if the DB race produces a duplicate.
+  (``{slug2}-{YYYYMMDD}-{NNN}``) from the locked ``OrderCounter`` row.
 
 * :func:`calculate_total_from_items` — server-side total calculation.
   Client-supplied prices are **never** trusted; we look up the
@@ -22,13 +21,11 @@ Three pure-Python helpers plus a state machine.
 Decimal precision follows OP-6 (Sprint 2) — see ``Order.total_amount``
 field validators.
 
-Race notes
-----------
-Two customers posting at the same millisecond both pass the
-``Order.objects.filter(...).count()`` check with the same number, then
-both ``Order.objects.create()`` and one fails on the unique
-constraint. We catch ``IntegrityError`` and retry up to 5 times before
-giving up.
+Numbering
+---------
+``order_number`` suffixes and ``Order.daily_seq`` come from ``OrderCounter``
+rows advanced under a row lock (:func:`next_counter`), so concurrent customers
+never share a number and no retry loop is needed.
 """
 
 from __future__ import annotations
@@ -39,11 +36,12 @@ from typing import Any, Iterable
 
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
+from django.db.models import F
 from django.utils import timezone
 
 from apps.menu.models import MenuItem
 
-from .models import Order, OrderItem, OrderStatus
+from .models import CancelReason, Order, OrderCounter, OrderItem, OrderStatus
 
 logger = logging.getLogger(__name__)
 
@@ -59,41 +57,76 @@ STATUS_TRANSITIONS: dict[str, set[str]] = {
     OrderStatus.CANCELLED: set(),  # terminal
 }
 
-# Maximum retries when concurrent requests race on the same daily counter.
-_ORDER_NUMBER_RETRY_LIMIT = 5
+def _highest_suffix(prefix: str) -> int:
+    """Highest ``NNN`` already handed out under ``prefix`` (orders that predate the counter)."""
+    highest = 0
+    for number in Order.objects.filter(order_number__startswith=prefix).values_list(
+        "order_number", flat=True
+    ):
+        suffix = number[len(prefix):]
+        if suffix.isdigit():
+            highest = max(highest, int(suffix))
+    return highest
 
 
-def generate_order_number(organization) -> str:
+def next_counter(scope: str, key: str, day, *, start_at: int = 0) -> int:
+    """Next value of the (scope, key, day) counter: ``start_at + 1`` the first time.
+
+    The row is locked (``select_for_update``) while it is advanced, so two
+    orders in the same instant can never share a number. When two requests both
+    see "no row yet" the loser of the insert falls back to the winner's row.
+    ``start_at`` only matters when the row is created (a day that already has
+    orders from before the counter existed).
+    """
+    with transaction.atomic():
+        counter = (
+            OrderCounter.objects.select_for_update()
+            .filter(scope=scope, key=key, day=day)
+            .first()
+        )
+        if counter is None:
+            try:
+                with transaction.atomic():
+                    counter = OrderCounter.objects.create(
+                        scope=scope, key=key, day=day, last_value=start_at
+                    )
+            except IntegrityError:
+                counter = OrderCounter.objects.select_for_update().get(
+                    scope=scope, key=key, day=day
+                )
+        OrderCounter.objects.filter(pk=counter.pk).update(last_value=F("last_value") + 1)
+        counter.refresh_from_db(fields=["last_value"])
+        return counter.last_value
+
+
+def generate_order_number(organization, day=None) -> str:
     """Return a unique human-readable order number for the given org.
 
-    Format: ``{slug[:2].upper()}-{YYYYMMDD}-{NNN}`` where ``NNN`` is
-    the next available 3-digit suffix for that daily ``prefix``.
-
-    The DB unique constraint enforces global uniqueness — we count
-    across *all* orgs sharing the same prefix because two orgs with
-    the same first 2-letter slug prefix (e.g. ``cafe-a`` and
-    ``cafe-b``) would otherwise hand out the same number on the
-    same day. The per-organization "counter restarts each day"
-    property is therefore *per prefix*, not per org; for the V1
-    demo (one business per tenant) this is the same number.
+    Format: ``{slug[:2].upper()}-{YYYYMMDD}-{NNN}``, ``NNN`` being the next
+    value of the daily counter for that prefix. Two businesses whose slugs
+    start with the same two letters share the counter (that is what keeps the
+    number globally unique); the day is the local day (Europe/Istanbul).
     """
-    today = timezone.now().strftime("%Y%m%d")
+    day = day or timezone.localdate()
     slug_prefix = (organization.slug or "")[:2].upper() or "OR"
-    prefix = f"{slug_prefix}-{today}-"
-
-    for _ in range(_ORDER_NUMBER_RETRY_LIMIT):
-        # Global count across all orgs sharing the prefix.
-        today_prefixed_count = Order.objects.filter(
-            order_number__startswith=prefix,
-        ).count()
-        candidate = f"{prefix}{today_prefixed_count + 1:03d}"
-        if not Order.objects.filter(order_number=candidate).exists():
-            return candidate
-
-    raise RuntimeError(
-        f"generate_order_number: could not allocate unique order "
-        f"number after {_ORDER_NUMBER_RETRY_LIMIT} attempts"
+    prefix = f"{slug_prefix}-{day:%Y%m%d}-"
+    number = next_counter(
+        OrderCounter.SCOPE_PREFIX, slug_prefix, day, start_at=_highest_suffix(prefix)
     )
+    return f"{prefix}{number:03d}"
+
+
+# A line note is read on a kitchen tablet: short on purpose.
+MAX_LINE_NOTE_LENGTH = 120
+
+
+def _allergen_names(menu_item) -> list[str]:
+    """Turkish allergen names of a dish, ordered by allergen code."""
+    names = []
+    for link in sorted(menu_item.item_allergens.all(), key=lambda l: l.allergen.code):
+        name = link.allergen.name or {}
+        names.append(name.get("tr") or name.get("en") or link.allergen.code)
+    return names
 
 
 def calculate_total_from_items(items_data: Iterable[dict[str, Any]], organization):
@@ -132,8 +165,10 @@ def calculate_total_from_items(items_data: Iterable[dict[str, Any]], organizatio
         # Only the business's own items: a bare ``pk`` lookup let a customer of
         # business A order (and price) an item of business B (ANALYSIS_1 F-10).
         try:
-            menu_item = MenuItem.objects.select_related("menu").get(
-                pk=raw["menu_item_id"], menu__organization=organization
+            menu_item = (
+                MenuItem.objects.select_related("menu")
+                .prefetch_related("item_allergens__allergen")
+                .get(pk=raw["menu_item_id"], menu__organization=organization)
             )
         except MenuItem.DoesNotExist as exc:
             raise ValidationError(
@@ -151,7 +186,8 @@ def calculate_total_from_items(items_data: Iterable[dict[str, Any]], organizatio
             {
                 "menu_item": menu_item,
                 "quantity": quantity,
-                "notes": (raw.get("notes") or "")[:200],
+                "notes": (raw.get("notes") or "")[:MAX_LINE_NOTE_LENGTH],
+                "allergens": _allergen_names(menu_item),
                 "price": menu_item.price,
                 "name": menu_item.name,
                 "currency": menu_item.currency,
@@ -192,38 +228,23 @@ def create_order(
     total, validated = calculate_total_from_items(items_data, organization)
     currency = _default_currency(validated)
 
-    try:
-        order_number = generate_order_number(organization)
-        order = Order.objects.create(
-            organization=organization,
-            branch=branch,
-            menu=menu,
-            order_number=order_number,
-            customer_name=customer_name,
-            customer_phone=customer_phone,
-            table_number=table_number or "",
-            notes=notes or "",
-            total_amount=total,
-            currency=currency,
-            metadata=metadata or {},
-        )
-    except IntegrityError:
-        # Unique-constraint race from concurrent customers. One quick
-        # retry is enough in practice (the next counter slot is free).
-        order_number = generate_order_number(organization)
-        order = Order.objects.create(
-            organization=organization,
-            branch=branch,
-            menu=menu,
-            order_number=order_number,
-            customer_name=customer_name,
-            customer_phone=customer_phone,
-            table_number=table_number or "",
-            notes=notes or "",
-            total_amount=total,
-            currency=currency,
-            metadata=metadata or {},
-        )
+    # Both numbers come from locked counter rows inside this transaction: a
+    # failure further down takes them back (no gaps) and no two orders race.
+    day = timezone.localdate()
+    order = Order.objects.create(
+        organization=organization,
+        branch=branch,
+        menu=menu,
+        order_number=generate_order_number(organization, day),
+        daily_seq=next_counter(OrderCounter.SCOPE_ORG, str(organization.id), day),
+        customer_name=customer_name,
+        customer_phone=customer_phone,
+        table_number=table_number or "",
+        notes=notes or "",
+        total_amount=total,
+        currency=currency,
+        metadata=metadata or {},
+    )
 
     OrderItem.objects.bulk_create(
         [
@@ -234,6 +255,7 @@ def create_order(
                 price=line["price"],
                 quantity=line["quantity"],
                 notes=line["notes"],
+                allergens=line["allergens"],
             )
             for line in validated
         ]
@@ -241,56 +263,55 @@ def create_order(
     return order
 
 
-def transition_status(order: Order, new_status: str, actor=None) -> Order:
-    """Validate the transition + stamp timestamp + emit audit event.
+# Short Turkish names for messages (the model's labels are long sentences).
+STATUS_LABELS: dict[str, str] = {
+    OrderStatus.PENDING: "Beklemede",
+    OrderStatus.CONFIRMED: "Onaylandı",
+    OrderStatus.PREPARING: "Hazırlanıyor",
+    OrderStatus.READY: "Hazır",
+    OrderStatus.DELIVERED: "Teslim edildi",
+    OrderStatus.CANCELLED: "İptal edildi",
+}
 
-    Raises ``ValidationError`` for illegal transitions. The audit call
-    happens *after* the save so the event row's ``target_id`` matches
-    the persisted row (and the rollback on a partial save would not
-    leak an "audited" but unstamped transition).
-    """
+# "Hazırlamaya başla" on a new order: confirmed and preparing in one tap.
+_COMBINED_STEPS = {
+    (OrderStatus.PENDING, OrderStatus.PREPARING): (OrderStatus.CONFIRMED, OrderStatus.PREPARING),
+}
+
+
+class OrderTransitionError(ValidationError):
+    """The order cannot move to that status from where it really is (HTTP 409)."""
+
+
+def _apply_step(order: Order, step: str, cancel_reason: str) -> None:
+    """Stamp, save and audit ONE edge of the state machine."""
     # Local import keeps services import-order independent from apps.audit.
     from apps.audit.services import record_event
 
-    current = order.status
-    allowed = STATUS_TRANSITIONS.get(current, set())
-    if new_status not in allowed:
-        allowed_list = sorted(allowed) if allowed else ["(terminal)"]
-        raise ValidationError(
-            f"Geçersiz durum geçişi: {current} -> {new_status}. "
-            f"İzin verilen: {', '.join(allowed_list)}."
-        )
-
-    if new_status not in {choice for choice, _ in OrderStatus.choices}:
-        # Programmer error — guard against typos in the call site.
-        raise ValidationError(f"Bilinmeyen durum: {new_status}")
-
-    order.status = new_status
+    previous = order.status
+    order.status = step
     now = timezone.now()
-    if new_status == OrderStatus.CONFIRMED:
+    if step == OrderStatus.CONFIRMED:
         order.confirmed_at = now
-    elif new_status == OrderStatus.PREPARING:
+    elif step == OrderStatus.PREPARING:
         order.preparing_at = now
-    elif new_status == OrderStatus.READY:
+    elif step == OrderStatus.READY:
         order.ready_at = now
-    elif new_status == OrderStatus.DELIVERED:
+    elif step == OrderStatus.DELIVERED:
         order.delivered_at = now
-    elif new_status == OrderStatus.CANCELLED:
+    elif step == OrderStatus.CANCELLED:
         order.cancelled_at = now
+        order.cancel_reason = cancel_reason
 
-    order.save(update_fields=["status", "updated_at",
-                              "confirmed_at", "preparing_at",
-                              "ready_at", "delivered_at", "cancelled_at"])
+    order.save(update_fields=["status", "updated_at", "confirmed_at", "preparing_at",
+                              "ready_at", "delivered_at", "cancelled_at", "cancel_reason"])
 
     # Sprint 10A — loyalty award trigger (D-025). When an order
     # transitions to "delivered" and the customer is linked, we
     # append an EARN row to the loyalty ledger. Idempotent via
     # the (order, type='earn') unique constraint; safe to call
     # repeatedly if the state machine ever retries.
-    if (
-        new_status == OrderStatus.DELIVERED
-        and order.customer_id is not None
-    ):
+    if step == OrderStatus.DELIVERED and order.customer_id is not None:
         from apps.account.services import award_points_for_order
         try:
             award_points_for_order(order)
@@ -301,13 +322,61 @@ def transition_status(order: Order, new_status: str, actor=None) -> Order:
                 exc,
             )
 
-    action = f"order_{new_status}"
+    payload = {"from": previous, "to": step}
+    if step == OrderStatus.CANCELLED:
+        payload["cancel_reason"] = cancel_reason
     record_event(
         organization=order.organization,
-        action=action,
+        action=f"order_{step}",
         target_type="order",
         target_id=order.id,
         target_repr=f"{order.order_number} ({order.customer_name})",
-        payload={"from": current, "to": new_status},
+        payload=payload,
     )
+
+
+def transition_status(
+    order: Order, new_status: str, actor=None, cancel_reason: str = ""
+) -> Order:
+    """Move ``order`` to ``new_status`` (SPEC_PILOT_READINESS 5.2).
+
+    * The row is locked while it moves and the order is judged by what is
+      really stored - another tablet may have moved it since this copy was read.
+    * Asking for the status the order already has is a quiet success (a double
+      tap, two tablets): nothing changes, nothing is audited.
+    * A new order asked to be ``preparing`` goes through ``confirmed`` in the
+      same call (two timestamps, two audit events).
+    * An impossible move raises :class:`OrderTransitionError`; cancelling needs a
+      ``cancel_reason`` (``CancelReason``), else ``ValidationError``.
+
+    Both are ``django.core.exceptions.ValidationError`` subclasses with Turkish
+    messages. Audit actor/IP come from the request context, not from ``actor``.
+    """
+    if new_status not in {choice for choice, _ in OrderStatus.choices}:
+        raise ValidationError(f"Bilinmeyen durum: {new_status}", code="invalid_status")
+
+    with transaction.atomic():
+        Order.objects.select_for_update().get(pk=order.pk)
+        order.refresh_from_db()
+
+        current = order.status
+        if current == new_status:
+            return order
+
+        steps = _COMBINED_STEPS.get((current, new_status))
+        if steps is None and new_status in STATUS_TRANSITIONS.get(current, set()):
+            steps = (new_status,)
+        if steps is None:
+            raise OrderTransitionError(
+                f"Geçersiz durum geçişi: sipariş şu an \"{STATUS_LABELS[current]}\"; "
+                f"\"{STATUS_LABELS[new_status]}\" durumuna alınamaz."
+            )
+        if new_status == OrderStatus.CANCELLED:
+            if not cancel_reason:
+                raise ValidationError("İptal nedeni seçin.", code="cancel_reason_required")
+            if cancel_reason not in CancelReason.values:
+                raise ValidationError("Geçersiz iptal nedeni.", code="invalid_cancel_reason")
+
+        for step in steps:
+            _apply_step(order, step, cancel_reason)
     return order

@@ -9,13 +9,13 @@ import {
   ChefHat,
   Bell,
   PackageCheck,
-  X,
   RefreshCw,
   Receipt,
   ArrowLeft,
   ShoppingBag,
 } from "lucide-react";
 import { buttonStyles } from "@/components/ui/Button";
+import { OrderCancelledNotice } from "@/components/public/OrderCancelledNotice";
 import {
   fetchOrderStatus,
   OrdersApiError,
@@ -332,21 +332,10 @@ function StatusTimeline({
       })}
 
       {isCancelled ? (
-        <li className="flex items-start gap-3 rounded-lg border border-danger/30 bg-danger-soft p-3">
-          <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-danger/20 text-danger">
-            <X className="h-4 w-4" aria-hidden />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-danger">İptal Edildi</p>
-            <p className="text-xs text-muted">
-              Sipariş iptal edildi
-              {data.cancelled_at
-                ? ` · ${formatTimestamp(data.cancelled_at)}`
-                : null}
-              .
-            </p>
-          </div>
-        </li>
+        <OrderCancelledNotice
+          cancelledAt={data.cancelled_at}
+          reasonLabel={data.cancel_reason_label}
+        />
       ) : null}
     </ol>
   );

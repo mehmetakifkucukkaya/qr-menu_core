@@ -254,7 +254,7 @@ def test_admin_status_update_validates_transition(
         data={"status": "delivered"},
         format="json",
     )
-    assert response.status_code == 400
+    assert response.status_code == 409
     assert response.json()["error"]["code"] == "order.invalid_transition"
 
 

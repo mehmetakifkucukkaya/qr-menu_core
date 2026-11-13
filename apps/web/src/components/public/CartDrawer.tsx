@@ -10,6 +10,7 @@ import { SmartImage } from "@/components/ui/SmartImage";
 import { useCartStore } from "@/lib/cart-store";
 import { formatPrice } from "@/lib/format";
 import type { PublicMenuItem } from "@/types/menu";
+import { CartLineNote } from "./CartLineNote";
 import { CheckoutForm } from "./CheckoutForm";
 
 interface CartDrawerProps {
@@ -70,6 +71,7 @@ export function CartDrawer({
   const closeDrawer = useCartStore((s) => s.closeDrawer);
   const items = useCartStore((s) => s.items);
   const updateQuantity = useCartStore((s) => s.updateQuantity);
+  const updateNotes = useCartStore((s) => s.updateNotes);
   const remove = useCartStore((s) => s.remove);
   const totalAmount = useCartStore((s) => s.totalAmount());
 
@@ -154,11 +156,11 @@ export function CartDrawer({
                     <p className="mt-0.5 text-sm tabular-nums text-muted">
                       {formatPrice(item.price, item.currency)}
                     </p>
-                    {item.notes ? (
-                      <p className="mt-1 line-clamp-1 text-xs italic text-outline">
-                        Not: {item.notes}
-                      </p>
-                    ) : null}
+                    <CartLineNote
+                      itemName={item.name}
+                      value={item.notes ?? ""}
+                      onChange={(note) => updateNotes(item.menuItemId, note)}
+                    />
                     <div className="mt-2.5 flex items-center justify-between gap-2">
                       <div className="flex h-10 items-center rounded-pill bg-surface-low ring-1 ring-border">
                         <button

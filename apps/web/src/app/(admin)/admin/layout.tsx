@@ -6,6 +6,7 @@ import { AdminHeader } from "../_components/AdminHeader";
 import { AdminRoleGuard } from "../_components/AdminRoleGuard";
 import { AdminSidebar } from "../_components/AdminSidebar";
 import { ForcedPasswordChange } from "../_components/ForcedPasswordChange";
+import { KitchenShell } from "../_components/KitchenShell";
 import { NoPermission } from "../_components/NoPermission";
 import { fetchCurrentOrganization, fetchCurrentUser, AdminApiError } from "@/lib/api-admin";
 import { fetchTrialStatus } from "@/lib/api-onboarding";
@@ -43,9 +44,11 @@ function readCookieHeader(): string {
  *      gets only the "set your password" screen; a page the role may not open
  *      becomes a "no permission" notice (the server refuses it as well).
  *   3. Fetch the current organization for the sidebar brand area.
- *   4. Fetch the trial status for the sticky TrialBanner (owners only).
+ *   4. A kitchen user gets the kitchen's own frame (KitchenShell: business,
+ *      time, sign-out, no menu) instead of the sidebar.
+ *   5. Fetch the trial status for the sticky TrialBanner (owners only).
  *      Failure here is non-fatal — the banner just hides.
- *   5. Render sidebar + header + children.
+ *   6. Render sidebar + header + children.
  *
  * Login lives at `/(admin)/login` and intentionally sits outside this
  * layout so it doesn't render the sidebar/header.
@@ -126,7 +129,20 @@ export default async function AdminLayout({
     // Best-effort; the shell shows the default name and no menu shortcut.
   }
 
-  // ---- 4. Trial status (for the TrialBanner) ----------------------------
+  // ---- 4. A kitchen tablet gets the kitchen's own frame -------------------
+  if (role === "kitchen") {
+    return (
+      <KitchenShell businessName={businessName} logoutAction={logoutAction}>
+        {mayOpenPage ? (
+          <AdminRoleGuard role={role}>{children}</AdminRoleGuard>
+        ) : (
+          <NoPermission landingHref={landingPathFor(role)} />
+        )}
+      </KitchenShell>
+    );
+  }
+
+  // ---- 5. Trial status (for the TrialBanner) ----------------------------
   // Owners only: the banner's call to action is the plan page, which only they
   // can open. Non-fatal: any failure (network, 403, etc.) → status stays null
   // and the banner hides itself.
@@ -142,7 +158,7 @@ export default async function AdminLayout({
     }
   }
 
-  // ---- 5. Shell ---------------------------------------------------------
+  // ---- 6. Shell ---------------------------------------------------------
   return (
     <div className="flex min-h-screen bg-background">
       <AdminSidebar

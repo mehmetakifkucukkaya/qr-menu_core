@@ -69,3 +69,36 @@ test("changes are persisted, but the open/closed state of the drawer is not", ()
   assert.equal(persisted.state.items.length, 2);
   assert.ok(!("isOpen" in persisted.state), "isOpen must not be persisted");
 });
+
+test("a note belongs to its own line and is cut at 120 characters", () => {
+  useCartStore.setState({
+    items: [
+      { menuItemId: 1, name: "Latte", price: "95.00", currency: "TRY", quantity: 1 },
+      { menuItemId: 2, name: "Espresso", price: "60.00", currency: "TRY", quantity: 1 },
+    ],
+  });
+
+  useCartStore.getState().updateNotes(1, "az şekerli");
+  assert.deepEqual(
+    useCartStore.getState().items.map((i) => i.notes),
+    ["az şekerli", undefined],
+  );
+
+  useCartStore.getState().updateNotes(1, "x".repeat(150));
+  assert.equal(useCartStore.getState().items[0].notes, "x".repeat(120));
+  assert.equal(useCartStore.getState().items[1].notes, undefined);
+});
+
+test("a note survives a changed quantity and can be cleared again", () => {
+  useCartStore.setState({
+    items: [{ menuItemId: 1, name: "Latte", price: "95.00", currency: "TRY", quantity: 1 }],
+  });
+
+  useCartStore.getState().updateNotes(1, "sıcak olsun");
+  useCartStore.getState().updateQuantity(1, 3);
+  assert.equal(useCartStore.getState().items[0].notes, "sıcak olsun");
+  assert.equal(useCartStore.getState().items[0].quantity, 3);
+
+  useCartStore.getState().updateNotes(1, "");
+  assert.equal(useCartStore.getState().items[0].notes, "");
+});

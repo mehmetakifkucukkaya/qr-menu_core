@@ -273,24 +273,23 @@
 }
 
 /* ---------------------------------------------------------------------------
- * Kitchen display (Sprint 8C, refreshed in Sprint 12A)
- *
- * Subtle pulse on pending/confirmed tickets. The accent colour (`#E07856`)
- * gives operators a peripheral cue that a new / in-flight order exists
- * without being loud enough to distract. Tuned for a tablet kiosk 1–2 m away.
+ * Kitchen display
  * ------------------------------------------------------------------------- */
-@keyframes kitchen-pulse {
+/* A new, untouched order on the kitchen screen: a ring that pulses in the
+ * `warning` colour of the kitchen palette until somebody touches the card.
+ * (The border and the "YENİ" label stay when motion is switched off.) */
+@keyframes kitchen-alert {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(224, 120, 86, 0);
+    box-shadow: 0 0 0 0 rgb(var(--color-warning) / 0);
   }
   50% {
-    box-shadow: 0 0 0 8px rgba(224, 120, 86, 0.15);
+    box-shadow: 0 0 0 10px rgb(var(--color-warning) / 0.35);
   }
 }
 
-.kitchen-ticket-pending {
-  animation: kitchen-pulse 2s ease-in-out infinite;
+.kitchen-card-alert {
+  animation: kitchen-alert 1.2s ease-in-out infinite;
 }
 
 /* ---------------------------------------------------------------------------
@@ -311,7 +310,7 @@
     scroll-behavior: auto !important;
   }
 
-  .kitchen-ticket-pending {
+  .kitchen-card-alert {
     animation: none;
   }
 
