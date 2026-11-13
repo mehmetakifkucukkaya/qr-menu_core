@@ -12,7 +12,7 @@
 ## Alınan Kararlar (D-001..D-014 + OP-11)
 
 - **D-003:** Tek Next.js app + route group `(public)` ve `(admin)` — admin ekle
-- **D-007:** Container `node:20-bookworm-slim` multi-stage (zaten kurulu, admin de aynı image'da çalışır)
+- **D-007:** Container `node:24-bookworm-slim` multi-stage (zaten kurulu, admin de aynı image'da çalışır — D-044)
 - **OP-5:** Admin auth = DRF SessionAuthentication + cookie tabanlı; login CSRF korumalı (`GET /api/v1/auth/csrf` → POST `/api/v1/auth/login`)
 - **Sprint 2 hazırlığı:** 12 admin endpoint + tenant isolation (`IsOrganizationMember`) hazır
 - **Sprint 3 hazırlığı:** API client, types, placeholder stratejisi, theme tokens reusable

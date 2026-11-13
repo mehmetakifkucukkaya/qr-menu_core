@@ -221,7 +221,7 @@ Yeni karar her alındığında bu dosyaya eklenir; geri alınan kararlar üzeri 
 
 **Karar:**
 - **Python:** lokal dev sistem versiyonu (3.14) + container'da `python:3.12-slim` base image. `pyproject.toml`'da `python = ">=3.12,<3.15"`
-- **Node:** lokal dev sistem versiyonu (25.x) + container'da `node:20-bookworm-slim` base image. Next.js production build için LTS
+- **Node:** lokal dev sistem versiyonu (25.x) + container'da `node:24-bookworm-slim` base image (D-044 ile 20'den 24'e çıkarıldı). Next.js production build için LTS
 - **PostgreSQL:** container'da `postgres:16-alpine`
 - **Django:** 5.2 LTS
 - **Next.js:** 14.x (App Router stable)
@@ -264,7 +264,7 @@ Yeni karar her alındığında bu dosyaya eklenir; geri alınan kararlar üzeri 
 | D-004 | 2026-09-26 | Deploy = Hetzner + Cloudflare + Caddy | aktif |
 | D-005 | 2026-09-26 | GitHub remote = qr-menu_core, public, MIT | aktif |
 | D-006 | 2026-09-26 | Demo görseller = logo/kapak AI + ürün/kategori stock | aktif |
-| D-007 | 2026-09-26 | Container sabitleme = Python 3.12, Node 20 LTS, PG 16 | aktif |
+| D-007 | 2026-09-26 | Container sabitleme = Python 3.12, Node 24 LTS (D-044), PG 16 | aktif |
 | D-008 | 2026-09-26 | Custom User: email USERNAME_FIELD + role + Membership | aktif |
 | D-009 | 2026-09-26 | Settings & deps: requirements.txt + pyproject.toml (poetry yok) | aktif |
 | D-010 | 2026-09-26 | CSRF akışı: cookie-based session + X-CSRFToken header | aktif |
@@ -764,7 +764,7 @@ Local'de birden fazla Postgres instance çakışmasın diye ana stack'te host po
 | D-004 | 2026-09-26 | Deploy = Hetzner + Cloudflare + Caddy | aktif |
 | D-005 | 2026-09-26 | GitHub remote = qr-menu_core, public, MIT | aktif |
 | D-006 | 2026-09-26 | Demo görseller = logo/kapak AI + ürün/kategori stock | aktif |
-| D-007 | 2026-09-26 | Container sabitleme = Python 3.12, Node 20 LTS, PG 16 | aktif |
+| D-007 | 2026-09-26 | Container sabitleme = Python 3.12, Node 24 LTS (D-044), PG 16 | aktif |
 | D-008 | 2026-09-26 | Custom User: email USERNAME_FIELD + role + Membership | aktif |
 | D-009 | 2026-09-26 | Settings & deps: requirements.txt + requirements-dev.txt + pyproject.toml | aktif |
 | D-010 | 2026-09-26 | CSRF: GET /auth/csrf + Set-Cookie qr_csrftoken + qr_sessionid | aktif |
@@ -1611,12 +1611,13 @@ Local'de birden fazla Postgres instance çakışmasın diye ana stack'te host po
 | D-035 | 2026-10-02 | Velouté Hospitality Suite Design Integration (Sprint G/H — primary #2A4436 Deep Reserve Forest + secondary #B25E3B Terracotta Glaze + surface #FAF8F5 Linen Cream + Playfair Display/Plus Jakarta Sans pairing + 8pt spacing grid + 5 V1 ekran entegrasyonu) | aktif |
 | D-036 | 2026-10-03 | Mobile-First Responsive Pattern (Sprint I — sticky chrome optimization + safe-area dvh viewport + drawer/cartfab iOS home indicator handling + 320-1280px test aralığı) | aktif |
 | D-037 | 2026-11-11 | Signup Akışının Uçtan Uca Çalışır Hale Getirilmesi (CSRF token taşıma via onboardingWrite + complete_onboarding idempotent get_or_create + POST /api/v1/onboarding/preferences locale kalıcılığı + check_count_limit ayrımı + auto-slug yarış düzeltmesi + enforce_csrf_checks=True test deseni) | aktif |
-| D-038 | 2026-11-11 | GitHub Actions CI (push/pull_request/workflow_dispatch + concurrency cancel-in-progress + Python 3.12/Node 20 + tek job'da scripts/release_gate.sh — lokal ile CI birebir aynı kapı) | aktif |
+| D-038 | 2026-11-11 | GitHub Actions CI (push/pull_request/workflow_dispatch + concurrency cancel-in-progress + Python 3.12/Node 24 + tek job'da scripts/release_gate.sh — lokal ile CI birebir aynı kapı) | aktif |
 | D-039 | 2026-11-11 | Kullanım Limitlerinin Tamamlanması + 402 Yükselt Banner'ı (USAGE_LIMIT_RESOURCES + enforce_usage_limit + AI sayaçları başarıdan sonra + views/scans limiti admin analytics'te public menüde değil + merkezi limit-notice store + LimitBanner shell'de) | aktif |
 | D-040 | 2026-11-11 | CI'nin Bulduğu Signup Submit Yarışı (slug kontrolü sürerken submit sessizce düşüyordu — deferred promise ile bekletme + slugStatusRef + Step1BusinessInfo.test.tsx regresyon testi) | aktif |
 | D-041 | 2026-11-11 | Kırık Bağımlılık Düzeltmesi (json-logging==1.4.1 PyPI'da yok — image build'ını kıran pin + var olmayan JSONFormatter sınıfı + bozuk fallback kaldırıldı; apps.core.logging.JsonLogFormatter stdlib ile yazıldı + davranış testleri) | aktif |
 | D-042 | 2026-11-11 | Frontend Testleri Node 20 Uyumu (--experimental-strip-types Node 22.6+ gerektiriyordu, Dockerfile Node 20 pinliyor → tsx'e geçildi + cart-store top-level await → before() hook + kitchen-ui glob → açık dosya listesi) | aktif |
 | D-043 | 2026-11-13 | Başarı Ekranı Menü Yazılmadan Önce Görünmüyordu (completeOnboarding fire-and-forget idi — 'Hesabınız hazır' ekranı yazma bitmeden render ediliyor, menü önizleme 404'e gidiyor, hata sadece console.error'a düşüyordu → durum makinesi idle/saving/done/error + hata paneli + retry) | aktif |
+| D-044 | 2026-11-13 | Node 20 EOL'ya Girdi → Runtime Node 24 (Dockerfile 3× `node:24-bookworm-slim` + CI `node-version: 24` + `package.json` `engines.node >=24` + `@types/node` 24 + `.nvmrc` + GitHub Actions checkout/setup-node/setup-python v7 — deprecation uyarısı gitti) | aktif |
 
 ---
 

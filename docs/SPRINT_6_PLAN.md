@@ -12,7 +12,7 @@ V1 demo akışını production'a taşımak: production-grade deploy (Hetzner VPS
 ## Sprint 6 Kararları (Önceden Alınan)
 
 - **D-004:** Deploy = Hetzner VPS + Cloudflare DNS + Caddy
-- **D-007:** Container Python 3.12-slim + Node 20-bookworm-slim multi-stage
+- **D-007:** Container Python 3.12-slim + Node 24-bookworm-slim multi-stage (D-044)
 - **D-011:** Image upload = local MEDIA_ROOT (Sprint 5A'da)
 - **D-016:** AuditEvent + thread-local context
 - **D-017:** Analytics (QR + events + overview)

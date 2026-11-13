@@ -6,7 +6,8 @@ intentionally minimal: a single `docker compose` stack managed by `git pull`
 on the server, with Caddy as the only public entry point.
 
 > **D-004** — Deploy target = Hetzner VPS + Cloudflare DNS + Caddy.
-> **D-007** — Python 3.12-slim, Node 20-bookworm-slim, Postgres 16-alpine.
+> **D-007** — Python 3.12-slim, Postgres 16-alpine. Frontend runtime: **Node 24-bookworm-slim**
+> (D-044 — Node 20, 2026-04-30'da EOL'ya girdi).
 > **D-018** — Production settings pattern (env-driven, Caddy-proxied,
 > Sentry optional). See [DECISIONS.md](../DECISIONS.md#karar-d-018).
 

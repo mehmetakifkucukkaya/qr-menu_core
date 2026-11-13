@@ -12,7 +12,7 @@ Mobil-first public QR menü deneyimi demo seviyesine gelir. Müşteri QR okutur 
 ## Alınan Kararlar (Sprint 0-2'den miras)
 
 - D-001..D-012 + OP-1..OP-11 (Sprint 0..2'den)
-- **D-007:** Frontend container `node:20-bookworm-slim` (multi-stage builder + runner)
+- **D-007:** Frontend container `node:24-bookworm-slim` (multi-stage builder + runner — D-044 ile güncellendi)
 - **D-003:** Tek Next.js app + route group `(public)` ve `(admin)`
 - **OP-5:** Admin auth SessionAuth; Sprint 3 sadece public route, admin Sprint 4'te
 - **Sprint 2 hazırlığı:** `get_full_menu_payload(organization, locale, branch)` servisi zaten yazılı — Sprint 3'te sadece endpoint + cache eklenir
@@ -277,19 +277,19 @@ V2'de Playwright eklenebilir. V1'de manuel test + Lighthouse yeterli.
 **apps/web/Dockerfile (multi-stage):**
 ```dockerfile
 # syntax=docker/dockerfile:1.4
-FROM node:20-bookworm-slim AS deps
+FROM node:24-bookworm-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm ci
 
-FROM node:20-bookworm-slim AS builder
+FROM node:24-bookworm-slim AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISCH=1
 RUN npm run build
 
-FROM node:20-bookworm-slim AS runner
+FROM node:24-bookworm-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISCH=1
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs

@@ -52,11 +52,11 @@ jobs:
 
     steps:
       - name: Check out the repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # --- Backend ---------------------------------------------------------
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -68,10 +68,14 @@ jobs:
           pip install -r backend/requirements-dev.txt
 
       # --- Frontend --------------------------------------------------------
+      # Node 24 (LTS "Krypton", supported until 2028-04) — the same major the
+      # Dockerfile pins, so CI runs on the runtime the production image ships.
+      # Node 20 reached EOL on 2026-04-30; keeping it here meant the gate was
+      # running on an unpatched runtime.
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          node-version: "24"
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
 

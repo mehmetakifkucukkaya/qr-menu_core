@@ -49,7 +49,7 @@ E2E_SKIP_BUILD=1 npm run test:e2e   # reuse the existing .next build (faster whi
 npx playwright show-report          # HTML report after a failure (traces + screenshots)
 ```
 
-Needs: Node 20+, Python 3.12+ with `backend/requirements-dev.txt` installed, and a
+Needs: Node 24+, Python 3.12+ with `backend/requirements-dev.txt` installed, and a
 Chromium. Playwright's bundled one is installed once with
 `npx playwright install chromium`; or use an installed browser with
 `E2E_CHANNEL=chrome` (or `msedge`).

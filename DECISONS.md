@@ -677,3 +677,57 @@ Frontend unit test script'leri `node --experimental-strip-types` ile çalışıy
 - `apps/web/e2e/signup.spec.ts` — senkronizasyon noktası netleştirildi
 - `apps/web/package.json` → `test:signup-step5`; `scripts/release_gate.sh` → gate'e eklendi
 - Frontend: **22 suite / 252 test** Node 20'de yeşil; `tsc --noEmit` ve `next lint` temiz
+
+---
+
+# D-044 — Node 20 EOL'ya Girdi: Prod Runtime'ı Node 24'e Yükseltildi (Dockerfile + CI + Actions v7)
+
+**Tarih:** 2026-11-13
+
+**Bağlam:** D-042'de frontend testleri Node 20 ile uyumlu hâle getirildi ve "CI, prod ile aynı Node sürümünde çalışmalı" kuralı yazıldı. Ama Node 20'in **kendisi** 2026-04-30'da EOL'ya girdi. Yani prod imajı (`node:20-bookworm-slim`) ve CI, güvenlik yaması almayan bir runtime'da çalışıyordu. D-042'de "bu ayrı bir iş" diye ertelenen madde buydu.
+
+**Karar 1: Hedef sürüm Node 24 (Krypton). Node 22 değil.**
+- **Node 20** → EOL 2026-04-30 (geçti)
+- **Node 22 (Jod)** → EOL 2027-04-30 → bugünden itibaren ~5 ay
+- **Node 24 (Krypton)** → EOL 2028-04-30 → ~17 ay
+- **Node 26 (Lithium)** → EOL 2029-04-30
+
+Node 22'ye yükseltmek, beş ay sonra aynı taşmanın tekrarı demek. Node 24'e geçmek, birkaç satır farkla 12 ay daha fazla destek süresi alıyor.
+
+**Karar 2: Runtime, CI ve tip tanımları birlikte taşındı.**
+- `apps/web/Dockerfile` — 3 × `FROM node:20-bookworm-slim` → `node:24-bookworm-slim` (deps / builder / runner)
+- `.github/workflows/ci.yml` — `node-version: "20"` → `"24"`
+- `apps/web/package.json` — `engines.node: ">=24"`; `@types/node` `^20.17.6` → `^24`
+- `.nvmrc` — `24` (**yeni**): nvm/volta kullanan geliştiricinin sürümü kayması diye.
+
+**Karar 3: GitHub Actions v4 → v7.**
+- CI her koşumunda "Node.js 20 is deprecated, forced to run on Node.js 24" uyarısı veriyordu. Uyarının kaynağı eylemlerin kendi runtime'ıydı, işin Node'u değil: `actions/checkout` v4 → `node20`, `actions/setup-node` v4 → `node20`, `actions/setup-python` v5 → `node20`.
+- `node24` runtime'ına geçen ilk sürümler: `checkout@v5`, `setup-node@v5`, `setup-python@v6`. Kullanılan en son majörler: **checkout@v7, setup-node@v7, setup-python@v7**.
+- Kırıcı değişiklik yok ve bu workflow'ta ilgili input'lar kullanılmıyor: `setup-python@v7` `pip-install` input'unu kaldırdı (kullanılmıyordu), `setup-node@v7` dummy `NODE_AUTH_TOKEN` export'unu kaldırdı (kullanılmıyordu), `checkout@v7` `pull_request_target`/`workflow_run` için fork checkout'unu engelliyor (bu workflow düz `pull_request` kullanıyor).
+
+**Doğrulama — Node 24.22.3 (darwin-arm64) altında:**
+- `tsc --noEmit` temiz, `next lint` temiz, `next build` temiz (tüm rotalar üretildi)
+- **22 frontend suite / 252 test yeşil** (tsx ile — D-042'nin kazanımı Node 24'te de geçerli)
+- **Prod imajı gerçekten build edildi**: `docker build -f apps/web/Dockerfile` → konteyner içinde `node --version` = **v24.22.3**, non-root `1001:1001`, `TZ=Europe/Istanbul` doğrulandı
+- Tam kapı (`scripts/release_gate.sh`) Node 24 PATH'i ile koşturuldu: backend 1216 test + 22 suite + 43 browser testi
+
+**Alternatifler:**
+- **Node 22'ye yükseltmek** — reddedildi (birincil gerekçe). EOL 2027-04-30; beş ay sonra aynı iş tekrar eder.
+- **Node 26 (Lithium)** — reddedildi. 2029'a kadar destek var, ancak Node 26 2026-10'da sürüldü ve Next.js 14.2.18 ile `@testing-library`/`jsdom` zinciri henüz olgunlaşmadı. Node 24 bir yıldır LTS; 12 ay fazla destek süresine karşılık 12 ay gecikme riski.
+- **Sadece CI'ı yükseltmek, Dockerfile'ı bırakmak** — reddedildi. D-042 tam olarak bu ayrımın bedelini ödedi: "CI'da geçen kod prod'da çalışmıyor".
+- **Node 20'da bırakmak, EOL'u kabul etmek** — reddedildi. EOL, o sürümde güvenlik yaması olmadığı anlamına gelir; prod imajı internete açık.
+- **`engines`'i dar yazmak (`>=24 <25`)** — reddedildi. Lokal geliştirme sistemi Node 25 kullanıyor (D-007); `npm` `engines`'i varsayılan olarak zorlamasa da dar aralık `npm ci`'ı gereksiz yere kırabilirdi.
+- **`@types/node`'u 20'de bırakmak** — reddedildi. Runtime 24 iken tip tanımı 20'de kalmak, "sürüm farkını kapatma" kuralının ihlali; `^24` ile tip kontrolü ve lint temiz çıktı, risk yoktu.
+
+**Seçim gerekçesi:**
+- **En uzun destek süresi, en az iş.** Node 22 beş ay, Node 24 on yedi ay. Fark birkaç satır.
+- **CI ile prod aynı major'da kalmalı.** D-042'nin kuralı, bu kararın da temeli; ikisi birlikte taşındı.
+- **Sürüm değişmeden önce kapıdan geçirilir.** Değişiklik, Node 24 altında doğrulanmadan merge edilmedi.
+
+**Sonuçlar:**
+- `apps/web/Dockerfile` — 3 stage `node:24-bookworm-slim`
+- `.github/workflows/ci.yml` — Node 24 + `checkout@v7` / `setup-node@v7` / `setup-python@v7` (deprecation uyarısı gitti)
+- `apps/web/package.json` — `engines.node: ">=24"`, `@types/node` `^24`
+- `.nvmrc` — **yeni**, `24`
+- `docs/DEPLOYMENT.md`, `docs/SPRINT_3_PLAN.md`, `docs/SPRINT_4_PLAN.md`, `docs/SPRINT_6_PLAN.md`, `apps/web/e2e/README.md` — runtime referansları güncellendi
+- `DECISIONS.md` — D-007 "Node 20 LTS" satırı Node 24'e çekildi; D-044 indeks satırı eklendi

@@ -1,7 +1,9 @@
 # syntax=docker/dockerfile:1.4
 # ============================================================================
 # Multi-stage Dockerfile for the Next.js public menu frontend.
-# Sprint 3B-2 (D-007 — node:20-bookworm-slim, standalone output).
+# Sprint 3B-2 (D-007 — standalone output).
+# D-044 — runtime is node:24-bookworm-slim (was node:20; Node 20 hit EOL
+# on 2026-04-30, so the image was running an unpatched runtime).
 #
 # Build stages:
 #   1. deps    — npm ci with cache mount (fast re-builds)
@@ -13,7 +15,7 @@
 # the runner stage copies in.
 # ============================================================================
 
-FROM node:20-bookworm-slim AS deps
+FROM node:24-bookworm-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
 # BuildKit cache mount keeps the npm cache between builds (huge speedup
@@ -22,7 +24,7 @@ RUN --mount=type=cache,target=/root/.npm \
     npm ci --no-audit --no-fund
 
 
-FROM node:20-bookworm-slim AS builder
+FROM node:24-bookworm-slim AS builder
 WORKDIR /app
 # Next.js inlines NEXT_PUBLIC_* values into the JavaScript at BUILD time, so they
 # must arrive as build args (docker-compose.production.yml `build.args`). Setting
@@ -45,7 +47,7 @@ COPY . .
 RUN npm run build
 
 
-FROM node:20-bookworm-slim AS runner
+FROM node:24-bookworm-slim AS runner
 WORKDIR /app
 # TZ: the venue's clock. Dates the business sees are formatted with an explicit
 # time zone (src/lib/datetime.ts); this covers anything that still uses local time.
