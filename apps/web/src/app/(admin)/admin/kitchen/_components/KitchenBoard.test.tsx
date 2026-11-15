@@ -430,6 +430,32 @@ test("an ended session says so instead of blaming the network", async () => {
   assert.ok(article(view, "Sipariş #1, Masa 5"), "the last orders stay visible");
 });
 
+test("a plan without the module says so — not the network, not the session", async () => {
+  const view = await mount({ new: [1] });
+  respond = (call) =>
+    call.path === "/api/v1/admin/kitchen/board"
+      ? json(
+          {
+            error: {
+              code: "billing.feature_disabled",
+              message: "'Sipariş + mutfak' özelliği planınızda kapalı.",
+              feature: "orders_enabled",
+            },
+          },
+          403,
+        )
+      : undefined;
+
+  await advance(5_000);
+
+  const notice = view.getByTestId("plan-blocked-notice");
+  assert.match(notice.textContent ?? "", /Mutfak ekranı planınızda kapalı/);
+  assert.match(notice.textContent ?? "", /Sipariş \+ mutfak/);
+  assert.match(notice.textContent ?? "", /Planı yükselt/);
+  assert.equal(view.queryByText("Bağlantı yok"), null, "the network is not the problem");
+  assert.equal(view.queryByText(/Oturumunuz sona erdi/), null, "the session is not the problem");
+});
+
 // ------------------------------------------------------------------ the bell
 
 test("a new order is silent until 'Servisi başlat' was tapped; after that it rings until the card is touched", async () => {

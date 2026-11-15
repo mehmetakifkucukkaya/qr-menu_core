@@ -79,6 +79,23 @@ export class AdminApiError extends Error {
 }
 
 /**
+ * Is this error "your plan does not include this" rather than "you may not"?
+ *
+ * The backend answers 403 with `billing.feature_disabled` when the tenant's
+ * plan does not carry the module (SPEC_PILOT_READINESS §6 — the "Sipariş +
+ * mutfak" module). That is a different thing from a session that ended, and
+ * the admin screens have to say so: a kitchen tablet that says "oturum bitti,
+ * tekrar giriş yap" sends the cook to the wrong problem.
+ */
+export function isPlanBlocked(error: unknown): boolean {
+  return (
+    error instanceof AdminApiError &&
+    error.status === 403 &&
+    error.code === "billing.feature_disabled"
+  );
+}
+
+/**
  * Record a 402 (limit reached) in the limit-notice store.
  *
  * The store is a client-side store, so this is a no-op on the server

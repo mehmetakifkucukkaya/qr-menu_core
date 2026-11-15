@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { AdminApiError, fetchCsrfToken, fetchKitchenBoard, updateOrderStatus } from "@/lib/api-admin";
+import { AdminApiError, fetchCsrfToken, fetchKitchenBoard, isPlanBlocked, updateOrderStatus } from "@/lib/api-admin";
 import {
   acknowledge,
   COLUMN_KEYS,
@@ -22,6 +22,7 @@ import { CancelDialog } from "./CancelDialog";
 import { ConnectionBanner } from "./ConnectionBanner";
 import { KitchenCard } from "./KitchenCard";
 import { LiveStatus } from "./LiveStatus";
+import { PlanBlockedNotice } from "./PlanBlockedNotice";
 import { ServiceControls } from "./ServiceControls";
 
 export interface KitchenBoardProps {
@@ -129,6 +130,18 @@ export function KitchenBoard({ initialBoard, csrfToken }: KitchenBoardProps) {
     polling.failures > 0 &&
     polling.lastError instanceof AdminApiError &&
     (polling.lastError.status === 401 || polling.lastError.status === 403);
+
+  // The plan dropped the module while the tablet was open (or the account
+  // never had it). The board can't work, so say why — "oturum bitti" would
+  // send the cook to log in again for no reason.
+  if (isPlanBlocked(polling.lastError)) {
+    const message = polling.lastError instanceof Error ? polling.lastError.message : "";
+    return (
+      <div className="kitchen-dark flex flex-col gap-4 rounded-3xl bg-background p-4 text-text sm:p-6">
+        <PlanBlockedNotice message={message || undefined} />
+      </div>
+    );
+  }
 
   return (
     <div className="kitchen-dark flex flex-col gap-4 rounded-3xl bg-background p-4 text-text sm:p-6">

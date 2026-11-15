@@ -8,6 +8,8 @@ from datetime import datetime, timedelta, timezone as dt_timezone
 from decimal import Decimal
 
 import pytest
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from apps.accounts.models import Membership, MembershipRole, User
@@ -154,20 +156,52 @@ def test_the_board_shows_at_most_100_cards_and_says_so(api_client, org_a):
     assert data["truncated"] is True
 
 
+def _board_query_count(api_client) -> int:
+    """How many queries one board read costs."""
+    with CaptureQueriesContext(connection) as captured:
+        assert api_client.get(BOARD).status_code == 200
+    return len(captured.captured_queries)
+
+
 def test_the_number_of_queries_does_not_grow_with_the_number_of_cards(
-    api_client, org_a, item_a, django_assert_max_num_queries
+    api_client, org_a, item_a
 ):
-    for i in range(12):
-        order = _order(org_a, f"Q-{i:02d}", ["pending", "preparing", "ready"][i % 3])
-        for n in range(3):
-            OrderItem.objects.create(
-                order=order, menu_item=item_a, name=f"Ürün {n}", price=Decimal("5.00"), quantity=1,
-                allergens=["Gluten"],
-            )
+    """A card must not cost a query.
+
+    The board reads the plan once (the ``orders_enabled`` guard) and the cards
+    in one go, so the count is the same whether the kitchen has one order or
+    thirteen. Comparing the two counts says that directly; a magic ceiling
+    would only ever say "not too many" and would break every time a constant
+    cost is added.
+    """
     _login(api_client, org_a)
 
-    with django_assert_max_num_queries(12):
-        assert api_client.get(BOARD).status_code == 200
+    # Warm-up: the first read creates the tenant's PlanSettings row (the guard
+    # reads the plan). That is a one-off cost, not a per-card one, so it must
+    # not land in the comparison.
+    _board_query_count(api_client)
+
+    order = _order(org_a, "Q-00", "pending")
+    for n in range(3):
+        OrderItem.objects.create(
+            order=order, menu_item=item_a, name=f"Ürün {n}", price=Decimal("5.00"),
+            quantity=1, allergens=["Gluten"],
+        )
+    with_few_cards = _board_query_count(api_client)
+
+    for i in range(12):
+        order = _order(org_a, f"Q-{i + 1:02d}", ["pending", "preparing", "ready"][i % 3])
+        for n in range(3):
+            OrderItem.objects.create(
+                order=order, menu_item=item_a, name=f"Ürün {n}", price=Decimal("5.00"),
+                quantity=1, allergens=["Gluten"],
+            )
+    with_many_cards = _board_query_count(api_client)
+
+    assert with_many_cards == with_few_cards, (
+        f"the board grew from {with_few_cards} to {with_many_cards} queries "
+        "when the cards grew"
+    )
 
 
 # ------------------------------------------------------------------ who

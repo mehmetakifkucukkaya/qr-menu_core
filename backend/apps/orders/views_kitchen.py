@@ -24,7 +24,7 @@ from rest_framework.views import APIView
 from apps.accounts.permissions import IsOrganizationMember
 
 from .models import Order, OrderStatus
-from .views import _resolve_organization, _wrap
+from .views import _feature_guard, _resolve_organization, _wrap
 
 #: The most cards one call returns; ``counts`` and ``truncated`` tell the truth beyond it.
 MAX_CARDS = 100
@@ -43,6 +43,14 @@ class KitchenBoardView(APIView):
 
     def get(self, request: Request) -> Response:
         organization = _resolve_organization(request.user)
+        if organization is not None:
+            # The plan says "Sipariş + mutfak" or it does not. Without this
+            # a BASIC tenant could open the kitchen and work a flow its plan
+            # does not include (SPEC_PILOT_READINESS §6).
+            blocked = _feature_guard(organization, request, "orders_enabled")
+            if blocked is not None:
+                return blocked
+
         now = timezone.now()
         columns: dict[str, list] = {name: [] for name in COLUMNS}
         counts = {name: 0 for name in COLUMNS}

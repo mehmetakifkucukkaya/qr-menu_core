@@ -782,3 +782,74 @@ Bu depo **App Router** kullanıyor (D-003) → etkileniyor. Duyurunun kendi ifad
 - `apps/web/package-lock.json` — bağımlılık ağacı güncellendi
 - CI log'unda next güvenlik uyarısı gitti
 - Frontend: **22 suite / 252 test** + **43 browser testi** yeşil
+
+---
+
+# D-046 — BASIC Planda Mutfak/Sipariş Ekranları Açılıyordu (`orders_enabled` Koruması)
+
+**Tarih:** 2026-11-15
+
+**Bağlam:** Pilot hazırlık denetiminde (SPEC_PILOT_READINESS §6, Dilim 4) kalan maddelerden biri şuydu: *"sunucu tarafında mutfak ve sipariş **admin** uçları `orders_enabled` ister (403 `billing.feature_disabled`)"*.
+
+Kodda `orders_enabled` bayrağı **yalnız bir yerde** kontrol ediliyordu: müşterinin sipariş verdiği herkese açık uçta (`PublicOrderCreateView`). Yani bayrak, sistemde siparişin **doğduğu** yerde vardı ama siparişin **yönetildiği** yerde yoktu. Sonuç: BASIC bir kiracı (`orders_enabled = False`) `/admin/kitchen` ve `/admin/orders` sayfalarını açıp, planında olmayan "Sipariş + mutfak" akışını çalıştırabiliyordu. Denetim bunu "Dilim 1 tek başına birleşirse BASIC planlı işletmeler mutfakta ham hata görür" diye işaret etmişti; işaret doğruydu.
+
+**Karar 1: Koruma beş admin ucuna kondu.**
+`apps/orders/views.py` içinde tek bir yardımcı (`_feature_guard`) yazıldı ve şu uçlara bağlandı:
+
+| Uç | Ne |
+|---|---|
+| `GET /api/v1/admin/kitchen/board` | mutfak panosu |
+| `GET /api/v1/admin/kitchen/tickets` | eski mutfak akışı |
+| `GET /api/v1/admin/orders/` | sipariş listesi |
+| `GET /api/v1/admin/orders/{id}/` | sipariş detayı |
+| `POST /api/v1/admin/orders/{id}/status` | durum geçişi (Hazır → Teslim) |
+
+Yanıt `403` + `{"error": {"code": "billing.feature_disabled", "message": ..., "feature": "orders_enabled"}}`. Kod ayırt etmeye yarıyor: `billing.feature_disabled` "planınızda kapalı", `auth.*` "oturumunuz bitti".
+
+**Karar 2: Aynı yardımcı, herkese açık uçta da kullanılıyor.**
+`PublicOrderCreateView` kendi `try/except Exception` bloğunu taşıyordu; aynı yardımcıya bağlandı. Yan fayda: dar yakalama (`except FeatureDisabled`) artık `FeatureDisabled` dışındaki bir hatayı 403'e çevirmiyor — önceki `except Exception` bir `NameError`'ı bile 403 "planınızda kapalı" diye çeviriyordu.
+
+**Karar 3: Kullanıcının gördüğü mesaj Türkçe modül adı.**
+`require_feature` artık `FEATURE_LABELS`'i kullanıyor: mesaj `"'orders_enabled' özelliği planınızda kapalı."` yerine `"'Sipariş + mutfak' özelliği planınızda kapalı."`. Ajans panelinin zaten kullandığı isim — tek doğru kelime.
+
+**Karar 4: Mutfak ekranı 403'te "bağlantı yok" demiyor.**
+Sunucu tarafı kapıyı kapatınca mutfak tableti şunu gösterecekti: pano polling'i başarısız olduğu için "Bağlantı yok · son güncelleme 15:00" şeridi, 403 için de "Oturumunuz sona erdi". İkisi de **yanlış teşhis**: tablet sağlam, oturum sağlam, değişen tek şey plan. Bu yüzden:
+- `apps/web/src/lib/api-admin.ts` → `isPlanBlocked(error)` yardımcısı (403 + `billing.feature_disabled`).
+- `PlanBlockedNotice` bileşeni (yeni): "Mutfak ekranı planınızda kapalı" + mesaj + "Planı yükselt" bağlantısı.
+- `kitchen/page.tsx` (sunucu) ve `KitchenBoard` (istemci) bu bildirimi gösteriyor; ikisi de gerekiyor — sunucu ilk boyamayı yapıyor, istemci sonraki polling'lerde.
+
+`/admin/orders` sayfası zaten `AdminErrorState` ile sunucunun Türkçe mesajını gösteriyordu; dokunulmadı.
+
+**Yakalanan tuzak: gizli import bağımlılığı.**
+`loyalty_enabled` kontrolü, `require_feature`'i **kendi import etmeden** kullanıyordu — fonksiyon kapsamındaki daha önceki yerel importtan yararlanıyordu. Yardımcıya geçince o import kalktı ve 5 sadakat testi `NameError` yüzünden düştü. Ders: bir bloğun kullandığı ismi o blok import etmeli. Sadakat bloğu da aynı yardımcıya bağlandı.
+
+**Doğrulama (Node 24.22.3):**
+- **Negatif kontrol:** yeni 9 test eski kodda kırmızıydı (6 "kapalı" testi düşüyordu, 3 regresyon testi geçiyordu), yeni kodda 9/9 yeşil.
+- Yeni testler: `backend/apps/orders/tests/test_orders_feature_gate.py` — beş ucun beşi de 403 + doğru kod, sipariş durumu değişmiyor, reddediş denetim tablosuna yazılıyor; modülü olan kiracıda üç uç da açık kalıyor.
+- **Pano sorgu testi yeniden yazıldı:** `test_the_number_of_queries_does_not_grow_with_the_number_of_cards` artık büyülü bir tavan değil **iki sayımı karşılaştırıyor** (1 kart vs 13 kart → eşit olmalı). Koruma sabit iki sorgu ekliyor; bu kart sayısıyla büyümüyor, ama eski tavan (12) her sabit maliyet eklenince kırılıyordu. Test artık adını yaptığı işi ölçüyor.
+- Backend: **1225 passed, 2 skipped** (1216 taban + 9 yeni).
+- Frontend: `test:kitchen-ui` **56 test** (55 + 1 yeni), `tsc --noEmit` ve `next lint` temiz.
+- **Tam kapı:** backend 1225 + 22 frontend suite + **43 browser testi** — hepsi yeşil, flaky yok.
+- **Production stack'te doğrulandı:** BASIC kiracı mutfak panosunda 403 `billing.feature_disabled`; "Sipariş + mutfak" modülü olan kiracı 200.
+
+**Alternatifler:**
+- **Yalnız frontend'de gizlemek** (yan menüden "Mutfak" ve "Siparişler" linkini kaldırmak) — reddedildi. URL'yi bilen biri yine açabilir; koruma sunucuda olmalı.
+- **Guard'ı middleware'e taşımak** — düşünüldü, reddedildi. `RoleGateMiddleware` yol × rol denetimi yapıyor; plan bayrağı kiracı düzeyinde ve uç başına farklı (mutfak/sipariş uçları `orders_enabled`, sadakat uçları `loyalty_enabled`). Uç başına açık yardımcı daha okunur.
+- **`FeatureDisabled`'ı global bir DRF exception handler'a taşımak** — düşünüldü, reddedildi. Büyük bir yüzey; bu iş için gereksiz. Yardımcı, zaten var olan hata zarfını yeniden kullanıyor.
+- **Mesajı bayrağın adıyla bırakmak** (`'orders_enabled' özelliği...`) — reddedildi. Kullanıcı "orders_enabled" bilmez; ajans panelinin etiketi ("Sipariş + mutfak") doğru kelime.
+
+**Seçim gerekçesi:**
+- **Bayrağı üreten yerde değil, işin yapıldığı yerde koy.** Sipariş vermek kapalıysa siparişi yönetmek de kapalı olmalı.
+- **Kapatılan kapı iz bırakmalı.** Reddediş `feature_disabled_access` denetim olayı yazar — ajans sonradan "bu müşteri neden mutfağı açamıyor" sorusunu cevaplayabilir.
+- **Yanlış teşhis, kapalı kapıdan daha kötüdür.** Tablet "bağlantı yok" deyip ağzı arıyor, sahibi telefonla arıyor, o da interneti kontrol ediyor — oysa mesele plan.
+
+**Sonuçlar:**
+- `backend/apps/orders/views.py` — `_feature_guard` yardımcısı; beş admin ucu + herkese açık sipariş ucu + sadakat bloğu
+- `backend/apps/orders/views_kitchen.py` — pano ucunda koruma
+- `backend/apps/billing/services.py` — `require_feature` mesajı `FEATURE_LABELS` etiketini kullanıyor
+- `backend/apps/orders/tests/test_orders_feature_gate.py` — **yeni**, 9 test
+- `backend/apps/orders/tests/test_kitchen_board.py` — sorgu testi yeniden yazıldı (tavan → karşılaştırma)
+- `apps/web/src/lib/api-admin.ts` — `isPlanBlocked()`
+- `apps/web/src/app/(admin)/admin/kitchen/_components/PlanBlockedNotice.tsx` — **yeni**
+- `apps/web/src/app/(admin)/admin/kitchen/page.tsx` + `KitchenBoard.tsx` — 403'te plan bildirimi
+- `apps/web/src/app/(admin)/admin/kitchen/_components/KitchenBoard.test.tsx` — 1 yeni test

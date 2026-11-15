@@ -42,6 +42,7 @@ from apps.organizations.models import Organization
 from .constants import (
     BASIC,
     FEATURE_FIELDS,
+    FEATURE_LABELS,
     OPS,
     ORDERS,
     PLAN_TIER_LIMITS,
@@ -252,8 +253,11 @@ def require_feature(
     if has_feature(organization, feature):
         return
     _audit_feature_blocked(organization, feature)
+    # The label is what the agency panel calls the flag ("Sipariş + mutfak"),
+    # so the message a tenant reads is Turkish instead of the raw flag name.
+    label = FEATURE_LABELS.get(feature, feature)
     raise FeatureDisabled(
-        message=f"'{feature}' özelliği planınızda kapalı.",
+        message=f"'{label}' özelliği planınızda kapalı.",
         feature=feature,
     )
 

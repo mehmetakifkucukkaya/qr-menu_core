@@ -107,6 +107,42 @@ def _resolve_organization(user):
     return membership.organization if membership else None
 
 
+def _feature_guard(organization, request: Request, feature: str) -> Response | None:
+    """403 when the tenant's plan does not include ``feature``.
+
+    The ``orders_enabled`` flag used to be checked in exactly one place: the
+    public endpoint where a customer places an order. The admin surfaces that
+    actually run a kitchen — the board, the ticket feed, the order list, the
+    order detail and the status change — had no guard, so a BASIC tenant
+    (whose plan has ``orders_enabled = False``) could open them and work a
+    flow its plan does not include (SPEC_PILOT_READINESS §6, Dilim 4).
+
+    Returns the 403 ``Response`` when the plan says no, ``None`` when the
+    tenant may continue. The body is the standard error envelope with
+    ``code = "billing.feature_disabled"`` so the client can tell "this is
+    not in your plan" apart from "your session ended" (403 + a different
+    code).
+    """
+    from apps.billing.errors import FeatureDisabled
+    from apps.billing.services import require_feature
+
+    try:
+        require_feature(organization, feature)
+    except FeatureDisabled as exc:
+        return Response(
+            {
+                "error": {
+                    "code": exc.code,
+                    "message": exc.message,
+                    "feature": exc.extra.get("feature"),
+                },
+                "meta": {"request_id": request.META.get("HTTP_X_REQUEST_ID", "")},
+            },
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Public endpoints
 # ---------------------------------------------------------------------------
@@ -168,24 +204,9 @@ class PublicOrderCreateView(APIView):
         # Sprint B1 — D-026 feature flag guard. ``orders_enabled`` must
         # be True on the PlanSettings. We audit on rejection so the
         # admin UI can surface "operator X tried to order with BASIC".
-        from apps.billing.services import require_feature
-
-        try:
-            require_feature(org, "orders_enabled")
-        except Exception as exc:  # FeatureDisabled from billing
-            return Response(
-                {
-                    "error": {
-                        "code": getattr(exc, "code", "billing.feature_disabled"),
-                        "message": getattr(exc, "message", str(exc)),
-                        "feature": getattr(exc, "extra", {}).get("feature"),
-                    },
-                    "meta": {
-                        "request_id": request.META.get("HTTP_X_REQUEST_ID", "")
-                    },
-                },
-                status=status.HTTP_403_FORBIDDEN,
-            )
+        blocked = _feature_guard(org, request, "orders_enabled")
+        if blocked is not None:
+            return blocked
 
         branch = None
         if payload.get("branch_slug"):
@@ -243,22 +264,9 @@ class PublicOrderCreateView(APIView):
         # audit (BASIC tier has the feature off; PRO/ORDERS can
         # override it on if the operator chose to).
         if loyalty_points_to_redeem:
-            try:
-                require_feature(org, "loyalty_enabled")
-            except Exception as exc:  # FeatureDisabled from billing
-                return Response(
-                    {
-                        "error": {
-                            "code": getattr(exc, "code", "billing.feature_disabled"),
-                            "message": getattr(exc, "message", str(exc)),
-                            "feature": getattr(exc, "extra", {}).get("feature"),
-                        },
-                        "meta": {
-                            "request_id": request.META.get("HTTP_X_REQUEST_ID", "")
-                        },
-                    },
-                    status=status.HTTP_403_FORBIDDEN,
-                )
+            blocked = _feature_guard(org, request, "loyalty_enabled")
+            if blocked is not None:
+                return blocked
 
         # If the client claims to redeem puan, we need a customer +
         # an enabled loyalty config. Otherwise treat as 400.
@@ -475,6 +483,10 @@ class AdminOrdersView(APIView):
                 request,
             )
 
+        blocked = _feature_guard(organization, request, "orders_enabled")
+        if blocked is not None:
+            return blocked
+
         qs = (
             Order.objects.filter(organization=organization)
             .select_related("branch")
@@ -547,6 +559,10 @@ class AdminOrderDetailView(APIView):
                 },
                 status=status.HTTP_404_NOT_FOUND,
             )
+
+        blocked = _feature_guard(organization, request, "orders_enabled")
+        if blocked is not None:
+            return blocked
 
         order = (
             Order.objects.filter(organization=organization, pk=pk)
@@ -628,6 +644,10 @@ class AdminOrderStatusView(APIView):
                 },
                 status=status.HTTP_404_NOT_FOUND,
             )
+
+        blocked = _feature_guard(organization, request, "orders_enabled")
+        if blocked is not None:
+            return blocked
 
         order = Order.objects.filter(
             organization=organization, pk=pk
@@ -735,6 +755,10 @@ class KitchenTicketsView(APIView):
         organization = _resolve_organization(request.user)
         if organization is None:
             return _wrap([], request)
+
+        blocked = _feature_guard(organization, request, "orders_enabled")
+        if blocked is not None:
+            return blocked
 
         status_filter = request.query_params.get(
             "status", _KITCHEN_DEFAULT_STATUSES
