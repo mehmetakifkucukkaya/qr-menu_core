@@ -73,6 +73,16 @@ services:
     build:
       context: ./apps/web
       dockerfile: Dockerfile
+      # NEXT_PUBLIC_* values are inlined into the JavaScript at BUILD time, so
+      # they have to be build args — setting them only in `environment:` leaves
+      # the browser bundle pointing at the default (localhost:8000) instead of
+      # the host/port this stack is actually published on. Mirrors the
+      # production compose file (same reason, see the note there).
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
+        NEXT_PUBLIC_BASE_URL: ${NEXT_PUBLIC_BASE_URL:-http://localhost:3000}
+        NEXT_PUBLIC_DEFAULT_LOCALE: ${NEXT_PUBLIC_DEFAULT_LOCALE:-tr}
+        NEXT_PUBLIC_SUPPORTED_LOCALES: ${NEXT_PUBLIC_SUPPORTED_LOCALES:-tr,en}
     container_name: qrmenu-frontend
     restart: unless-stopped
     env_file:
@@ -88,7 +98,9 @@ services:
       backend:
         condition: service_healthy
     ports:
-      - "3000:3000"
+      # Host port is configurable (WEB_PORT) because 3000 is often already
+      # taken by another local project. The container always listens on 3000.
+      - "${WEB_PORT:-3000}:3000"
     healthcheck:
       # Standalone server.js doesn't expose /health by default; just
       # confirm the port responds. The frontend is "healthy" the moment

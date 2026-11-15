@@ -934,3 +934,54 @@ Beş guard da `except Exception` kullanıyordu — `require_feature` dışındak
 - `apps/web/src/components/billing/UpgradeNotice.test.tsx` — **yeni**, 10 test
 - `apps/web/src/lib/api-plan-notices.test.ts` — **yeni**, 3 test
 - `apps/web/package.json` + `scripts/release_gate.sh` — `test:upgrade-notice`, `test:api-plan-notices`
+
+---
+
+# D-048 — Dev Frontend Konteyneri Crash-Loop Yapıyordu: İmaj Bozuk Değil, Writable Layer Silinmişti
+
+**Karar:** `docker-compose.yml` → frontend'e `NEXT_PUBLIC_*` **build args** eklendi ve host portu `WEB_PORT` ile ayarlanabilir hale getirildi.
+
+**Tarih:** 2026-11-15
+
+**Bağlam:** "Projeyi lokalde çalıştır" isteği üzerine dev stack ayağa kaldırılırken frontend konteyneri sürekli crash-loop yapıyordu (`Restarting (1)`), log: `Error: Could not find a production build in the './.next' directory` (`next/dist/server/lib/router-utils/filesystem.js:151`, `setupFsCheck`).
+
+Teşhis zinciri:
+
+1. `docker run --rm qrmenu-frontend` → **çalışıyor** ("✓ Ready in 49ms"). Aynı imaj elle çalışıyor, konteyner çalışmıyor.
+2. `docker inspect` → konteynerin image ID'si ile `qrmenu-frontend` tag'inin image ID'si **aynı** (`sha256:e7aabef0…`).
+3. Konteynerde mount yok, WorkingDir `/app`, Cmd `node server.js`, User `nextjs` — hepsi imajla aynı.
+4. `docker diff qrmenu-frontend` → **asıl bulgu**:
+   ```
+   D /app/.next/BUILD_ID
+   D /app/.next/server
+   D /app/.next/static
+   D /app/.next/required-server-files.json
+   ```
+   İmajın içi sağlam; **konteynerin writable layer'ından `.next/` silinmişti.**
+
+Ayrıca iki ayrı yapılandırma kusuru bulundu:
+- `docker-compose.yml` frontend servisi `NEXT_PUBLIC_*` değerlerini yalnız `environment:` ile veriyordu. Next bu değerleri **build-time'da JavaScript'e gömer**; çalışma zamanında verilmesi browser bundle'ı değiştirmez. Production compose'da bu zaten `build.args` ile çözülmüştü, dev compose'da eksikti.
+- Host portu `3000` sabitti; bu makinede 3000'u `e-ticaret-storefront-web` konteyneri tutuyordu, yeni frontend başlayamıyordu ("Bind for 127.0.0.1:3000 failed: port is already allocated").
+
+**Alternatifler:**
+- **Sorunu "bozuk imaj" sanıp `docker compose build` çalıştırmak** — teşhis yanlış; imajın içi sağlamdı, katman silinmişti. (Yine de imaj 6 haftalıktı ve Next 14.2.18 içeriyordu; D-045 sonrası güncel kodla yeniden build etmek doğruydu.)
+- **Host portunu 3000'dan farklı bir sabit değere almak** (örn. `3100:3000` yazmak) — reddedildi. Port çakışması makineye özgü; ikinci bir geliştirici aynı sorunu yaşamamalı. `WEB_PORT` env ile ayarlanabilir.
+- **Frontend'i hot-reload moduna geçirmek** (`next dev`) — bu turda yapılmadı. Konteyner imajı production standalone bundle'ı çalıştırıyor; `next dev` geçişi ayrı bir iş (mount + `node_modules` + watcher kurulumu).
+- **Sadece production stack'i sunmak, dev stack'i hiç onarmamak** — reddedildi. Kullanıcı geliştirme yaparken dev stack'e ihtiyaç duyar; kırık bırakmak "çalışıyor" izlenimi yaratır.
+- **`.env`'deki `NEXT_PUBLIC_API_BASE_URL`'ı değiştirmek** — yapıldı, ama `.env` gitignored ve kullanıcının dosyası; commit'e girmez. `.env.example` değişti, yeni geliştirici için belge öldü.
+
+**Seçim gerekçesi:**
+- **"İmaj bozuk" teşhisi tuzağı.** Aynı imajın elle çalışması, imajın sağlam olduğunun kanıtıydı. `docker diff` tek komutla gerçek farkı gösterdi.
+- **`NEXT_PUBLIC_*` build args olmadan yazılan kod sessizce yanlış adrese gider.** Hata mesajı yoktur; sadece yanlış host. Production compose'da çözülmüş olması, dev compose'un eksikliğini "kasten yapılmamış" değil "unutulmuş" olduğunu gösteriyordu.
+- **Port çakışması kod hatası değil, ortam hatası.** Sabit port, ortamı varsayıyordu. `WEB_PORT` varsayımı kaldırıyor, varsayılanı 3000'de tutarak mevcut davranışı bozmuyor.
+
+**Doğrulama:**
+- `docker compose config` geçerli; build args doğru okunuyor (`NEXT_PUBLIC_BASE_URL: http://localhost:3100`).
+- Dev stack yeniden kuruldu: frontend healthy (Next 14.2.35 / Node 24), backend healthy, `/health` → `{"status":"ok","database":"ok"}`.
+- Tarayıcıda `/m/modern-cafe` gerçek seed verisiyle render oldu; network sekmesinde browser bundle'ın `http://localhost:8000` adresine gittiği görüldü (build args sayesinde), console'da hata yok.
+- Giriş akışı: `admin@modern-cafe.local` → 200; admin sipariş uçları → 200.
+
+**Sonuçlar:**
+- `docker-compose.yml` — frontend `build.args` (`NEXT_PUBLIC_*` × 4), `ports` → `${WEB_PORT:-3000}:3000`
+- `.env.example` — `WEB_PORT`, `NEXT_PUBLIC_BASE_URL` ve bunların ne işe yaradığını anlatan yorumlar eklendi
+- `.env` (gitignored, kullanıcı dosyası) — `NEXT_PUBLIC_API_BASE_URL` ölü Cloudflare tunnel adresinden `http://localhost:8000`'e çevrildi, `WEB_PORT=3100` ve `NEXT_PUBLIC_BASE_URL=http://localhost:3100` eklendi, `CORS_ALLOWED_ORIGINS`'a 3100 eklendi
