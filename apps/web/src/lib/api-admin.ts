@@ -121,6 +121,29 @@ function raiseLimitNotice(
   });
 }
 
+/**
+ * Record a 403 ("your plan does not include this") in the feature-notice
+ * store.
+ *
+ * The same trick as the 402: the store is client-only, and a static import
+ * would drag it into the server bundle.
+ */
+function raiseFeatureNotice(
+  code: string,
+  message: string,
+  extra: Record<string, unknown>,
+): void {
+  if (typeof window === "undefined") return;
+  if (code !== "billing.feature_disabled") return;
+  void import("@/lib/stores/feature-notice").then(({ useFeatureNoticeStore }) => {
+    useFeatureNoticeStore.getState().raise({
+      feature: typeof extra.feature === "string" ? extra.feature : "",
+      featureLabel: typeof extra.featureLabel === "string" ? extra.featureLabel : "",
+      message,
+    });
+  });
+}
+
 export interface AdminFetchOptions {
   method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
   /** CSRF token to echo in the X-CSRFToken header (required for unsafe methods). */
@@ -237,6 +260,8 @@ export async function adminFetch<T>(
           resource?: string;
           current?: number;
           limit?: number;
+          feature?: string;
+          feature_label?: string;
         };
         detail?: string;
       };
@@ -249,6 +274,10 @@ export async function adminFetch<T>(
         if (errBody.error.current !== undefined)
           errExtra.current = errBody.error.current;
         if (errBody.error.limit !== undefined) errExtra.limit = errBody.error.limit;
+        // The feature error carries the flag and its Turkish label, so the
+        // banner can name the module without keeping its own list.
+        if (errBody.error.feature) errExtra.feature = errBody.error.feature;
+        if (errBody.error.feature_label) errExtra.featureLabel = errBody.error.feature_label;
       } else if ("detail" in errBody && typeof errBody.detail === "string") {
         // DRF's default error shape (e.g. permission denied).
         errCode = res.status === 401 ? "auth.unauthenticated" : "api.error";
@@ -263,6 +292,13 @@ export async function adminFetch<T>(
     // to the caller, which decides what to do inline.
     if (res.status === 402) {
       raiseLimitNotice(errCode, errMessage, errExtra);
+    }
+
+    // A 403 with this code means "this module is not in your plan" — also
+    // not a bug, and also worth saying out loud (the same banner, the
+    // other copy).
+    if (res.status === 403) {
+      raiseFeatureNotice(errCode, errMessage, errExtra);
     }
 
     throw new AdminApiError(res.status, errCode, errMessage);

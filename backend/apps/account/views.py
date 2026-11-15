@@ -313,30 +313,14 @@ class MagicLinkRequestView(APIView):
                 slug=slug, is_active=True
             ).first()
             if org is not None:
+                from apps.billing.errors import FeatureDisabled
+                from apps.billing.responses import feature_disabled_response
                 from apps.billing.services import require_feature
 
                 try:
                     require_feature(org, "customer_accounts_enabled")
-                except Exception as exc:  # FeatureDisabled from billing
-                    return Response(
-                        {
-                            "error": {
-                                "code": getattr(
-                                    exc, "code", "billing.feature_disabled"
-                                ),
-                                "message": getattr(exc, "message", str(exc)),
-                                "feature": getattr(
-                                    exc, "extra", {}
-                                ).get("feature"),
-                            },
-                            "meta": {
-                                "request_id": request.META.get(
-                                    "HTTP_X_REQUEST_ID", ""
-                                )
-                            },
-                        },
-                        status=status.HTTP_403_FORBIDDEN,
-                    )
+                except FeatureDisabled as exc:
+                    return feature_disabled_response(exc, request)
 
         serializer = MagicLinkRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

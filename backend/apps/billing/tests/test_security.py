@@ -153,8 +153,10 @@ def test_guard_returns_403_when_feature_disabled_payments(
     res = client.post(f"/api/v1/payment/public/orders/{order.order_number}/pay/")
     assert res.status_code == 403, res.content
     body = res.json()
-    assert body.get("code") == "billing.feature_disabled"
-    assert body.get("feature") == "payments_enabled"
+    # The common envelope (D-047): every feature guard answers the same way.
+    assert body["error"]["code"] == "billing.feature_disabled"
+    assert body["error"]["feature"] == "payments_enabled"
+    assert body["error"]["message"]
 
 
 def test_guard_403_customer_accounts_disabled(basic_org):

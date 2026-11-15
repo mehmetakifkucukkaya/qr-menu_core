@@ -109,21 +109,14 @@ def _scoped_category(organization, pk: int) -> MenuCategory | None:
 
 def _ai_feature_guard(organization) -> Response | None:
     """May this tenant use AI at all? (BASIC: no.)"""
+    from apps.billing.errors import FeatureDisabled
+    from apps.billing.responses import feature_disabled_response
     from apps.billing.services import require_feature
 
     try:
         require_feature(organization, "ai_translate_enabled")
-    except Exception as exc:  # FeatureDisabled from billing
-        return Response(
-            {
-                "error": {
-                    "code": getattr(exc, "code", "billing.feature_disabled"),
-                    "message": getattr(exc, "message", str(exc)),
-                    "feature": getattr(exc, "extra", {}).get("feature"),
-                }
-            },
-            status=status.HTTP_403_FORBIDDEN,
-        )
+    except FeatureDisabled as exc:
+        return feature_disabled_response(exc)
     return None
 
 

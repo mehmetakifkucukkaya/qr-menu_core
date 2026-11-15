@@ -853,3 +853,84 @@ Sunucu tarafı kapıyı kapatınca mutfak tableti şunu gösterecekti: pano poll
 - `apps/web/src/app/(admin)/admin/kitchen/_components/PlanBlockedNotice.tsx` — **yeni**
 - `apps/web/src/app/(admin)/admin/kitchen/page.tsx` + `KitchenBoard.tsx` — 403'te plan bildirimi
 - `apps/web/src/app/(admin)/admin/kitchen/_components/KitchenBoard.test.tsx` — 1 yeni test
+
+---
+
+# D-047 — Ortak Yükseltme Bildirimi: 402 ve 403 Artık Aynı Yerde, Aynı Dille
+
+**Tarih:** 2026-11-15
+
+**Bağlam:** Pilot hazırlık denetiminde (SPEC_PILOT_READINESS §6, Dilim 4) kalan maddelerden biri şuydu: *"ortak `UpgradeNotice` 402/403'ü Türkçe gösterir ('Bu özellik planınıza dahil değil, açtırmak için ajansınıza yazın')"*.
+
+Durum şöyleydi:
+
+- **402 (`billing.limit_exceeded`)** — "planınız çok küçük" — vardı: `LimitBanner` bileşeni admin shell'de, `limit-notice` store ile.
+- **403 (`billing.feature_disabled`)** — "bu modül planınızda yok" — **yoktu**. Görünür olduğu tek yer, onu tetikleyen formun içindeki bir metin satırıydı.
+
+Ama "ortak" isteniyordu ve backend tarafı **ortak bile değildi**. Beş feature guard, beş farklı bayrağı koruyordu ve beşi farklı yanıt zarfı yazıyordu:
+
+| Guard | Zarf |
+|---|---|
+| `orders` (mutfak + siparişler) | `{"error": {code, message, feature}, "meta": {...}}` |
+| `translate` / `pdf_import` / `account` | `{"error": {code, message, feature}}` |
+| `payment` | **`{"detail": message, "code": ..., "feature": ...}`** — `error` altında değil |
+
+Ödeme guard'ının farklı zarfı yüzünden frontend'in `adminFetch`'i onu `error` dalında değil `detail` dalında okuyor, kod `billing.feature_disabled` yerine **`api.error`** oluyordu. Yani "bu modül planınızda yok" cevabı ödeme ucunda istemciye **plansız** gidiyordu — ortak bir bildirim yazmak önce backend'in ortak bir zarf vermesini gerektiriyordu.
+
+**Karar 1: Backend'de tek bir zarf.**
+Yeni `backend/apps/billing/responses.py` → `feature_disabled_response(exc, request=None)`. Beş guard da bunu kullanıyor. Zarf:
+
+```json
+{"error": {"code": "billing.feature_disabled",
+           "message": "'Sipariş + mutfak' özelliği planınızda kapalı.",
+           "feature": "orders_enabled",
+           "feature_label": "Sipariş + mutfak"},
+ "meta": {"request_id": ""}}
+```
+
+**Karar 2: `feature_label` sunucudan geliyor.**
+Bayrağın Türkçe adı (`FEATURE_LABELS`) backend'de zaten vardı — ajans paneli aynı adı kullanıyor. İstemcide ikinci bir etiket haritası tutmak iki tarafın ayrışması demekti; onun yerine **sunucu etiketi gönderiyor**. İstemci hiçbir bayrağa kendi adını vermiyor.
+
+**Karar 3: Guard'lar artık `except FeatureDisabled`.**
+Beş guard da `except Exception` kullanıyordu — `require_feature` dışındaki her hata 403 "planınızda kapalı" diye çevriliyordu. Bu D-046'da zaten bir kez tuzak verdi (sadakat bloğunun gizli import bağımlılığı `NameError` ile 403'e dönüşmüştü). Artık yalnız `FeatureDisabled` yakalanıyor; başka bir hata 500 olur, yani gerçek bir hata gizlenmez.
+
+**Karar 4: Tek banner, iki metin.**
+`UpgradeNotice` (yeni) iki store'u birden dinler ve hangisi aktifse onu gösterir:
+- **402** → "Ürün limitiniz doldu (25/25)." + "Paketinizi yükselterek bu limite kaldırabilirsiniz."
+- **403** → sunucunun cümlesi ("'Sipariş + mutfak' özelliği planınızda kapalı.") + "Paketinizi yükselterek bu özelliği açabilirsiniz."
+
+`LimitBanner` **kaldırıldı** ve içeriği `UpgradeNotice`'e katlandı — iki banner, iki renk dili, iki bileşen yok. Admin shell `<LimitBanner />` yerine `<UpgradeNotice />` çiziyor. Test script'i `test:limit-banner` → `test:upgrade-notice` olarak yeniden adlandırıldı (`scripts/release_gate.sh` da güncellendi).
+
+**Karar 5: 402'nin eli de doğrulandı.**
+`adminFetch` 402'yi `limit-notice` store'una yazıyordu ama **bu yol hiç test edilmemişti** — store elle dolduruluyordu. Yeni `src/lib/api-plan-notices.test.ts` üç şeyi uçtan uca doğruluyor: 403 → feature-notice store, 402 → limit-notice store, **planla ilgisi olmayan bir 403** (yetki hatası) → hiçbir store'a dokunmuyor. Üçüncüsü önemli: "yetkiniz yok" cümlesi "paketinizi yükseltin" cümlesine dönüşmemeli.
+
+**Doğrulama (Node 24.22.3):**
+- Backend: yeni `apps/billing/tests/test_feature_disabled_envelope.py` (7 test) — beş guard'ın **birebir aynı** zarfı döndürdüğünü, mesajın bayrağın adını içermediğini, `feature_label`'in geldiğini doğrular. Toplam **1232 passed, 2 skipped**.
+- Frontend: `test:upgrade-notice` (10 test — eski LimitBanner testlerinin aktarılmış hâli + 403 kolları), `test:api-plan-notices` (3 test), `test:kitchen-ui` (56 test) — hepsi yeşil; `tsc --noEmit` ve `next lint` temiz.
+- **Tam kapı:** backend 1232 + 23 frontend suite + 43 browser testi.
+
+**Alternatifler:**
+- **Sadece frontend'de bir banner eklemek, backend'e dokunmamak** — reddedildi. Ödeme ucunun cevabı istemciye `api.error` olarak gidiyor; ortak bir bildirim onu yakalayamaz. "Ortak" önce backend'de kazanılmalı.
+- **Frontend'de bayrak etiketi haritası tutmak** — reddedildi. `types/admin.ts`'teki `FEATURE_LABEL` ile backend'in `FEATURE_LABELS`'i zaten farklı kelimeler söylüyor ("Siparişler" / "Sipariş + mutfak"); iki harita daha büyütmek ayrışmayı garanti ederdi. Etiketi sunucudan almak tek kaynak bırakıyor.
+- **`LimitBanner`'ı 403 için de yeniden kullanmak** (bileşeni olduğu gibi bırakıp içine bir dal eklemek) — düşünüldü, reddedildi. `LimitBanner`'ın adı ne yaptığını anlatıyor ("limit"); 403 bir limit değil, plan kapsamı dışı bir modül. İsim değiştiği için `UpgradeNotice` adı da taşındı.
+- **Her guard'ı ayrı ayrı elle düzeltmek, ortak yardımcı kurmadan** — reddedildi. Beş kopya zarfı bugün üç farklı biçimde dağılmış; altıncısı dağılacaktı.
+- **403'ü hiç göstermemek, sadece sunucu cevabını bırakmak** — reddedildi. D-046 bunu zaten ölçtü: yanlış teşhis, kapalı kapıdan daha kötüdür.
+
+**Seçim gerekçesi:**
+- **"Ortak" bir isim değil, bir sözleşmedir.** Tek bir zarf, tek bir bileşen, tek bir dil — üçü de aynı işi yapar: operatör planı sorusunu cevaplamak.
+- **Bayrağın adını sunucu söyler.** İstemci bayrağı tanımaz; tanıyabildiği tek şey sunucunun Türkçe cümlesidir.
+- **Yanlış teşhisi düzeltmek, kapıyı kapatmaktan daha değerli.** 402 zaten doğru davranıyordu; bu iş asıl olarak 403'ü onun seviyesine getirdi.
+
+**Sonuçlar:**
+- `backend/apps/billing/responses.py` — **yeni**, ortak zarf
+- `backend/apps/orders/views.py`, `translate/views.py`, `pdf_import/views.py`, `payment/views.py`, `account/views.py` — ortak zarf + dar yakalama
+- `backend/apps/billing/tests/test_feature_disabled_envelope.py` — **yeni**, 7 test
+- `backend/apps/billing/tests/test_security.py` — ödeme guard'ı artık ortak zarfı bekliyor
+- `apps/web/src/lib/stores/feature-notice.ts` — **yeni** store
+- `apps/web/src/lib/api-admin.ts` — `feature`/`feature_label` okunuyor, 403 store'a yazılıyor
+- `apps/web/src/components/billing/UpgradeNotice.tsx` — **yeni**, 402 + 403 tek banner
+- `apps/web/src/components/billing/LimitBanner.tsx` + testi — **kaldırıldı** (UpgradeNotice'e katlandı)
+- `apps/web/src/app/(admin)/admin/layout.tsx` — `<UpgradeNotice />`
+- `apps/web/src/components/billing/UpgradeNotice.test.tsx` — **yeni**, 10 test
+- `apps/web/src/lib/api-plan-notices.test.ts` — **yeni**, 3 test
+- `apps/web/package.json` + `scripts/release_gate.sh` — `test:upgrade-notice`, `test:api-plan-notices`

@@ -1620,6 +1620,7 @@ Local'de birden fazla Postgres instance çakışmasın diye ana stack'te host po
 | D-044 | 2026-11-13 | Node 20 EOL'ya Girdi → Runtime Node 24 (Dockerfile 3× `node:24-bookworm-slim` + CI `node-version: 24` + `package.json` `engines.node >=24` + `@types/node` 24 + `.nvmrc` + GitHub Actions checkout/setup-node/setup-python v7 — deprecation uyarısı gitti) | aktif |
 | D-045 | 2026-11-13 | Next.js 14.2.18 → 14.2.35 Güvenlik Yaması (CVE-2025-67779 DoS + CVE-2025-55183 kaynak kodu ifşası — React Server Components, App Router etkileniyor, workaround yok) | aktif |
 | D-046 | 2026-11-15 | BASIC Planda Mutfak/Sipariş Ekranları Açılıyordu (orders_enabled koruması beş admin ucuna kondu: mutfak panosu + ticket feed + sipariş listesi/detayı/durum geçişi — 403 billing.feature_disabled + audit + Türkçe modül etiketi + mutfakta 'planında kapalı' bildirimi) | aktif |
+| D-047 | 2026-11-15 | Ortak Yükseltme Bildirimi (402 limit + 403 feature_disabled tek banner'da: backend'de ortak zarf `billing/responses.py` — beş guard aynı zarfı ve `feature_label`'ı; guard'lar `except FeatureDisabled`; `UpgradeNotice` LimitBanner'ın yerini aldı; 402 eli de test edildi) | aktif |
 
 ---
 

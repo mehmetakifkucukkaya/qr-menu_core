@@ -124,22 +124,13 @@ def _feature_guard(organization, request: Request, feature: str) -> Response | N
     code).
     """
     from apps.billing.errors import FeatureDisabled
+    from apps.billing.responses import feature_disabled_response
     from apps.billing.services import require_feature
 
     try:
         require_feature(organization, feature)
     except FeatureDisabled as exc:
-        return Response(
-            {
-                "error": {
-                    "code": exc.code,
-                    "message": exc.message,
-                    "feature": exc.extra.get("feature"),
-                },
-                "meta": {"request_id": request.META.get("HTTP_X_REQUEST_ID", "")},
-            },
-            status=status.HTTP_403_FORBIDDEN,
-        )
+        return feature_disabled_response(exc, request)
     return None
 
 
